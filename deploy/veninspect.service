@@ -1,0 +1,26 @@
+[Unit]
+Description=VenInspect (bridge & drainage inspections)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=veninspect
+Group=veninspect
+WorkingDirectory=/opt/veninspect
+EnvironmentFile=/etc/veninspect.env
+# Ensure Node from NodeSource is on PATH
+Environment=PATH=/usr/bin:/bin
+ExecStartPre=/usr/bin/mkdir -p ${DATA_DIR}/uploads
+ExecStartPre=/usr/bin/npx prisma migrate deploy
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+
+# Hardening suitable for an unprivileged LXC
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

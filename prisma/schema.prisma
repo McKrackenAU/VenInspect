@@ -1,0 +1,145 @@
+// VenInspect — bridge & drainage asset inspections
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Role {
+  ADMIN
+  INSPECTOR
+}
+
+enum AssetType {
+  BRIDGE
+  DRAINAGE
+}
+
+enum InspectionLevel {
+  LEVEL_1
+  LEVEL_2
+}
+
+enum InspectionStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum DefectSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id               String   @id @default(cuid())
+  email            String   @unique
+  name             String
+  role             Role     @default(INSPECTOR)
+  level1Qualified  Boolean  @default(false)
+  level2Qualified  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  inspectionsCreated  Inspection[]    @relation("InspectionCreator")
+  inspectionsApproved Inspection[]    @relation("InspectionApprover")
+  notifications       Notification[]
+}
+
+model Asset {
+  id                  String    @id @default(cuid())
+  assetNumber         String    @unique
+  name                String
+  type                AssetType
+  roadName            String?
+  location            String?
+  latitude            Float?
+  longitude           Float?
+  level1IntervalYears Int       @default(3)
+  level2IntervalYears Int       @default(5)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  inspections Inspection[]
+}
+
+model Inspection {
+  id             String           @id @default(cuid())
+  assetId        String
+  level          InspectionLevel
+  status         InspectionStatus @default(DRAFT)
+  inspectedAt    DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  submittedAt    DateTime?
+  approvedAt     DateTime?
+  generalComments String?
+  createdById    String
+  approvedById   String?
+  /// When a Level 1 inspector drafts a Level 2 report for L2 verification
+  requiresLevel2Approval Boolean @default(false)
+
+  asset      Asset                   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  createdBy  User                    @relation("InspectionCreator", fields: [createdById], references: [id])
+  approvedBy User?                   @relation("InspectionApprover", fields: [approvedById], references: [id])
+  categories InspectionCategory[]
+  defects    Defect[]
+  notifications Notification[]
+}
+
+model InspectionCategory {
+  id           String @id @default(cuid())
+  inspectionId String
+  /// e.g. Superstructure, Substructure, Approaches, Drainage
+  category     String
+  /// e.g. Deck, Abutment A, Pier 1
+  subcategory  String
+  comments     String?
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([inspectionId])
+}
+
+model Defect {
+  id           String         @id @default(cuid())
+  /// Human-readable ID e.g. SN2656-D001 — generated on create
+  defectCode   String
+  inspectionId String
+  category     String?
+  subcategory  String?
+  description  String
+  comments     String?
+  severity     DefectSeverity @default(MEDIUM)
+  photoPath    String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@unique([inspectionId, defectCode])
+  @@index([inspectionId])
+}
+
+model Notification {
+  id           String   @id @default(cuid())
+  userId       String
+  inspectionId String?
+  title        String
+  message      String
+  read         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inspection Inspection? @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}

@@ -1,0 +1,18 @@
+# Example lines for /etc/pve/lxc/<CTID>.conf on the Proxmox host.
+# Adjust CTID, storage, and paths to match your cluster.
+#
+# Goal: small CT rootfs for the app; separate mount for DATA_DIR photos/DB.
+
+# Unprivileged Debian 12 CT (create via UI or pct create) — then add:
+
+# Bind-mount host storage into the CT at /var/lib/veninspect
+# (ZFS dataset / NFS / directory — whatever you backup)
+# mp0: /tank/veninspect-data,mp=/var/lib/veninspect
+
+# Or attach a second virtual disk and mount it from inside the CT fstab:
+# (created with: pct set <CTID> -mp1 <storage>:size=100G,mp=/var/lib/veninspect)
+
+# Networking tip: give the CT a static IP or DHCP reservation so phones
+# and office PCs can reach http://<ct-ip>:3000 (or 443 via reverse proxy).
+
+# Firewall tip: allow 3000 from LAN only, or terminate TLS on the CT / another proxy CT.

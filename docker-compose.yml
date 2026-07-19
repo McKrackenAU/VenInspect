@@ -1,0 +1,16 @@
+services:
+  veninspect:
+    build: .
+    container_name: veninspect
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATA_DIR: /data
+      NODE_ENV: production
+    volumes:
+      # Persist SQLite + compressed photos outside the container filesystem
+      - veninspect-data:/data
+
+volumes:
+  veninspect-data:
