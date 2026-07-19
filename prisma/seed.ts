@@ -1,5 +1,25 @@
 import "dotenv/config";
+import fs from "node:fs";
+import path from "node:path";
 import { prisma } from "../src/lib/db";
+import type { AssetType } from "../src/generated/prisma/client";
+
+type SeedAsset = {
+  assetVisionId: string | null;
+  assetNumber: string;
+  name: string;
+  type: AssetType;
+  roadName: string | null;
+  location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  parentDirection?: string | null;
+  parentChainage?: number | null;
+  parentAssetCode?: string | null;
+  parentAssetName?: string | null;
+  classification?: string | null;
+  notes?: string | null;
+};
 
 async function main() {
   console.log("Seeding VenInspect...");
@@ -41,28 +61,61 @@ async function main() {
     },
   });
 
-  const forsyth = await prisma.asset.create({
-    data: {
+  const seedPath = path.join(__dirname, "seed-data", "assets-bridges-culverts.json");
+  const assetsJson = JSON.parse(fs.readFileSync(seedPath, "utf8")) as SeedAsset[];
+
+  // Ensure Forsyth example exists for report demos even if not in export
+  if (!assetsJson.some((a) => a.assetNumber === "SN2656")) {
+    assetsJson.push({
+      assetVisionId: null,
       assetNumber: "SN2656",
-      name: "Forsyth Road Bridge",
+      name: "FORSYTH RD | Bridge",
       type: "BRIDGE",
       roadName: "Forsyth Rd",
-      location: "Example corridor — replace with real site details",
-      level1IntervalYears: 3,
-      level2IntervalYears: 5,
-    },
-  });
+      location: "Example corridor",
+      latitude: null,
+      longitude: null,
+      notes: "Demo asset for report-style previews",
+    });
+  }
 
-  const culvert = await prisma.asset.create({
-    data: {
-      assetNumber: "DR-0142",
-      name: "Creek Crossing Culvert",
-      type: "DRAINAGE",
-      roadName: "Ridge Track",
-      location: "Chainage 12.4 km",
-      level1IntervalYears: 3,
-      level2IntervalYears: 5,
-    },
+  // Placeholder noise wall until a dedicated export is imported
+  if (!assetsJson.some((a) => a.type === "NOISE_WALL")) {
+    assetsJson.push({
+      assetVisionId: null,
+      assetNumber: "NW-0001",
+      name: "SAMPLE RD | Noise Wall",
+      type: "NOISE_WALL",
+      roadName: "Sample Rd",
+      location: "Placeholder — replace via management import",
+      latitude: null,
+      longitude: null,
+    });
+  }
+
+  for (const a of assetsJson) {
+    await prisma.asset.create({
+      data: {
+        assetNumber: a.assetNumber,
+        assetVisionId: a.assetVisionId,
+        name: a.name,
+        type: a.type,
+        roadName: a.roadName || "Unknown Road",
+        location: a.location ?? null,
+        latitude: a.latitude ?? null,
+        longitude: a.longitude ?? null,
+        parentDirection: a.parentDirection ?? null,
+        parentChainage: a.parentChainage ?? null,
+        parentAssetCode: a.parentAssetCode ?? null,
+        parentAssetName: a.parentAssetName ?? null,
+        classification: a.classification ?? null,
+        notes: a.notes ?? null,
+      },
+    });
+  }
+
+  const forsyth = await prisma.asset.findUniqueOrThrow({
+    where: { assetNumber: "SN2656" },
   });
 
   await prisma.inspection.create({
@@ -71,12 +124,14 @@ async function main() {
       level: "LEVEL_1",
       status: "APPROVED",
       inspectedAt: new Date("2023-08-01"),
-      submittedAt: new Date("2023-08-01"),
+      submittedAt: new Date("2023-08-01T10:00:00"),
       approvedAt: new Date("2023-08-02"),
-      generalComments: "Routine Level 1 — sample historical report (PDF-style output later).",
+      generalComments:
+        "Routine Level 1 — sample historical report (PDF-style output later).",
       createdById: l1.id,
       approvedById: l2.id,
-      requiresLevel2Approval: false,
+      folderKey: "01082023",
+      titleLabel: "Forsyth Rd - SN2656 - 01082023",
       categories: {
         create: [
           {
@@ -116,17 +171,14 @@ async function main() {
       generalComments: "Level 2 draft prepared on site by Level 1 inspector.",
       createdById: l1.id,
       requiresLevel2Approval: true,
+      folderKey: "19072026",
+      titleLabel: "Forsyth Rd - SN2656 - 19072026",
       categories: {
         create: [
           {
             category: "Superstructure",
             subcategory: "Beams / Girders",
             comments: "Paint loss on outer girder flange.",
-          },
-          {
-            category: "Approaches",
-            subcategory: "Approach A",
-            comments: "Settlement at joint — measure on verification visit.",
           },
         ],
       },
@@ -139,7 +191,6 @@ async function main() {
             description: "Corrosion / paint failure on outer girder",
             comments: "Requires Level 2 confirmation of extent.",
             severity: "MEDIUM",
-            photoPath: null,
           },
         ],
       },
@@ -155,37 +206,9 @@ async function main() {
     },
   });
 
-  await prisma.inspection.create({
-    data: {
-      assetId: culvert.id,
-      level: "LEVEL_1",
-      status: "APPROVED",
-      inspectedAt: new Date("2024-11-15"),
-      submittedAt: new Date("2024-11-15"),
-      approvedAt: new Date("2024-11-16"),
-      generalComments: "Inlet clear, barrel condition fair.",
-      createdById: l1.id,
-      approvedById: admin.id,
-      categories: {
-        create: [
-          {
-            category: "Drainage",
-            subcategory: "Inlet",
-            comments: "Light silt — cleaned during visit.",
-          },
-          {
-            category: "Drainage",
-            subcategory: "Barrel",
-            comments: "No significant deformation observed.",
-          },
-        ],
-      },
-    },
-  });
-
   console.log("Seed complete.");
   console.log(`  Users: ${admin.email}, ${l1.email}, ${l2.email}`);
-  console.log(`  Assets: ${forsyth.assetNumber}, ${culvert.assetNumber}`);
+  console.log(`  Assets loaded: ${assetsJson.length}`);
 }
 
 main()

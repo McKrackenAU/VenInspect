@@ -102,3 +102,15 @@ export const DRAINAGE_CATEGORIES = [
   { category: "Drainage", subcategories: ["Inlet", "Outlet", "Barrel", "Headwalls"] },
   { category: "Surrounds", subcategories: ["Embankment", "Access", "Vegetation"] },
 ] as const;
+
+export const NOISE_WALL_CATEGORIES = [
+  { category: "Panels", subcategories: ["Face", "Joints", "Caps"] },
+  { category: "Structure", subcategories: ["Posts", "Foundations", "Fixings"] },
+  { category: "Surrounds", subcategories: ["Access", "Vegetation", "Drainage at toe"] },
+] as const;
+
+export function formatAssetType(type: string) {
+  if (type === "NOISE_WALL") return "Noise wall";
+  if (type === "DRAINAGE") return "Drainage";
+  return "Bridge";
+}

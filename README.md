@@ -4,6 +4,35 @@ Web app for **bridge and drainage asset inspections** — field capture, compres
 
 **Production target:** Proxmox **LXC** as the main server (native Node + systemd). Local `npm run dev` is for development only.
 
+## Git remotes
+
+| Remote | Where | When to use |
+|--------|--------|-------------|
+| `origin` | Gitea `http://192.168.13.9:3000/McKraken/VenInspect` | Day-to-day push/pull (dev) |
+| `github` | `https://github.com/McKrackenAU/VenInspect` | Promote to live / public |
+
+```bash
+git push -u origin main
+git push github main
+```
+
+## Two portals
+
+| Portal | URL | Purpose |
+|--------|-----|---------|
+| Inspection (user) | `/` | Inspections, defects, approvals, reports |
+| Management | `/manage` | Asset registry, Excel/CSV import, users & qualifications |
+
+## Brand & context
+
+- Style: Ventia greens/blue from [Our brand](https://www.ventia.com/who-we-are/our-brand) — see CSS tokens in `src/app/globals.css`
+- Agent context: `CONTEXT.md` and `.cursor/rules/veninspect.mdc`
+- Licensed logos: drop into `public/brand/` when approved
+
+## Microsoft login (planned — not built)
+
+Entra ID / work accounts so corporate MFA applies. Stubs in `.env.example`. Do not implement until requested.
+
 ## Storage model (lightweight)
 
 | What | Where | Why |
@@ -39,10 +68,13 @@ mp0: /tank/veninspect-data,mp=/var/lib/veninspect
 After the CT is up and the data mount exists:
 
 ```bash
-# Option A — from GitHub once the repo is pushed:
-bash deploy/install-lxc.sh https://github.com/<you>/VenInspect.git
+# Option A — from Gitea (LAN / day-to-day):
+bash deploy/install-lxc.sh http://192.168.13.9:3000/McKraken/VenInspect.git
 
-# Option B — copy this project in (scp/rsync), then:
+# Option B — from GitHub (live / external):
+bash deploy/install-lxc.sh https://github.com/McKrackenAU/VenInspect.git
+
+# Option C — copy this project in (scp/rsync), then:
 cd /path/to/VenInspect
 sudo bash deploy/install-lxc.sh
 ```

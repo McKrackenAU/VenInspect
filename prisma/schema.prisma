@@ -1,4 +1,4 @@
-// VenInspect — bridge & drainage asset inspections
+// VenInspect — bridge, drainage & noise wall inspections
 
 generator client {
   provider = "prisma-client"
@@ -17,6 +17,7 @@ enum Role {
 enum AssetType {
   BRIDGE
   DRAINAGE
+  NOISE_WALL
 }
 
 enum InspectionLevel {
@@ -39,68 +40,99 @@ enum DefectSeverity {
   CRITICAL
 }
 
-model User {
-  id               String   @id @default(cuid())
-  email            String   @unique
-  name             String
-  role             Role     @default(INSPECTOR)
-  level1Qualified  Boolean  @default(false)
-  level2Qualified  Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+/// How this inspection relates to others (combine / parent-child)
+enum InspectionRelationKind {
+  STANDALONE
+  PARENT
+  CHILD
+}
 
-  inspectionsCreated  Inspection[]    @relation("InspectionCreator")
-  inspectionsApproved Inspection[]    @relation("InspectionApprover")
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String
+  role            Role     @default(INSPECTOR)
+  microsoftOid    String?  @unique
+  level1Qualified Boolean  @default(false)
+  level2Qualified Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  inspectionsCreated  Inspection[]   @relation("InspectionCreator")
+  inspectionsApproved Inspection[]   @relation("InspectionApprover")
   notifications       Notification[]
 }
 
 model Asset {
   id                  String    @id @default(cuid())
   assetNumber         String    @unique
+  assetVisionId       String?
   name                String
   type                AssetType
-  roadName            String?
+  /// Primary grouping key in registry & photo folders (e.g. Kororoit Creek Road)
+  roadName            String    @default("Unknown Road")
   location            String?
   latitude            Float?
   longitude           Float?
+  parentDirection     String?
+  parentChainage      Float?
+  parentAssetCode     String?
+  parentAssetName     String?
+  classification      String?
+  notes               String?
   level1IntervalYears Int       @default(3)
   level2IntervalYears Int       @default(5)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   inspections Inspection[]
+
+  @@index([roadName, assetNumber])
+  @@index([assetVisionId])
+  @@index([type])
 }
 
 model Inspection {
-  id             String           @id @default(cuid())
-  assetId        String
-  level          InspectionLevel
-  status         InspectionStatus @default(DRAFT)
-  inspectedAt    DateTime         @default(now())
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  submittedAt    DateTime?
-  approvedAt     DateTime?
-  generalComments String?
-  createdById    String
-  approvedById   String?
-  /// When a Level 1 inspector drafts a Level 2 report for L2 verification
-  requiresLevel2Approval Boolean @default(false)
+  id                     String                 @id @default(cuid())
+  assetId                String
+  level                  InspectionLevel
+  status                 InspectionStatus       @default(DRAFT)
+  inspectedAt            DateTime               @default(now())
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  /// Always set on create — used for same-day disambiguation & exports
+  submittedAt            DateTime               @default(now())
+  approvedAt             DateTime?
+  generalComments        String?
+  createdById            String
+  approvedById           String?
+  requiresLevel2Approval Boolean                @default(false)
 
-  asset      Asset                   @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  createdBy  User                    @relation("InspectionCreator", fields: [createdById], references: [id])
-  approvedBy User?                   @relation("InspectionApprover", fields: [approvedById], references: [id])
-  categories InspectionCategory[]
-  defects    Defect[]
+  /// Photo folder segment: DDMMYYYY or DDMMYYYY-HHmmss
+  folderKey              String
+  /// Display: "Kororoit Creek Road - SN1234 - 19072026" (+ time if needed)
+  titleLabel             String
+  relationKind           InspectionRelationKind @default(STANDALONE)
+  parentInspectionId     String?
+
+  asset         Asset                 @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  createdBy     User                  @relation("InspectionCreator", fields: [createdById], references: [id])
+  approvedBy    User?                 @relation("InspectionApprover", fields: [approvedById], references: [id])
+  parent        Inspection?           @relation("InspectionTree", fields: [parentInspectionId], references: [id])
+  children      Inspection[]          @relation("InspectionTree")
+  categories    InspectionCategory[]
+  defects       Defect[]
   notifications Notification[]
+
+  @@index([assetId, submittedAt])
+  @@index([folderKey])
+  @@index([parentInspectionId])
 }
 
 model InspectionCategory {
-  id           String @id @default(cuid())
+  id           String  @id @default(cuid())
   inspectionId String
-  /// e.g. Superstructure, Substructure, Approaches, Drainage
   category     String
-  /// e.g. Deck, Abutment A, Pier 1
   subcategory  String
   comments     String?
 
@@ -111,7 +143,6 @@ model InspectionCategory {
 
 model Defect {
   id           String         @id @default(cuid())
-  /// Human-readable ID e.g. SN2656-D001 — generated on create
   defectCode   String
   inspectionId String
   category     String?

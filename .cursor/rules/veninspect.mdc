@@ -1,0 +1,59 @@
+---
+description: VenInspect project context — product, brand, portals, auth plan, storage
+alwaysApply: true
+---
+
+# VenInspect — agent context
+
+## What this is
+
+Field + web app for **bridge, drainage (culvert), and noise wall** inspections (Ventia / road assets).
+
+- Dev repo (Gitea): http://192.168.13.9:3000/McKraken/VenInspect (`origin`)
+- Live repo (GitHub): https://github.com/McKrackenAU/VenInspect (`github`)
+- Local path: `D:\Projects\VenInspect`
+- Production: **Proxmox LXC** — SQLite on `DATA_DIR`, photos on optional `PHOTO_DIR`
+
+## Two portals
+
+| Portal | Routes | Purpose |
+|--------|--------|---------|
+| **User** | `/`, `/assets`, `/inspect`, `/inspections/*`, `/approvals` | Field inspections, reports, L2 approvals, **scope export** |
+| **Management** | `/manage/*` | Registry by **road → asset**, import, **photo storage path**, users |
+
+Do not put asset import / storage config / user admin in the user portal.
+
+## Mobile
+
+Mobile-first field UI + PWA install. Future native shells via Capacitor — keep one codebase.
+
+## Storage
+
+- `DATA_DIR` → `veninspect.db` + `settings.json` (lightweight)
+- `PHOTO_DIR` → photos (default `{DATA_DIR}/photos`; override via env or `/manage/storage`)
+- Layout: `{PHOTO_DIR}/{Road}/{Code}/{DDMMYYYY|DDMMYYYY-HHmmss}/{defectCode}.webp`
+- Inspection fields: `folderKey`, `titleLabel` e.g. `Kororoit Creek Road - SN1234 - 19072026`
+- Always set `submittedAt` (time) for same-day disambiguation
+
+## Assets
+
+- Group by `roadName`, then `assetNumber` (Code)
+- Types: `BRIDGE` | `DRAINAGE` | `NOISE_WALL`
+- Import: `src/lib/asset-import.ts` / `/manage/assets/import`
+
+## Inspection relations & scope
+
+- Parent/child via `relationKind` + `parentInspectionId`; combine on asset page
+- Scope: `/inspections/[id]/scope` — select defects → Print/PDF works scope
+
+## Brand (Ventia)
+
+Dark green `#004825`, mid `#00994D`, blue `#0077C8`, ink `#2A2A2A`, tint `#F6FAEF`. Light UI. Logos in `public/brand/` when licensed.
+
+## Auth (planned — do not implement until asked)
+
+Microsoft Entra ID for work MFA. Stubs in `.env.example`. `User.microsoftOid` reserved.
+
+## Stack
+
+Next.js · Prisma · SQLite · Sharp · xlsx · Tailwind

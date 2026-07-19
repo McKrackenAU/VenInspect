@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { absoluteUploadPath } from "@/lib/paths";
+import { absolutePhotoPath } from "@/lib/paths";
 
 export const runtime = "nodejs";
 
@@ -16,7 +16,7 @@ export async function GET(
 
   const relative = parts.join("/");
   try {
-    const abs = absoluteUploadPath(relative);
+    const abs = absolutePhotoPath(relative);
     const data = await fs.readFile(abs);
     const ext = path.extname(abs).toLowerCase();
     const type =

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import {
-  absoluteUploadPath,
+  absolutePhotoPath,
   defectPhotoRelativePath,
   ensureDataDirs,
 } from "@/lib/paths";
@@ -10,12 +10,13 @@ import {
 /** Keep field photos small: long edge ≤ 1600px, WebP ~75 quality. */
 export const PHOTO_MAX_EDGE = 1600;
 export const PHOTO_WEBP_QUALITY = 75;
-export const PHOTO_MAX_INPUT_BYTES = 15 * 1024 * 1024; // 15 MB camera originals OK
+export const PHOTO_MAX_INPUT_BYTES = 15 * 1024 * 1024;
 
 export async function saveCompressedDefectPhoto(opts: {
   buffer: Buffer;
+  roadName: string;
   assetNumber: string;
-  inspectionId: string;
+  folderKey: string;
   defectCode: string;
 }): Promise<{ relativePath: string; bytesWritten: number }> {
   if (opts.buffer.byteLength > PHOTO_MAX_INPUT_BYTES) {
@@ -23,12 +24,13 @@ export async function saveCompressedDefectPhoto(opts: {
   }
 
   ensureDataDirs();
-  const relativePath = defectPhotoRelativePath(
-    opts.assetNumber,
-    opts.inspectionId,
-    opts.defectCode,
-  );
-  const abs = absoluteUploadPath(relativePath);
+  const relativePath = defectPhotoRelativePath({
+    roadName: opts.roadName,
+    assetNumber: opts.assetNumber,
+    folderKey: opts.folderKey,
+    defectCode: opts.defectCode,
+  });
+  const abs = absolutePhotoPath(relativePath);
   await fs.mkdir(path.dirname(abs), { recursive: true });
 
   const out = await sharp(opts.buffer, { failOn: "none" })

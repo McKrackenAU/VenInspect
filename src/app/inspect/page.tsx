@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { createInspection } from "@/lib/actions";
+import { AssetPicker } from "@/components/AssetPicker";
 
 export const dynamic = "force-dynamic";
 
@@ -10,75 +10,79 @@ export default async function InspectPage({
   searchParams: Promise<{ assetId?: string }>;
 }) {
   const { assetId: preselect } = await searchParams;
-  const assets = await prisma.asset.findMany({ orderBy: { assetNumber: "asc" } });
+  const assets = await prisma.asset.findMany({
+    orderBy: [{ roadName: "asc" }, { assetNumber: "asc" }],
+    select: {
+      id: true,
+      assetNumber: true,
+      name: true,
+      roadName: true,
+      type: true,
+    },
+  });
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
+    <div className="mx-auto max-w-lg space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Start inspection</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Field-friendly entry. Level 1 inspectors can draft Level 2 reports — Level 2
-          inspectors are notified to verify.
+        <p className="text-sm font-medium text-[color:var(--ventia-muted)]">Step 1 of 2</p>
+        <h1 className="text-2xl font-bold text-[color:var(--ventia-green)]">
+          Start inspection
+        </h1>
+        <p className="mt-1 text-base text-[color:var(--ventia-muted)]">
+          Find the structure, choose the level, then tap continue. Photos come next.
         </p>
       </div>
 
-      <form action={createInspection} className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/70 p-5">
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-slate-300">Asset</span>
-          <select
-            name="assetId"
-            required
-            defaultValue={preselect ?? ""}
-            className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2.5 text-slate-100"
-          >
-            <option value="" disabled>
-              Select asset…
-            </option>
-            {assets.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.assetNumber} — {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      <form action={createInspection} className="card space-y-5 p-4 sm:p-5">
+        <AssetPicker assets={assets} defaultAssetId={preselect} />
 
         <fieldset className="space-y-2">
-          <legend className="text-sm font-medium text-slate-300">Inspection level</legend>
-          <label className="flex items-center gap-2 text-sm text-slate-200">
-            <input type="radio" name="level" value="LEVEL_1" defaultChecked className="accent-teal-400" />
-            Level 1 (every 3 years)
+          <legend className="text-sm font-semibold">Inspection type</legend>
+          <label className="flex min-h-[3.25rem] cursor-pointer items-center gap-3 rounded-xl border border-[color:var(--ventia-border)] px-4 py-3 has-[:checked]:border-[color:var(--ventia-green)] has-[:checked]:bg-[color:var(--ventia-green-tint)]">
+            <input
+              type="radio"
+              name="level"
+              value="LEVEL_1"
+              defaultChecked
+              className="h-5 w-5 accent-[color:var(--ventia-green)]"
+            />
+            <span>
+              <span className="block font-semibold">Level 1</span>
+              <span className="text-xs text-[color:var(--ventia-muted)]">
+                Routine check (about every 3 years)
+              </span>
+            </span>
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-200">
-            <input type="radio" name="level" value="LEVEL_2" className="accent-teal-400" />
-            Level 2 (every 5 years — may need L2 approval)
+          <label className="flex min-h-[3.25rem] cursor-pointer items-center gap-3 rounded-xl border border-[color:var(--ventia-border)] px-4 py-3 has-[:checked]:border-[color:var(--ventia-green)] has-[:checked]:bg-[color:var(--ventia-green-tint)]">
+            <input
+              type="radio"
+              name="level"
+              value="LEVEL_2"
+              className="h-5 w-5 accent-[color:var(--ventia-green)]"
+            />
+            <span>
+              <span className="block font-semibold">Level 2</span>
+              <span className="text-xs text-[color:var(--ventia-muted)]">
+                Detailed check — may need a Level 2 person to approve
+              </span>
+            </span>
           </label>
         </fieldset>
 
         <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-slate-300">General comments</span>
+          <span className="text-sm font-semibold">Notes (optional)</span>
           <textarea
             name="generalComments"
             rows={3}
-            placeholder="Site conditions, weather, access…"
-            className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100"
+            placeholder="Weather, access, anything unusual…"
+            className="field-input min-h-[6rem]"
           />
         </label>
 
-        <button
-          type="submit"
-          className="w-full rounded-md bg-teal-600 py-3 text-sm font-semibold text-white hover:bg-teal-500"
-        >
-          Create & continue on site
+        <button type="submit" className="btn-primary">
+          Continue — add defects & photos
         </button>
       </form>
-
-      <p className="text-center text-xs text-slate-500">
-        Demo actor: Level 1 inspector (
-        <Link href="/admin" className="text-teal-400 hover:underline">
-          manage users
-        </Link>
-        )
-      </p>
     </div>
   );
 }

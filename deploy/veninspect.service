@@ -11,7 +11,9 @@ WorkingDirectory=/opt/veninspect
 EnvironmentFile=/etc/veninspect.env
 # Ensure Node from NodeSource is on PATH
 Environment=PATH=/usr/bin:/bin
-ExecStartPre=/usr/bin/mkdir -p ${DATA_DIR}/uploads
+ExecStartPre=/bin/mkdir -p ${DATA_DIR}/photos
+# If PHOTO_DIR is set in EnvironmentFile, also ensure it exists (ignore failure if unset path)
+ExecStartPre=/bin/sh -c 'mkdir -p "${PHOTO_DIR:-$DATA_DIR/photos}"'
 ExecStartPre=/usr/bin/npx prisma migrate deploy
 ExecStart=/usr/bin/npm run start
 Restart=on-failure
