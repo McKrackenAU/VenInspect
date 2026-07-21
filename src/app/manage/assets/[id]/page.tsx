@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { format } from "date-fns";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { updateAssetDetails } from "@/lib/actions";
@@ -144,6 +145,48 @@ export default async function ManageAssetEditPage({
               className="field-input w-full"
             />
           </label>
+        </div>
+
+        <fieldset className="space-y-3 rounded-xl border border-[color:var(--ventia-border)] p-4">
+          <legend className="px-1 text-sm font-semibold">
+            Last inspection baselines (manual)
+          </legend>
+          <p className="text-xs text-[color:var(--ventia-muted)]">
+            Use these when history isn’t in VenInspect yet. Due dates use the later of this
+            baseline and any submitted inspection in the app. Clear a field to remove the
+            baseline.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium text-[color:var(--ventia-muted)]">
+                Last Level 1
+              </span>
+              <input
+                name="lastLevel1At"
+                type="date"
+                defaultValue={
+                  asset.lastLevel1At ? format(asset.lastLevel1At, "yyyy-MM-dd") : ""
+                }
+                className="field-input w-full"
+              />
+            </label>
+            <label className="block space-y-1 text-sm">
+              <span className="font-medium text-[color:var(--ventia-muted)]">
+                Last Level 2
+              </span>
+              <input
+                name="lastLevel2At"
+                type="date"
+                defaultValue={
+                  asset.lastLevel2At ? format(asset.lastLevel2At, "yyyy-MM-dd") : ""
+                }
+                className="field-input w-full"
+              />
+            </label>
+          </div>
+        </fieldset>
+
+        <div className="grid gap-3 sm:grid-cols-2">
           <label className="block space-y-1 text-sm sm:col-span-2">
             <span className="font-medium text-[color:var(--ventia-muted)]">Notes</span>
             <textarea

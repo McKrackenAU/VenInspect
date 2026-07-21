@@ -51,16 +51,27 @@ html.dark {
 }
 
 body {
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  /* Base fill only — gradients live on a fixed layer so they don’t scroll */
+  background: var(--background);
+}
+
+/* Viewport-fixed brand wash (does not move when the page scrolls) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background:
     radial-gradient(900px 420px at 0% 0%, rgba(0, 153, 77, 0.12), transparent),
     radial-gradient(700px 380px at 100% 0%, rgba(0, 119, 200, 0.1), transparent),
     var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  -webkit-tap-highlight-color: transparent;
 }
 
-html.dark body {
+html.dark body::before {
   background:
     radial-gradient(800px 400px at 0% 0%, rgba(61, 214, 140, 0.08), transparent),
     radial-gradient(700px 380px at 100% 0%, rgba(77, 163, 255, 0.06), transparent),
@@ -162,6 +173,10 @@ html.dark .card {
   body {
     background: #fff !important;
     color: #2a2a2a !important;
+  }
+
+  body::before {
+    display: none !important;
   }
 
   main {

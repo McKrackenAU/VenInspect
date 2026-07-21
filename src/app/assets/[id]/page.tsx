@@ -92,8 +92,18 @@ export default async function AssetDetailPage({
       ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2">
-        <ScheduleCard title="Level 1" interval={asset.level1IntervalYears} schedule={l1} />
-        <ScheduleCard title="Level 2" interval={asset.level2IntervalYears} schedule={l2} />
+        <ScheduleCard
+          title="Level 1"
+          interval={asset.level1IntervalYears}
+          schedule={l1}
+          baselineAt={asset.lastLevel1At}
+        />
+        <ScheduleCard
+          title="Level 2"
+          interval={asset.level2IntervalYears}
+          schedule={l2}
+          baselineAt={asset.lastLevel2At}
+        />
       </section>
 
       <section className="space-y-3">
@@ -216,11 +226,18 @@ function ScheduleCard({
   title,
   interval,
   schedule,
+  baselineAt,
 }: {
   title: string;
   interval: number;
   schedule: ReturnType<typeof computeLevelSchedule>;
+  baselineAt: Date | null;
 }) {
+  const usingBaselineOnly =
+    Boolean(baselineAt) &&
+    schedule.lastInspectedAt &&
+    baselineAt!.getTime() === schedule.lastInspectedAt.getTime();
+
   return (
     <div className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-4 shadow-sm">
       <div className="flex items-center justify-between gap-2">
@@ -233,6 +250,9 @@ function ScheduleCard({
         {schedule.lastInspectedAt
           ? format(schedule.lastInspectedAt, "dd MMM yyyy")
           : "None"}
+        {usingBaselineOnly ? (
+          <span className="text-[color:var(--ventia-muted)]"> (manual baseline)</span>
+        ) : null}
       </p>
       <p className="text-sm">
         Next due:{" "}

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addDefect } from "@/lib/actions";
 import type { SeverityOption } from "@/lib/severities";
 
 export function DefectAddForm({
@@ -25,17 +24,34 @@ export function DefectAddForm({
     <form
       className="card space-y-4 border-dashed p-4"
       id="defect-form"
-      action={async (fd) => {
+      onSubmit={async (e) => {
+        e.preventDefault();
         setPending(true);
         setError(null);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         try {
-          await addDefect(fd);
+          const res = await fetch(`/api/inspections/${inspectionId}/defects`, {
+            method: "POST",
+            body: fd,
+          });
+          const body = (await res.json().catch(() => null)) as {
+            error?: string;
+            ok?: boolean;
+          } | null;
+          if (!res.ok) {
+            throw new Error(
+              body?.error ||
+                (res.status === 413
+                  ? "Photo too large for the server"
+                  : `Save failed (${res.status})`),
+            );
+          }
           setPreview(null);
-          const form = document.getElementById("defect-form") as HTMLFormElement | null;
-          form?.reset();
+          form.reset();
           router.refresh();
-        } catch (e) {
-          setError(e instanceof Error ? e.message : "Could not save defect");
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Could not save defect");
         } finally {
           setPending(false);
         }
@@ -45,19 +61,18 @@ export function DefectAddForm({
       <p className="text-sm text-[color:var(--ventia-muted)]">
         Take a photo first, then describe it. A code is created automatically.
       </p>
-      <input type="hidden" name="inspectionId" value={inspectionId} />
 
       <label className="flex min-h-[8rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[color:var(--ventia-green)] bg-[color:var(--ventia-green-tint)] px-4 py-6 text-center">
         <span className="text-sm font-bold text-[color:var(--ventia-green)]">
           {preview ? "Change photo" : "Tap to take / choose photo"}
         </span>
         <span className="text-xs text-[color:var(--ventia-muted)]">
-          Required · saved compressed
+          Required · saved compressed (JPEG preferred on iPhone)
         </span>
         <input
           name="photo"
           type="file"
-          accept="image/*"
+          accept="image/*,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
           capture="environment"
           required
           className="sr-only"
@@ -107,7 +122,9 @@ export function DefectAddForm({
       <input type="hidden" name="subcategory" value="" />
 
       {error && (
-        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-950/50 dark:text-rose-200">{error}</p>
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-950/50 dark:text-rose-200">
+          {error}
+        </p>
       )}
 
       <button type="submit" className="btn-primary" disabled={pending}>

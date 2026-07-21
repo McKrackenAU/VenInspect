@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Asset" ADD COLUMN "lastLevel1At" DATETIME;
+ALTER TABLE "Asset" ADD COLUMN "lastLevel2At" DATETIME;

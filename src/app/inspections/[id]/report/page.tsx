@@ -6,8 +6,13 @@ import { requireUser } from "@/lib/auth";
 import { canViewInspection } from "@/lib/inspection-access";
 import { formatLevel, formatStatus } from "@/lib/inspection";
 import { severityLabel } from "@/lib/severities";
-import { PrintButton } from "@/components/PrintButton";
+import { ExportPdfButton } from "@/components/ExportPdfButton";
 import { VentiaPrintLogo } from "@/components/BrandMark";
+import {
+  getTemplateForLevel,
+  parseFormPayload,
+} from "@/lib/inspection-templates";
+import { fieldFilled } from "@/lib/inspection-template-types";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +41,10 @@ export default async function InspectionReportPage({
   if (!inspection) notFound();
   if (!canViewInspection(user, inspection)) redirect("/assets");
 
+  const template = getTemplateForLevel(inspection.level);
+  const formPayload = parseFormPayload(inspection.formPayload);
+  const values = formPayload.values;
+
   return (
     <div className="space-y-4">
       <div className="no-print flex flex-wrap items-center justify-between gap-2">
@@ -46,7 +55,7 @@ export default async function InspectionReportPage({
           ← Back to inspection
         </Link>
         <div className="flex flex-wrap gap-2">
-          <PrintButton label="Export PDF" />
+          <ExportPdfButton inspectionId={inspection.id} label="Export PDF" />
           <Link
             href={`/inspections/${inspection.id}/scope`}
             className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm font-semibold text-[color:var(--ventia-green)]"
@@ -136,29 +145,73 @@ export default async function InspectionReportPage({
           </section>
         ) : null}
 
-        <section className="mt-6">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-[color:var(--ventia-green)]">
-            Element comments
-          </h2>
-          <table className="mt-2 w-full border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b border-[color:var(--ventia-border)] text-[color:var(--ventia-muted)]">
-                <th className="py-2 pr-2 font-medium">Category</th>
-                <th className="py-2 pr-2 font-medium">Subcategory</th>
-                <th className="py-2 font-medium">Comments</th>
-              </tr>
-            </thead>
-            <tbody>
-              {inspection.categories.map((c) => (
-                <tr key={c.id} className="border-b border-[color:var(--ventia-border)] align-top">
-                  <td className="py-2 pr-2">{c.category}</td>
-                  <td className="py-2 pr-2">{c.subcategory}</td>
-                  <td className="py-2">{c.comments || "—"}</td>
-                </tr>
+        {template.pages.map((page) => {
+          if (page.builtin === "defects" || page.builtin === "photos") return null;
+          const sectionsWithData = page.sections
+            .map((sec) => ({
+              ...sec,
+              fields: sec.fields.filter((f) => fieldFilled(values[f.id])),
+            }))
+            .filter((sec) => sec.fields.length > 0);
+          if (sectionsWithData.length === 0) return null;
+          return (
+            <section key={page.id} className="mt-6">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-[color:var(--ventia-green)]">
+                {page.title}
+              </h2>
+              {sectionsWithData.map((sec) => (
+                <div key={sec.id} className="mt-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {sec.title}
+                  </h3>
+                  <table className="mt-1 w-full border-collapse text-left text-sm">
+                    <tbody>
+                      {sec.fields.map((f) => (
+                        <tr
+                          key={f.id}
+                          className="border-b border-[color:var(--ventia-border)] align-top"
+                        >
+                          <td className="py-2 pr-2 font-medium w-[40%]">{f.label}</td>
+                          <td className="py-2">{values[f.id]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </section>
+            </section>
+          );
+        })}
+
+        {inspection.categories.length > 0 &&
+        !Object.keys(values).some((k) => fieldFilled(values[k])) ? (
+          <section className="mt-6">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-[color:var(--ventia-green)]">
+              Element comments (legacy)
+            </h2>
+            <table className="mt-2 w-full border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-[color:var(--ventia-border)] text-[color:var(--ventia-muted)]">
+                  <th className="py-2 pr-2 font-medium">Category</th>
+                  <th className="py-2 pr-2 font-medium">Subcategory</th>
+                  <th className="py-2 font-medium">Comments</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inspection.categories.map((c) => (
+                  <tr
+                    key={c.id}
+                    className="border-b border-[color:var(--ventia-border)] align-top"
+                  >
+                    <td className="py-2 pr-2">{c.category}</td>
+                    <td className="py-2 pr-2">{c.subcategory}</td>
+                    <td className="py-2">{c.comments || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ) : null}
 
         <section className="mt-6">
           <h2 className="text-sm font-bold uppercase tracking-wide text-[color:var(--ventia-green)]">

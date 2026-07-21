@@ -23,6 +23,8 @@ export default async function DashboardPage() {
           roadName: true,
           level1IntervalYears: true,
           level2IntervalYears: true,
+          lastLevel1At: true,
+          lastLevel2At: true,
         },
         orderBy: { roadName: "asc" },
         take: 80,

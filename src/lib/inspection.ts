@@ -40,7 +40,13 @@ export function latestApprovedForLevel(
 }
 
 export function computeLevelSchedule(
-  asset: Pick<Asset, "level1IntervalYears" | "level2IntervalYears">,
+  asset: Pick<
+    Asset,
+    | "level1IntervalYears"
+    | "level2IntervalYears"
+    | "lastLevel1At"
+    | "lastLevel2At"
+  >,
   inspections: Pick<Inspection, "level" | "status" | "inspectedAt" | "approvedAt">[],
   level: ScheduleLevel,
   now = new Date(),
@@ -48,7 +54,17 @@ export function computeLevelSchedule(
   const intervalYears =
     level === "LEVEL_1" ? asset.level1IntervalYears : asset.level2IntervalYears;
   const last = latestApprovedForLevel(inspections, level);
-  const lastInspectedAt = last ? (last.approvedAt ?? last.inspectedAt) : null;
+  const fromInspection = last ? (last.approvedAt ?? last.inspectedAt) : null;
+  const baseline =
+    level === "LEVEL_1" ? asset.lastLevel1At ?? null : asset.lastLevel2At ?? null;
+
+  let lastInspectedAt: Date | null = null;
+  if (fromInspection && baseline) {
+    lastInspectedAt =
+      fromInspection.getTime() >= baseline.getTime() ? fromInspection : baseline;
+  } else {
+    lastInspectedAt = fromInspection ?? baseline;
+  }
 
   if (!lastInspectedAt) {
     return {

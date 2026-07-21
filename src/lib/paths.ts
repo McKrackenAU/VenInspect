@@ -30,6 +30,8 @@ export type StorageSettings = {
   }[];
   /** Optional Maps JS key when not set in environment */
   googleMapsApiKey?: string;
+  /** Admin-editable L1/L2 (etc.) form templates keyed by inspection type code */
+  inspectionTemplates?: Record<string, unknown>;
 };
 
 function settingsPath() {
@@ -66,6 +68,16 @@ export function writeStorageSettings(next: StorageSettings) {
   if (Object.prototype.hasOwnProperty.call(next, "inspectionTypes")) {
     if (!next.inspectionTypes?.length) delete merged.inspectionTypes;
     else merged.inspectionTypes = next.inspectionTypes;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "inspectionTemplates")) {
+    if (
+      !next.inspectionTemplates ||
+      Object.keys(next.inspectionTemplates).length === 0
+    ) {
+      delete merged.inspectionTemplates;
+    } else {
+      merged.inspectionTemplates = next.inspectionTemplates;
+    }
   }
   fs.writeFileSync(settingsPath(), JSON.stringify(merged, null, 2), "utf8");
   return merged;

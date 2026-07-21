@@ -15,6 +15,12 @@ import {
 } from "@/lib/paths";
 import { saveSeverityOptions } from "@/lib/severities";
 import { getInspectionTypes, saveInspectionTypes } from "@/lib/inspection-types";
+import {
+  getInspectionTemplates,
+  resetTemplateToSeed,
+  saveInspectionTemplates,
+  type InspectionTemplate,
+} from "@/lib/inspection-templates";
 import { ASSET_PERMIT_FLAGS } from "@/lib/permits";
 
 export async function createInspection(formData: FormData) {
@@ -274,7 +280,7 @@ export async function addDefect(formData: FormData) {
     throw new Error("Inspection and description required");
   }
 
-  if (!(photo instanceof File) || photo.size === 0) {
+  if (!(photo instanceof Blob) || photo.size === 0) {
     throw new Error("Defect photo is required");
   }
 
@@ -292,12 +298,14 @@ export async function addDefect(formData: FormData) {
   );
 
   const buffer = Buffer.from(await photo.arrayBuffer());
+  const originalName = photo instanceof File ? photo.name : null;
   const { relativePath } = await saveCompressedDefectPhoto({
     buffer,
     roadName: inspection.asset.roadName || "Unknown Road",
     assetNumber: inspection.asset.assetNumber,
     folderKey: inspection.folderKey,
     defectCode,
+    originalName,
   });
 
   await prisma.defect.create({
@@ -352,7 +360,7 @@ export async function carryForwardDefect(formData: FormData) {
   );
 
   let photoPath: string | null = null;
-  if (photo instanceof File && photo.size > 0) {
+  if (photo instanceof Blob && photo.size > 0) {
     const buffer = Buffer.from(await photo.arrayBuffer());
     const saved = await saveCompressedDefectPhoto({
       buffer,
@@ -360,6 +368,7 @@ export async function carryForwardDefect(formData: FormData) {
       assetNumber: inspection.asset.assetNumber,
       folderKey: inspection.folderKey,
       defectCode,
+      originalName: photo instanceof File ? photo.name : null,
     });
     photoPath = saved.relativePath;
   }
@@ -412,6 +421,32 @@ export async function saveInspectionTypesAction(formData: FormData) {
   saveInspectionTypes(parsed);
   revalidatePath("/manage/inspection-types");
   revalidatePath("/inspect");
+}
+
+export async function saveInspectionTemplateAction(formData: FormData) {
+  await requireAdmin();
+  const raw = String(formData.get("templateJson") ?? "");
+  let parsed: InspectionTemplate;
+  try {
+    parsed = JSON.parse(raw) as InspectionTemplate;
+  } catch {
+    throw new Error("Invalid template JSON");
+  }
+  const all = getInspectionTemplates();
+  all[parsed.typeCode] = parsed;
+  saveInspectionTemplates(all);
+  revalidatePath("/manage/inspection-templates");
+  revalidatePath(`/manage/inspection-templates/${parsed.typeCode}`);
+  revalidatePath("/inspections");
+}
+
+export async function resetInspectionTemplateAction(formData: FormData) {
+  await requireAdmin();
+  const typeCode = String(formData.get("typeCode") ?? "").trim();
+  if (!typeCode) throw new Error("Type code required");
+  resetTemplateToSeed(typeCode);
+  revalidatePath("/manage/inspection-templates");
+  revalidatePath(`/manage/inspection-templates/${typeCode}`);
 }
 
 export async function deleteDraftInspection(formData: FormData) {
@@ -672,6 +707,26 @@ export async function updateAssetDetails(formData: FormData) {
   const l1 = Number(String(formData.get("level1IntervalYears") ?? "3"));
   const l2 = Number(String(formData.get("level2IntervalYears") ?? "5"));
 
+  function parseOptionalDate(raw: string): Date | null {
+    const s = raw.trim();
+    if (!s) return null;
+    // date input → YYYY-MM-DD (treat as local noon to avoid TZ day-shift)
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m) {
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const lastLevel1At = parseOptionalDate(
+    String(formData.get("lastLevel1At") ?? ""),
+  );
+  const lastLevel2At = parseOptionalDate(
+    String(formData.get("lastLevel2At") ?? ""),
+  );
+
   if (!assetNumber || !name) throw new Error("Code and name required");
 
   await prisma.asset.update({
@@ -689,6 +744,8 @@ export async function updateAssetDetails(formData: FormData) {
       longitude: Number.isFinite(longitude) ? longitude : null,
       level1IntervalYears: Number.isFinite(l1) && l1 > 0 ? l1 : 3,
       level2IntervalYears: Number.isFinite(l2) && l2 > 0 ? l2 : 5,
+      lastLevel1At,
+      lastLevel2At,
       requireConfinedSpace: formData.get("requireConfinedSpace") === "on",
       requireTrafficManagement: formData.get("requireTrafficManagement") === "on",
       requireWorkingAtHeights: formData.get("requireWorkingAtHeights") === "on",

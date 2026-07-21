@@ -73,6 +73,9 @@ model Asset {
   notes               String?
   level1IntervalYears Int       @default(3)
   level2IntervalYears Int       @default(5)
+  /// Manual baseline when history isn’t in VenInspect yet (bootstrap tracking)
+  lastLevel1At        DateTime?
+  lastLevel2At        DateTime?
   /// Site access / WHS flags — prompt on inspection start
   requireConfinedSpace      Boolean @default(false)
   requireTrafficManagement  Boolean @default(false)
@@ -100,6 +103,8 @@ model Inspection {
   submittedAt            DateTime               @default(now())
   approvedAt             DateTime?
   generalComments        String?
+  /// Template answers + UI state (open sections / optional pages) as JSON
+  formPayload            String?
   createdById            String
   approvedById           String?
   requiresLevel2Approval Boolean                @default(false)

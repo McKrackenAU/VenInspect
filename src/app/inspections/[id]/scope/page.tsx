@@ -50,6 +50,7 @@ export default async function ScopeExportPage({
         Select defects for works scoping, then export a formatted PDF.
       </p>
       <ScopeDefectPicker
+        inspectionId={inspection.id}
         titleLabel={inspection.titleLabel}
         roadName={inspection.asset.roadName}
         assetNumber={inspection.asset.assetNumber}

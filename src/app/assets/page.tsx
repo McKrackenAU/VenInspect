@@ -17,6 +17,8 @@ export default async function AssetsPage() {
         type: true,
         level1IntervalYears: true,
         level2IntervalYears: true,
+        lastLevel1At: true,
+        lastLevel2At: true,
         _count: { select: { inspections: true } },
       },
       orderBy: [{ roadName: "asc" }, { assetNumber: "asc" }],
