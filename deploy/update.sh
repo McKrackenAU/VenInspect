@@ -199,7 +199,8 @@ if [[ -f "$APP_LIVE/deploy/veninspect-update.path" ]]; then
   install -m 644 "$APP_LIVE/deploy/veninspect-update.path" /etc/systemd/system/veninspect-update.path
 fi
 if [[ -f "$APP_LIVE/deploy/veninspect-update.sudoers" ]]; then
-  install -m 440 "$APP_LIVE/deploy/veninspect-update.sudoers" /etc/sudoers.d/veninspect-update
+  mkdir -p /etc/sudoers.d
+  install -m 440 "$APP_LIVE/deploy/veninspect-update.sudoers" /etc/sudoers.d/veninspect-update || true
 fi
 chmod 755 "$APP_LIVE/deploy/update.sh" "$APP_LIVE/deploy/manual-update.sh" 2>/dev/null || true
 systemctl daemon-reload

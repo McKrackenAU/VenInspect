@@ -123,7 +123,8 @@ chmod 755 "$APP_DIR/deploy/update.sh" "$APP_DIR/deploy/manual-update.sh" 2>/dev/
 install -m 644 "$APP_DIR/deploy/veninspect-update.service" /etc/systemd/system/veninspect-update.service
 install -m 644 "$APP_DIR/deploy/veninspect-update.path" /etc/systemd/system/veninspect-update.path
 if [[ -f "$APP_DIR/deploy/veninspect-update.sudoers" ]]; then
-  install -m 440 "$APP_DIR/deploy/veninspect-update.sudoers" /etc/sudoers.d/veninspect-update
+  mkdir -p /etc/sudoers.d
+  install -m 440 "$APP_DIR/deploy/veninspect-update.sudoers" /etc/sudoers.d/veninspect-update || true
 fi
 systemctl daemon-reload
 systemctl enable --now veninspect
