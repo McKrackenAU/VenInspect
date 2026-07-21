@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveInspectionTypesAction } from "@/lib/actions";
-import type { InspectionTypeOption } from "@/lib/inspection-types";
+import type { InspectionTypeOption } from "@/lib/inspection-type-options";
 
 export function InspectionTypesForm({ initial }: { initial: InspectionTypeOption[] }) {
   const router = useRouter();

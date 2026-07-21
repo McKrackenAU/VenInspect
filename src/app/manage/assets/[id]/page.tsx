@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { updateAssetDetails } from "@/lib/actions";
-import { ASSET_PERMIT_FLAGS, formatAssetType } from "@/lib/inspection";
+import { formatAssetType } from "@/lib/inspection";
+import { ASSET_PERMIT_FLAGS } from "@/lib/permits";
 
 export const dynamic = "force-dynamic";
 

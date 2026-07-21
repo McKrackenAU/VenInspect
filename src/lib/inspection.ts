@@ -2,6 +2,9 @@ import { addYears, isBefore, differenceInCalendarDays, format } from "date-fns";
 import type { Asset, Inspection } from "@/generated/prisma/client";
 import { getInspectionTypes, inspectionTypeLabel } from "@/lib/inspection-types";
 
+export type { PermitKey } from "@/lib/permits";
+export { ASSET_PERMIT_FLAGS } from "@/lib/permits";
+
 export type ScheduleStatus = "ok" | "due_soon" | "overdue" | "never";
 
 /** Built-in schedule keys (asset still has level1/level2 interval fields). */
@@ -111,40 +114,6 @@ export function nextDefectCode(assetNumber: string, existingCodes: string[]) {
   }
   return `${prefix}${String(max + 1).padStart(3, "0")}`;
 }
-
-export type PermitKey =
-  | "CONFINED_SPACE"
-  | "TRAFFIC_MANAGEMENT"
-  | "WORKING_AT_HEIGHTS";
-
-export const ASSET_PERMIT_FLAGS: {
-  key: PermitKey;
-  assetField:
-    | "requireConfinedSpace"
-    | "requireTrafficManagement"
-    | "requireWorkingAtHeights";
-  label: string;
-  hint: string;
-}[] = [
-  {
-    key: "CONFINED_SPACE",
-    assetField: "requireConfinedSpace",
-    label: "Confined spaces permit",
-    hint: "Entry into confined spaces",
-  },
-  {
-    key: "TRAFFIC_MANAGEMENT",
-    assetField: "requireTrafficManagement",
-    label: "Traffic management",
-    hint: "Lane closures / TMP on site",
-  },
-  {
-    key: "WORKING_AT_HEIGHTS",
-    assetField: "requireWorkingAtHeights",
-    label: "Working at heights / EWP",
-    hint: "Elevated work platform or heights permit",
-  },
-];
 
 export const BRIDGE_CATEGORIES = [
   { category: "Approaches", subcategories: ["Approach A", "Approach B", "Barriers"] },

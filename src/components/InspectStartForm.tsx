@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { createInspection } from "@/lib/actions";
 import { AssetPicker } from "@/components/AssetPicker";
-import { ASSET_PERMIT_FLAGS } from "@/lib/inspection";
-import type { InspectionTypeOption } from "@/lib/inspection-types";
+import { ASSET_PERMIT_FLAGS } from "@/lib/permits";
+import type { InspectionTypeOption } from "@/lib/inspection-type-options";
 
 export type InspectAssetOption = {
   id: string;

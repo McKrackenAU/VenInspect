@@ -15,7 +15,7 @@ import {
 } from "@/lib/paths";
 import { saveSeverityOptions } from "@/lib/severities";
 import { getInspectionTypes, saveInspectionTypes } from "@/lib/inspection-types";
-import { ASSET_PERMIT_FLAGS } from "@/lib/inspection";
+import { ASSET_PERMIT_FLAGS } from "@/lib/permits";
 
 export async function createInspection(formData: FormData) {
   const assetId = String(formData.get("assetId") ?? "");
