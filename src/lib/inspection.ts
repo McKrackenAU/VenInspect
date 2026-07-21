@@ -71,8 +71,30 @@ export function computeLevelSchedule(
   };
 }
 
+/**
+ * Inspection type options shown on Start inspection.
+ * Add new entries here when extending beyond Level 1 / Level 2
+ * (also add matching enum values + migration when needed).
+ */
+export const INSPECTION_TYPES: {
+  value: InspectionLevel;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "LEVEL_1",
+    label: "Level 1",
+    description: "Routine check (about every 3 years)",
+  },
+  {
+    value: "LEVEL_2",
+    label: "Level 2",
+    description: "Detailed check — may need a Level 2 person to approve",
+  },
+];
+
 export function formatLevel(level: InspectionLevel) {
-  return level === "LEVEL_1" ? "Level 1" : "Level 2";
+  return INSPECTION_TYPES.find((t) => t.value === level)?.label ?? level.replaceAll("_", " ");
 }
 
 export function formatStatus(status: string) {
@@ -90,6 +112,40 @@ export function nextDefectCode(assetNumber: string, existingCodes: string[]) {
   }
   return `${prefix}${String(max + 1).padStart(3, "0")}`;
 }
+
+export type PermitKey =
+  | "CONFINED_SPACE"
+  | "TRAFFIC_MANAGEMENT"
+  | "WORKING_AT_HEIGHTS";
+
+export const ASSET_PERMIT_FLAGS: {
+  key: PermitKey;
+  assetField:
+    | "requireConfinedSpace"
+    | "requireTrafficManagement"
+    | "requireWorkingAtHeights";
+  label: string;
+  hint: string;
+}[] = [
+  {
+    key: "CONFINED_SPACE",
+    assetField: "requireConfinedSpace",
+    label: "Confined spaces permit",
+    hint: "Entry into confined spaces",
+  },
+  {
+    key: "TRAFFIC_MANAGEMENT",
+    assetField: "requireTrafficManagement",
+    label: "Traffic management",
+    hint: "Lane closures / TMP on site",
+  },
+  {
+    key: "WORKING_AT_HEIGHTS",
+    assetField: "requireWorkingAtHeights",
+    label: "Working at heights / EWP",
+    hint: "Elevated work platform or heights permit",
+  },
+];
 
 export const BRIDGE_CATEGORIES = [
   { category: "Approaches", subcategories: ["Approach A", "Approach B", "Barriers"] },

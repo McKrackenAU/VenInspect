@@ -46,8 +46,9 @@ export default async function ManageAssetsPage({
             Asset registry
           </h1>
           <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-            Grouped by <strong>road name</strong>, then asset code. Photos land under{" "}
-            <code className="text-xs">{"{PHOTO_DIR}/{Road}/{Code}/{date}/"}</code>.
+            Grouped by <strong>road name</strong>, then asset code. Click a code to{" "}
+            <strong>edit</strong> details, coordinates, and permit flags. Field users use Find
+            asset for history/photos.
           </p>
         </div>
         <div className="flex gap-2">
@@ -121,7 +122,7 @@ export default async function ManageAssetsPage({
                 {list.map((a) => (
                   <tr key={a.id} className="border-b border-[color:var(--ventia-border)]">
                     <td className="px-3 py-2 font-mono font-semibold text-[color:var(--ventia-green)]">
-                      <Link href={`/assets/${a.id}`} className="hover:underline">
+                      <Link href={`/manage/assets/${a.id}`} className="hover:underline">
                         {a.assetNumber}
                       </Link>
                     </td>

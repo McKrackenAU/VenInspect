@@ -78,6 +78,10 @@ model Asset {
   notes               String?
   level1IntervalYears Int       @default(3)
   level2IntervalYears Int       @default(5)
+  /// Site access / WHS flags — prompt on inspection start
+  requireConfinedSpace      Boolean @default(false)
+  requireTrafficManagement  Boolean @default(false)
+  requireWorkingAtHeights   Boolean @default(false)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -119,10 +123,29 @@ model Inspection {
   categories    InspectionCategory[]
   defects       Defect[]
   notifications Notification[]
+  permitChecks  InspectionPermitCheck[]
 
   @@index([assetId, submittedAt])
   @@index([folderKey])
   @@index([parentInspectionId])
+}
+
+/// Permit acknowledgements (shown on web report only — use no-print for PDF)
+model InspectionPermitCheck {
+  id              String  @id @default(cuid())
+  inspectionId    String
+  /// CONFINED_SPACE | TRAFFIC_MANAGEMENT | WORKING_AT_HEIGHTS
+  permitKey       String
+  label           String
+  requiredOnAsset Boolean @default(true)
+  /// true = will use / obtain; false = not needed (reason required)
+  willUse         Boolean
+  notNeededReason String?
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@unique([inspectionId, permitKey])
+  @@index([inspectionId])
 }
 
 model InspectionCategory {

@@ -10,26 +10,56 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [assetCount, pendingCount, attentionPreview, myDrafts] = await Promise.all([
-    prisma.asset.count(),
-    prisma.inspection.count({ where: { status: "PENDING_APPROVAL" } }),
-    prisma.asset.findMany({
-      include: { inspections: true },
-      orderBy: { roadName: "asc" },
-      take: 80,
-    }),
-    prisma.inspection.findMany({
-      where: { createdById: user.id, status: "DRAFT" },
-      include: { asset: true },
-      orderBy: { updatedAt: "desc" },
-      take: 8,
-    }),
-  ]);
+  const [assetCount, pendingCount, attentionAssets, scheduleRows, myDrafts] =
+    await Promise.all([
+      prisma.asset.count(),
+      prisma.inspection.count({ where: { status: "PENDING_APPROVAL" } }),
+      prisma.asset.findMany({
+        select: {
+          id: true,
+          assetNumber: true,
+          name: true,
+          roadName: true,
+          level1IntervalYears: true,
+          level2IntervalYears: true,
+        },
+        orderBy: { roadName: "asc" },
+        take: 80,
+      }),
+      prisma.inspection.findMany({
+        where: {
+          status: { in: ["APPROVED", "SUBMITTED", "PENDING_APPROVAL"] },
+        },
+        select: {
+          assetId: true,
+          level: true,
+          status: true,
+          inspectedAt: true,
+          approvedAt: true,
+        },
+        orderBy: { inspectedAt: "desc" },
+        take: 500,
+      }),
+      prisma.inspection.findMany({
+        where: { createdById: user.id, status: "DRAFT" },
+        include: { asset: true },
+        orderBy: { updatedAt: "desc" },
+        take: 8,
+      }),
+    ]);
 
-  const attention = attentionPreview
+  const byAsset = new Map<string, typeof scheduleRows>();
+  for (const row of scheduleRows) {
+    const list = byAsset.get(row.assetId);
+    if (list) list.push(row);
+    else byAsset.set(row.assetId, [row]);
+  }
+
+  const attention = attentionAssets
     .flatMap((asset) => {
-      const l1 = computeLevelSchedule(asset, asset.inspections, "LEVEL_1");
-      const l2 = computeLevelSchedule(asset, asset.inspections, "LEVEL_2");
+      const inspections = byAsset.get(asset.id) ?? [];
+      const l1 = computeLevelSchedule(asset, inspections, "LEVEL_1");
+      const l2 = computeLevelSchedule(asset, inspections, "LEVEL_2");
       return [
         { asset, schedule: l1 },
         { asset, schedule: l2 },

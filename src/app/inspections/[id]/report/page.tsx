@@ -30,6 +30,7 @@ export default async function InspectionReportPage({
       approvedBy: true,
       categories: { orderBy: [{ category: "asc" }, { subcategory: "asc" }] },
       defects: { orderBy: { defectCode: "asc" } },
+      permitChecks: { orderBy: { label: "asc" } },
     },
   });
   if (!inspection) notFound();
@@ -54,6 +55,31 @@ export default async function InspectionReportPage({
           </Link>
         </div>
       </div>
+
+      {inspection.permitChecks.length > 0 ? (
+        <section className="no-print card space-y-2 p-4 text-sm">
+          <h2 className="font-semibold text-[color:var(--ventia-green)]">
+            Site permits (web only — not in PDF)
+          </h2>
+          <ul className="space-y-2">
+            {inspection.permitChecks.map((p) => (
+              <li
+                key={p.id}
+                className="rounded-lg border border-[color:var(--ventia-border)] px-3 py-2"
+              >
+                <p className="font-medium">{p.label}</p>
+                {p.willUse ? (
+                  <p className="text-[color:var(--ventia-muted)]">Will use / obtain</p>
+                ) : (
+                  <p className="text-amber-800 dark:text-amber-200">
+                    Not needed: {p.notNeededReason || "—"}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <article className="report-sheet mx-auto max-w-3xl rounded-xl border border-[color:var(--ventia-border)] bg-white p-8 text-slate-900 shadow-sm print:max-w-none print:border-0 print:p-0 print:shadow-none">
         <header className="border-b-2 border-[color:var(--ventia-green)] pb-4">

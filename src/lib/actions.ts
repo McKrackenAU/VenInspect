@@ -14,6 +14,7 @@ import {
   writeStorageSettings,
 } from "@/lib/paths";
 import { saveSeverityOptions } from "@/lib/severities";
+import { ASSET_PERMIT_FLAGS } from "@/lib/inspection";
 import type { InspectionLevel } from "@/generated/prisma/client";
 
 export async function createInspection(formData: FormData) {
@@ -95,6 +96,25 @@ export async function createInspection(formData: FormData) {
       comments: null,
     })),
   });
+
+  const permitRows = ASSET_PERMIT_FLAGS.filter((f) => asset[f.assetField]).map((f) => {
+    const willUse = String(formData.get(`permit_${f.key}_willUse`) ?? "") === "1";
+    const reason = String(formData.get(`permit_${f.key}_reason`) ?? "").trim();
+    if (!willUse && !reason) {
+      throw new Error(`Reason required when not using: ${f.label}`);
+    }
+    return {
+      inspectionId: inspection.id,
+      permitKey: f.key,
+      label: f.label,
+      requiredOnAsset: true,
+      willUse,
+      notNeededReason: willUse ? null : reason,
+    };
+  });
+  if (permitRows.length > 0) {
+    await prisma.inspectionPermitCheck.createMany({ data: permitRows });
+  }
 
   revalidatePath("/");
   revalidatePath("/assets");
@@ -567,6 +587,60 @@ export async function upsertAssetManual(formData: FormData) {
   revalidatePath("/manage/assets");
   revalidatePath("/assets");
   redirect("/manage/assets");
+}
+
+export async function updateAssetDetails(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) throw new Error("Asset id required");
+
+  const assetNumber = String(formData.get("assetNumber") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const type = String(formData.get("type") ?? "BRIDGE") as
+    | "BRIDGE"
+    | "DRAINAGE"
+    | "NOISE_WALL";
+  const assetVisionId = String(formData.get("assetVisionId") ?? "").trim() || null;
+  const roadName = String(formData.get("roadName") ?? "").trim() || "Unknown Road";
+  const location = String(formData.get("location") ?? "").trim() || null;
+  const classification = String(formData.get("classification") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const latitudeRaw = String(formData.get("latitude") ?? "").trim();
+  const longitudeRaw = String(formData.get("longitude") ?? "").trim();
+  const latitude = latitudeRaw ? Number(latitudeRaw) : null;
+  const longitude = longitudeRaw ? Number(longitudeRaw) : null;
+  const l1 = Number(String(formData.get("level1IntervalYears") ?? "3"));
+  const l2 = Number(String(formData.get("level2IntervalYears") ?? "5"));
+
+  if (!assetNumber || !name) throw new Error("Code and name required");
+
+  await prisma.asset.update({
+    where: { id },
+    data: {
+      assetNumber,
+      name,
+      type,
+      assetVisionId,
+      roadName,
+      location,
+      classification,
+      notes,
+      latitude: Number.isFinite(latitude) ? latitude : null,
+      longitude: Number.isFinite(longitude) ? longitude : null,
+      level1IntervalYears: Number.isFinite(l1) && l1 > 0 ? l1 : 3,
+      level2IntervalYears: Number.isFinite(l2) && l2 > 0 ? l2 : 5,
+      requireConfinedSpace: formData.get("requireConfinedSpace") === "on",
+      requireTrafficManagement: formData.get("requireTrafficManagement") === "on",
+      requireWorkingAtHeights: formData.get("requireWorkingAtHeights") === "on",
+    },
+  });
+
+  revalidatePath("/manage/assets");
+  revalidatePath(`/manage/assets/${id}`);
+  revalidatePath("/assets");
+  revalidatePath(`/assets/${id}`);
+  revalidatePath("/map");
+  redirect(`/manage/assets/${id}?saved=1`);
 }
 
 export async function savePhotoStoragePath(formData: FormData) {

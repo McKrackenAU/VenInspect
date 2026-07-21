@@ -5,34 +5,49 @@ import { AssetFinder, formatNextDue } from "@/components/AssetFinder";
 export const dynamic = "force-dynamic";
 
 export default async function AssetsPage() {
-  // Keep this light — including full inspection graphs for the whole registry
-  // can fail or hang on SQLite; manage/assets only loads asset rows.
-  const assets = await prisma.asset.findMany({
-    select: {
-      id: true,
-      assetNumber: true,
-      name: true,
-      roadName: true,
-      type: true,
-      level1IntervalYears: true,
-      level2IntervalYears: true,
-      _count: { select: { inspections: true } },
-      inspections: {
-        select: {
-          level: true,
-          status: true,
-          inspectedAt: true,
-          approvedAt: true,
-        },
+  // Light query: asset rows + only schedule fields from completed inspections.
+  // Never pull defects/categories/photos for the whole registry.
+  const [assets, scheduleRows] = await Promise.all([
+    prisma.asset.findMany({
+      select: {
+        id: true,
+        assetNumber: true,
+        name: true,
+        roadName: true,
+        type: true,
+        level1IntervalYears: true,
+        level2IntervalYears: true,
+        _count: { select: { inspections: true } },
       },
-    },
-    orderBy: [{ roadName: "asc" }, { assetNumber: "asc" }],
-  });
+      orderBy: [{ roadName: "asc" }, { assetNumber: "asc" }],
+    }),
+    prisma.inspection.findMany({
+      where: {
+        status: { in: ["APPROVED", "SUBMITTED", "PENDING_APPROVAL"] },
+      },
+      select: {
+        assetId: true,
+        level: true,
+        status: true,
+        inspectedAt: true,
+        approvedAt: true,
+      },
+      orderBy: { inspectedAt: "desc" },
+    }),
+  ]);
+
+  const byAsset = new Map<string, typeof scheduleRows>();
+  for (const row of scheduleRows) {
+    const list = byAsset.get(row.assetId);
+    if (list) list.push(row);
+    else byAsset.set(row.assetId, [row]);
+  }
 
   const rows = assets.map((asset) => {
     const roadName = asset.roadName?.trim() || "Unknown Road";
-    const l1 = computeLevelSchedule(asset, asset.inspections, "LEVEL_1");
-    const l2 = computeLevelSchedule(asset, asset.inspections, "LEVEL_2");
+    const inspections = byAsset.get(asset.id) ?? [];
+    const l1 = computeLevelSchedule(asset, inspections, "LEVEL_1");
+    const l2 = computeLevelSchedule(asset, inspections, "LEVEL_2");
     const worst =
       l1.status === "overdue" || l2.status === "overdue"
         ? l1.status === "overdue"

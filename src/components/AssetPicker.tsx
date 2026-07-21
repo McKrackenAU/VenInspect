@@ -14,13 +14,20 @@ export function AssetPicker({
   assets,
   defaultAssetId,
   name = "assetId",
+  onAssetChange,
 }: {
   assets: AssetOption[];
   defaultAssetId?: string;
   name?: string;
+  onAssetChange?: (assetId: string) => void;
 }) {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(defaultAssetId ?? "");
+
+  function selectAsset(id: string) {
+    setSelected(id);
+    onAssetChange?.(id);
+  }
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -88,7 +95,7 @@ export function AssetPicker({
           <button
             type="button"
             className="mt-2 text-xs font-semibold text-[color:var(--ventia-blue)]"
-            onClick={() => setSelected("")}
+            onClick={() => selectAsset("")}
           >
             Change
           </button>
@@ -106,7 +113,7 @@ export function AssetPicker({
               <li key={a.id} className="border-b border-[color:var(--ventia-border)] last:border-0">
                 <button
                   type="button"
-                  onClick={() => setSelected(a.id)}
+                  onClick={() => selectAsset(a.id)}
                   className="flex min-h-[3.25rem] w-full flex-col items-start px-4 py-3 text-left text-[color:var(--ventia-ink)] hover:bg-[color:var(--ventia-green-tint)] active:bg-[color:var(--ventia-green-tint)]"
                 >
                   <span className="font-mono font-semibold text-[color:var(--ventia-green)]">

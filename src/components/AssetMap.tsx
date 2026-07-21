@@ -271,7 +271,9 @@ export function AssetMap({ assets, apiKey }: Props) {
           </a>
           , or set <code className="font-mono text-xs">GOOGLE_MAPS_API_KEY</code> in{" "}
           <code className="font-mono text-xs">/etc/veninspect.env</code>. Enable the{" "}
-          <strong>Maps JavaScript API</strong> and restrict the key by HTTP referrer.
+          <strong>Maps JavaScript API</strong> and restrict the key by HTTP referrer to include{" "}
+          <code className="font-mono text-xs">http://192.168.13.10:8181/*</code> (and localhost if
+          needed). Billing must be enabled on the Google Cloud project.
         </p>
         <p className="mt-3">
           Assets with coordinates: <strong>{withCoords.length}</strong> / {assets.length}
@@ -283,7 +285,13 @@ export function AssetMap({ assets, apiKey }: Props) {
   if (mapsError === "load-failed") {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
-        Google Maps failed to load. Check the API key and network access.
+        <p className="font-medium">Google Maps failed to load</p>
+        <p className="mt-2">
+          Usually the API key referrer allow-list does not include this site. In Google Cloud →
+          Credentials, add{" "}
+          <code className="font-mono text-xs">http://192.168.13.10:8181/*</code> (and enable Maps
+          JavaScript API + billing). Then hard-refresh this page.
+        </p>
       </div>
     );
   }

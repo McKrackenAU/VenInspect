@@ -47,6 +47,7 @@ export default async function InspectionPage({
       children: true,
       categories: { orderBy: [{ category: "asc" }, { subcategory: "asc" }] },
       defects: { orderBy: { defectCode: "asc" } },
+      permitChecks: { orderBy: { label: "asc" } },
     },
   });
   if (!inspection) notFound();
@@ -135,6 +136,32 @@ export default async function InspectionPage({
           </div>
         ) : null}
       </div>
+
+      {inspection.permitChecks.length > 0 ? (
+        <section className="card space-y-2 p-4 text-sm">
+          <h2 className="font-semibold text-[color:var(--ventia-green)]">Site permits</h2>
+          <p className="text-xs text-[color:var(--ventia-muted)]">
+            Recorded for this visit (shown on web report; excluded from PDF print).
+          </p>
+          <ul className="space-y-2">
+            {inspection.permitChecks.map((p) => (
+              <li
+                key={p.id}
+                className="rounded-lg border border-[color:var(--ventia-border)] px-3 py-2"
+              >
+                <p className="font-medium">{p.label}</p>
+                {p.willUse ? (
+                  <p className="text-[color:var(--ventia-muted)]">Will use / obtain</p>
+                ) : (
+                  <p className="text-amber-800 dark:text-amber-200">
+                    Not needed: {p.notNeededReason || "—"}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="card p-4">
         <h2 className="text-sm font-semibold text-[color:var(--ventia-muted)]">
