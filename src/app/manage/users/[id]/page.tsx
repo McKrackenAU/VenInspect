@@ -49,7 +49,7 @@ export default async function ManageUserHistoryPage({
         {user.inspectionsCreated.length === 0 ? (
           <p className="text-sm text-[color:var(--ventia-muted)]">No inspections yet.</p>
         ) : (
-          <ul className="divide-y divide-[color:var(--ventia-border)] overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-white">
+          <ul className="divide-y divide-[color:var(--ventia-border)] overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)]">
             {user.inspectionsCreated.map((insp) => (
               <li key={insp.id} className="px-4 py-3">
                 <Link

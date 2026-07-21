@@ -262,14 +262,16 @@ export function AssetMap({ assets, apiKey }: Props) {
 
   if (mapsError === "missing-key") {
     return (
-      <div className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-5 text-sm text-[color:var(--ventia-muted)]">
+      <div className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5 text-sm text-[color:var(--ventia-muted)]">
         <p className="font-medium text-[color:var(--ventia-ink)]">Map not configured</p>
         <p className="mt-2">
-          Add <code className="font-mono text-xs">GOOGLE_MAPS_API_KEY</code> to{" "}
-          <code className="font-mono text-xs">/etc/veninspect.env</code> (or{" "}
-          <code className="font-mono text-xs">.env</code> locally), enable the{" "}
-          <strong>Maps JavaScript API</strong> in Google Cloud, restrict the key by HTTP
-          referrer, then restart the service.
+          Add a Google Maps API key under{" "}
+          <a href="/manage/system" className="font-semibold text-[color:var(--ventia-blue)] underline">
+            Admin → System
+          </a>
+          , or set <code className="font-mono text-xs">GOOGLE_MAPS_API_KEY</code> in{" "}
+          <code className="font-mono text-xs">/etc/veninspect.env</code>. Enable the{" "}
+          <strong>Maps JavaScript API</strong> and restrict the key by HTTP referrer.
         </p>
         <p className="mt-3">
           Assets with coordinates: <strong>{withCoords.length}</strong> / {assets.length}
@@ -280,7 +282,7 @@ export function AssetMap({ assets, apiKey }: Props) {
 
   if (mapsError === "load-failed") {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">
+      <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200">
         Google Maps failed to load. Check the API key and network access.
       </div>
     );
@@ -303,7 +305,7 @@ export function AssetMap({ assets, apiKey }: Props) {
       </div>
 
       {locError ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           {locError}
         </p>
       ) : null}
@@ -325,7 +327,7 @@ export function AssetMap({ assets, apiKey }: Props) {
               No mapped assets within {NEARBY_KM} km of your location.
             </p>
           ) : (
-            <ul className="divide-y divide-[color:var(--ventia-border)] overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-white">
+            <ul className="divide-y divide-[color:var(--ventia-border)] overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)]">
               {nearby.map(({ asset, km }) => (
                 <li key={asset.id}>
                   <button

@@ -17,7 +17,7 @@ export function AssetImportForm() {
   return (
     <div className="space-y-4">
       <form
-        className="space-y-4 rounded-xl border border-[color:var(--ventia-border)] bg-white p-5 shadow-sm"
+        className="space-y-4 rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5 shadow-sm"
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
@@ -75,13 +75,13 @@ export function AssetImportForm() {
       </form>
 
       {error && (
-        <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+        <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">
           {error}
         </p>
       )}
 
       {result && (
-        <div className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-4 text-sm">
+        <div className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-4 text-sm">
           <p className="font-medium text-[color:var(--ventia-green)]">Import complete</p>
           <ul className="mt-2 list-inside list-disc text-[color:var(--ventia-muted)]">
             <li>Parsed: {result.total}</li>

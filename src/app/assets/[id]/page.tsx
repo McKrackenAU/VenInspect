@@ -68,8 +68,8 @@ export default async function AssetDetailPage({
       </div>
 
       {myDrafts.length > 0 ? (
-        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <h2 className="font-semibold text-amber-900">Your drafts on this asset</h2>
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40">
+          <h2 className="font-semibold text-amber-900 dark:text-amber-100">Your drafts on this asset</h2>
           <ul className="mt-2 space-y-1">
             {myDrafts.map((d) => (
               <li key={d.id}>
@@ -99,7 +99,7 @@ export default async function AssetDetailPage({
         {asset.inspections.length === 0 ? (
           <p className="text-sm text-[color:var(--ventia-muted)]">No inspections yet.</p>
         ) : (
-          <ul className="divide-y divide-[color:var(--ventia-border)] overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-white">
+          <ul className="divide-y divide-[color:var(--ventia-border)] overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)]">
             {asset.inspections.map((insp) => (
               <li
                 key={insp.id}
@@ -152,7 +152,7 @@ export default async function AssetDetailPage({
       </section>
 
       {standalones.filter((i) => i.status !== "DRAFT").length >= 2 && (
-        <section className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-5">
+        <section className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5">
           <h2 className="font-medium">Combine two reports</h2>
           <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
             Creates a parent inspection and links both as children.
@@ -216,7 +216,7 @@ function ScheduleCard({
   schedule: ReturnType<typeof computeLevelSchedule>;
 }) {
   return (
-    <div className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-4 shadow-sm">
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-medium">{title}</h3>
         <StatusPill status={schedule.status} />

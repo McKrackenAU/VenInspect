@@ -20,7 +20,7 @@ export default async function ManageStoragePage() {
         </p>
       </div>
 
-      <section className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-5 shadow-sm text-sm space-y-2">
+      <section className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5 shadow-sm text-sm space-y-2">
         <p>
           <span className="font-medium">Database (DATA_DIR):</span>{" "}
           <code className="text-xs">{storage.dataDir}</code>
@@ -43,7 +43,7 @@ export default async function ManageStoragePage() {
 
       <form
         action={savePhotoStoragePath}
-        className="space-y-4 rounded-xl border border-[color:var(--ventia-border)] bg-white p-5 shadow-sm"
+        className="space-y-4 rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5 shadow-sm"
       >
         <label className="block space-y-1.5 text-sm">
           <span className="font-medium">Photo directory path</span>

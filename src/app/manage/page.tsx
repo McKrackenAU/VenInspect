@@ -33,7 +33,7 @@ export default async function ManageHomePage() {
         <Stat label="Import Excel / CSV" value="→" href="/manage/assets/import" />
       </section>
 
-      <section className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-5 shadow-sm">
+      <section className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5 shadow-sm">
         <h2 className="font-medium text-[color:var(--ventia-ink)]">By type</h2>
         <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
           <li>Bridges: {typeMap.BRIDGE ?? 0}</li>
@@ -63,7 +63,7 @@ function Stat({
   return (
     <Link
       href={href}
-      className="rounded-xl border border-[color:var(--ventia-border)] bg-white px-4 py-4 shadow-sm transition hover:border-[color:var(--ventia-green-mid)]"
+      className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] px-4 py-4 shadow-sm transition hover:border-[color:var(--ventia-green-mid)]"
     >
       <p className="text-xs uppercase tracking-wide text-[color:var(--ventia-muted)]">
         {label}

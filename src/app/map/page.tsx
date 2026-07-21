@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { formatAssetType } from "@/lib/inspection";
 import { AssetMap } from "@/components/AssetMap";
+import { getGoogleMapsApiKey } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,7 @@ export default async function MapPage() {
       longitude: a.longitude as number,
     }));
 
-  const apiKey =
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
-    process.env.GOOGLE_MAPS_API_KEY?.trim() ||
-    null;
+  const apiKey = getGoogleMapsApiKey();
 
   return (
     <div className="space-y-4">

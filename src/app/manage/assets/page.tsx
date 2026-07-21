@@ -71,12 +71,12 @@ export default async function ManageAssetsPage({
           name="q"
           defaultValue={q}
           placeholder="Search road, code, name, Asset Vision ID…"
-          className="min-w-[16rem] flex-1 rounded-md border border-[color:var(--ventia-border)] bg-white px-3 py-2 text-sm"
+          className="min-w-[16rem] flex-1 rounded-md border border-[color:var(--ventia-border)] bg-[color:var(--panel)] px-3 py-2 text-sm"
         />
         <select
           name="type"
           defaultValue={type ?? ""}
-          className="rounded-md border border-[color:var(--ventia-border)] bg-white px-3 py-2 text-sm"
+          className="rounded-md border border-[color:var(--ventia-border)] bg-[color:var(--panel)] px-3 py-2 text-sm"
         >
           <option value="">All types</option>
           <option value="BRIDGE">Bridge</option>
@@ -99,7 +99,7 @@ export default async function ManageAssetsPage({
         {[...byRoad.entries()].map(([road, list]) => (
           <section
             key={road}
-            className="overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-white shadow-sm"
+            className="overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] shadow-sm"
           >
             <h2 className="border-b border-[color:var(--ventia-border)] bg-[color:var(--ventia-green-tint)] px-4 py-2.5 text-sm font-semibold text-[color:var(--ventia-green)]">
               {road}{" "}
@@ -143,7 +143,7 @@ export default async function ManageAssetsPage({
         ))}
       </div>
 
-      <section className="rounded-xl border border-dashed border-[color:var(--ventia-border)] bg-white p-5">
+      <section className="rounded-xl border border-dashed border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5">
         <h2 className="font-medium">Add / update single asset</h2>
         <form action={upsertAssetManual} className="mt-3 grid gap-3 sm:grid-cols-2">
           <input

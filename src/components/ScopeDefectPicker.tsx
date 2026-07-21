@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { PrintButton } from "@/components/PrintButton";
+import { VentiaPrintLogo } from "@/components/BrandMark";
 
 export type ScopeDefect = {
   id: string;
@@ -90,7 +91,7 @@ export function ScopeDefectPicker({
         {defects.map((d) => (
           <li
             key={d.id}
-            className="flex items-start gap-3 rounded-lg border border-[color:var(--ventia-border)] bg-white px-3 py-2"
+            className="flex items-start gap-3 rounded-lg border border-[color:var(--ventia-border)] bg-[color:var(--panel)] px-3 py-2"
           >
             <input
               type="checkbox"
@@ -111,15 +112,20 @@ export function ScopeDefectPicker({
         ))}
       </ul>
 
-      <article className="scope-sheet mx-auto max-w-3xl rounded-xl border border-[color:var(--ventia-border)] bg-white p-8 text-[color:var(--ventia-ink)] shadow-sm print:max-w-none print:border-0 print:p-0 print:shadow-none">
+      <article className="scope-sheet mx-auto max-w-3xl rounded-xl border border-[color:var(--ventia-border)] bg-white p-8 text-slate-900 shadow-sm print:max-w-none print:border-0 print:p-0 print:shadow-none">
         <header className="border-b-2 border-[color:var(--ventia-green)] pb-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-[color:var(--ventia-muted)]">
-            VenInspect · Works scope
-          </p>
-          <h1 className="mt-2 text-xl font-bold text-[color:var(--ventia-green)]">
-            {assetNumber} — {assetName}
-          </h1>
-          <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">{titleLabel}</p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                VenInspect · Works scope
+              </p>
+              <h1 className="mt-2 text-xl font-bold text-[color:var(--ventia-green)]">
+                {assetNumber} — {assetName}
+              </h1>
+            </div>
+            <VentiaPrintLogo />
+          </div>
+          <p className="mt-1 text-sm text-slate-600">{titleLabel}</p>
           <dl className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
             <div>
               <span className="text-[color:var(--ventia-muted)]">Road: </span>

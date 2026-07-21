@@ -7,6 +7,7 @@ import { canViewInspection } from "@/lib/inspection-access";
 import { formatLevel, formatStatus } from "@/lib/inspection";
 import { severityLabel } from "@/lib/severities";
 import { PrintButton } from "@/components/PrintButton";
+import { VentiaPrintLogo } from "@/components/BrandMark";
 
 export const dynamic = "force-dynamic";
 
@@ -54,15 +55,20 @@ export default async function InspectionReportPage({
         </div>
       </div>
 
-      <article className="report-sheet mx-auto max-w-3xl rounded-xl border border-[color:var(--ventia-border)] bg-white p-8 text-[color:var(--ventia-ink)] shadow-sm print:max-w-none print:border-0 print:p-0 print:shadow-none">
+      <article className="report-sheet mx-auto max-w-3xl rounded-xl border border-[color:var(--ventia-border)] bg-white p-8 text-slate-900 shadow-sm print:max-w-none print:border-0 print:p-0 print:shadow-none">
         <header className="border-b-2 border-[color:var(--ventia-green)] pb-4">
-          <p className="text-xs font-semibold uppercase tracking-widest text-[color:var(--ventia-muted)]">
-            VenInspect · Inspection Report
-          </p>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-[color:var(--ventia-green)]">
-            {inspection.asset.assetNumber} — {inspection.asset.name}
-          </h1>
-          <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                VenInspect · Inspection Report
+              </p>
+              <h1 className="mt-2 text-2xl font-bold tracking-tight text-[color:var(--ventia-green)]">
+                {inspection.asset.assetNumber} — {inspection.asset.name}
+              </h1>
+            </div>
+            <VentiaPrintLogo />
+          </div>
+          <p className="mt-1 text-sm text-slate-600">
             {inspection.asset.type} · {inspection.asset.roadName} ·{" "}
             {inspection.asset.location ?? "—"}
           </p>

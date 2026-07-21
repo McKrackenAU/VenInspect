@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/lib/auth-actions";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BrandMark } from "@/components/BrandMark";
 
 const userLinks = [
   { href: "/", label: "Home" },
@@ -41,16 +42,7 @@ export function AppNav({ userName, isAdmin }: Props) {
     <header className="no-print sticky top-0 z-20 border-b border-[color:var(--ventia-border)] bg-[color:var(--nav-bg)] backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
         <Link href={isManage ? "/manage" : "/"} className="flex items-center gap-2">
-          <span
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white"
-            style={{
-              background:
-                "conic-gradient(from 210deg, var(--ventia-green), var(--ventia-blue), var(--ventia-green-mid), var(--ventia-green))",
-            }}
-            aria-hidden
-          >
-            V
-          </span>
+          <BrandMark size={36} priority />
           <div className="leading-tight">
             <span className="block font-semibold tracking-tight text-[color:var(--ventia-green)]">
               VenInspect

@@ -23,7 +23,7 @@ export default async function ManageUsersPage() {
         </p>
       </div>
 
-      <section className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-5 shadow-sm">
+      <section className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5 shadow-sm">
         <h2 className="text-lg font-medium">Add user</h2>
         <form action={createUser} className="mt-4 grid gap-3 sm:grid-cols-2">
           <input
@@ -84,7 +84,7 @@ export default async function ManageUsersPage() {
           {users.map((u) => (
             <li
               key={u.id}
-              className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-4 shadow-sm"
+              className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-4 shadow-sm"
             >
               <p className="font-medium">{u.name}</p>
               <p className="text-sm text-[color:var(--ventia-muted)]">

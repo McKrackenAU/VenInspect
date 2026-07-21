@@ -334,7 +334,7 @@ If you used the install script with a clone URL, `/opt/veninspect` already has t
 | Can’t save photos | Permissions on `DATA_DIR` / `PHOTO_DIR`; `chown -R veninspect:veninspect …` |
 | CT can’t clone Gitea | Ping `192.168.13.9`; use GitHub URL instead |
 | Out of disk on rootfs | You put photos on root — move `PHOTO_DIR` to a large mount |
-| Map says “not configured” | Set `GOOGLE_MAPS_API_KEY` in `/etc/veninspect.env`, enable Maps JavaScript API, `systemctl restart veninspect` |
+| Map says “not configured” | Admin → System → paste Google Maps API key, or set `GOOGLE_MAPS_API_KEY` in `/etc/veninspect.env`; enable Maps JavaScript API; restart if using env |
 | No nearby assets | Assets need `latitude`/`longitude` in the registry; import or edit them in Admin |
 | In-app update stuck / UI says “running” forever | Status JSON left behind. Clear now: `rm -f /var/lib/veninspect/update.request /var/lib/veninspect/update.request.active`; `printf '%s\n' '{"state":"idle","message":"cleared"}' > /var/lib/veninspect/update-status.json`; then refresh Admin. Prefer `deploy/manual-update.sh` for 0.0.3+. |
 

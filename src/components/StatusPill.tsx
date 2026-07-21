@@ -1,10 +1,13 @@
 import type { ScheduleStatus } from "@/lib/inspection";
 
 const styles: Record<ScheduleStatus, string> = {
-  ok: "bg-emerald-50 text-[color:var(--ventia-green)] ring-[color:var(--ventia-green-mid)]/40",
-  due_soon: "bg-amber-50 text-amber-800 ring-amber-300",
-  overdue: "bg-rose-50 text-rose-800 ring-rose-300",
-  never: "bg-slate-100 text-slate-600 ring-slate-300",
+  ok: "bg-emerald-50 text-[color:var(--ventia-green)] ring-[color:var(--ventia-green-mid)]/40 dark:bg-emerald-950/50 dark:text-emerald-300 dark:ring-emerald-800",
+  due_soon:
+    "bg-amber-50 text-amber-800 ring-amber-300 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-800",
+  overdue:
+    "bg-rose-50 text-rose-800 ring-rose-300 dark:bg-rose-950/50 dark:text-rose-200 dark:ring-rose-800",
+  never:
+    "bg-slate-100 text-slate-600 ring-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-600",
 };
 
 const labels: Record<ScheduleStatus, string> = {

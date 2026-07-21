@@ -1,13 +1,28 @@
 import { formatAppVersion, getAppVersion, getConfiguredUpdateChannel } from "@/lib/version";
 import { SystemUpdatePanel } from "@/components/SystemUpdatePanel";
-import { describeStorage } from "@/lib/paths";
+import { MapsApiKeyForm } from "@/components/MapsApiKeyForm";
+import {
+  describeStorage,
+  getGoogleMapsApiKey,
+  mapsApiKeySource,
+  readStorageSettings,
+} from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
+
+function maskKey(key: string | null): string | null {
+  if (!key) return null;
+  if (key.length <= 8) return "••••••••";
+  return `${key.slice(0, 6)}…${key.slice(-4)}`;
+}
 
 export default async function ManageSystemPage() {
   const version = formatAppVersion(getAppVersion());
   const channel = getConfiguredUpdateChannel();
   const storage = describeStorage();
+  const mapsSource = mapsApiKeySource();
+  const mapsKey = getGoogleMapsApiKey();
+  const settingsKey = readStorageSettings().googleMapsApiKey?.trim() || null;
 
   return (
     <div className="space-y-8">
@@ -16,7 +31,7 @@ export default async function ManageSystemPage() {
           System settings
         </h1>
         <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-          Version info and in-app updates from Gitea or GitHub with a short restart window.
+          Version, Maps API key, and in-app updates from Gitea or GitHub.
         </p>
       </div>
 
@@ -52,6 +67,15 @@ export default async function ManageSystemPage() {
             </dd>
           </div>
         </dl>
+      </section>
+
+      <section className="card space-y-3 p-5">
+        <h2 className="text-lg font-medium">Google Maps</h2>
+        <MapsApiKeyForm
+          source={mapsSource}
+          configured={Boolean(mapsKey)}
+          maskedKey={maskKey(mapsKey ?? settingsKey)}
+        />
       </section>
 
       <section className="card space-y-3 p-5">

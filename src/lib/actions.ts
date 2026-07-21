@@ -583,6 +583,23 @@ export async function savePhotoStoragePath(formData: FormData) {
   redirect("/manage/storage");
 }
 
+export async function saveGoogleMapsApiKey(formData: FormData) {
+  await requireAdmin();
+  const key = String(formData.get("googleMapsApiKey") ?? "").trim();
+  if (
+    process.env.GOOGLE_MAPS_API_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim()
+  ) {
+    throw new Error(
+      "GOOGLE_MAPS_API_KEY is set in the environment and takes priority. Update /etc/veninspect.env (or .env) instead.",
+    );
+  }
+  writeStorageSettings({ googleMapsApiKey: key || undefined });
+  revalidatePath("/manage/system");
+  revalidatePath("/map");
+  redirect("/manage/system");
+}
+
 /** Attach this inspection as a child of another (same asset preferred). */
 export async function linkAsChildInspection(formData: FormData) {
   const childId = String(formData.get("childId") ?? "");

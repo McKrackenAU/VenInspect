@@ -47,7 +47,7 @@ export function AssetPicker({
 
   if (assets.length === 0) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
         No assets in the registry yet. An admin must import or add assets under{" "}
         <strong>Admin → Assets</strong> before you can start an inspection.
         <input type="hidden" name={name} value="" />

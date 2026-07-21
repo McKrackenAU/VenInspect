@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { loginAction } from "@/lib/auth-actions";
 import { getSession } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BrandMark } from "@/components/BrandMark";
 
 export const dynamic = "force-dynamic";
 
@@ -27,16 +28,7 @@ export default async function LoginPage({ searchParams }: Props) {
       </div>
       <div className="card rounded-2xl p-6 shadow-sm sm:p-8">
         <div className="mb-6 flex items-center gap-3">
-          <span
-            className="inline-flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold text-white"
-            style={{
-              background:
-                "conic-gradient(from 210deg, var(--ventia-green), var(--ventia-blue), var(--ventia-green-mid), var(--ventia-green))",
-            }}
-            aria-hidden
-          >
-            V
-          </span>
+          <BrandMark size={48} priority />
           <div>
             <h1 className="text-xl font-bold tracking-tight text-[color:var(--ventia-green)]">
               VenInspect

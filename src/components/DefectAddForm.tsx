@@ -107,7 +107,7 @@ export function DefectAddForm({
       <input type="hidden" name="subcategory" value="" />
 
       {error && (
-        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>
+        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-950/50 dark:text-rose-200">{error}</p>
       )}
 
       <button type="submit" className="btn-primary" disabled={pending}>

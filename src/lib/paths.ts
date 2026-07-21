@@ -21,6 +21,8 @@ export type StorageSettings = {
   photoDir?: string;
   /** Admin-customisable defect severity dropdown options */
   severities?: { value: string; label: string }[];
+  /** Optional Maps JS key when not set in environment */
+  googleMapsApiKey?: string;
 };
 
 function settingsPath() {
@@ -50,6 +52,10 @@ export function writeStorageSettings(next: StorageSettings) {
   if (Object.prototype.hasOwnProperty.call(next, "photoDir")) {
     if (!next.photoDir) delete merged.photoDir;
   }
+  if (Object.prototype.hasOwnProperty.call(next, "googleMapsApiKey")) {
+    if (!next.googleMapsApiKey?.trim()) delete merged.googleMapsApiKey;
+    else merged.googleMapsApiKey = next.googleMapsApiKey.trim();
+  }
   fs.writeFileSync(settingsPath(), JSON.stringify(merged, null, 2), "utf8");
   return merged;
 }
@@ -74,6 +80,30 @@ export function getPhotoDir() {
   const fromSettings = readStorageSettings().photoDir?.trim();
   if (fromSettings) return path.resolve(fromSettings);
   return path.join(getDataDir(), "photos");
+}
+
+/**
+ * Google Maps JS API key.
+ * Env (GOOGLE_MAPS_API_KEY / NEXT_PUBLIC_…) wins; otherwise settings.json.
+ */
+export function getGoogleMapsApiKey(): string | null {
+  const fromEnv =
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
+    process.env.GOOGLE_MAPS_API_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  const fromSettings = readStorageSettings().googleMapsApiKey?.trim();
+  return fromSettings || null;
+}
+
+export function mapsApiKeySource(): "env" | "settings" | "none" {
+  if (
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ||
+    process.env.GOOGLE_MAPS_API_KEY?.trim()
+  ) {
+    return "env";
+  }
+  if (readStorageSettings().googleMapsApiKey?.trim()) return "settings";
+  return "none";
 }
 
 /** @deprecated use getPhotoDir */
