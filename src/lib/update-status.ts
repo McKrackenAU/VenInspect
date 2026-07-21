@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFile } from "node:child_process";
 import { getDataDir } from "@/lib/paths";
 
 export type UpdateStatus = {
@@ -15,7 +16,7 @@ export type UpdateStatus = {
 };
 
 /** Brief window after writing update.request before systemd claims it. */
-const CLAIM_GRACE_MS = 30_000;
+const CLAIM_GRACE_MS = 45_000;
 
 function statusPath() {
   return path.join(getDataDir(), "update-status.json");
@@ -27,6 +28,10 @@ function requestPath() {
 
 function activePath() {
   return path.join(getDataDir(), "update.request.active");
+}
+
+function logPath() {
+  return path.join(getDataDir(), "update.log");
 }
 
 function hasClaimFiles(): boolean {
@@ -43,10 +48,6 @@ export function readUpdateStatus(): UpdateStatus {
   }
 }
 
-/**
- * If the UI says running/requested but nothing is queued on disk, the updater
- * is not actually working (manual cleanup, crashed jobs, path unit never fired).
- */
 function normalizeStale(status: UpdateStatus): UpdateStatus {
   if (status.state !== "running" && status.state !== "requested") return status;
 
@@ -55,14 +56,13 @@ function normalizeStale(status: UpdateStatus): UpdateStatus {
   const started = status.startedAt || status.requestedAt;
   const ageMs = started ? Date.now() - new Date(started).getTime() : Number.POSITIVE_INFINITY;
 
-  // Allow a short grace so a brand-new request is not cleared before systemd starts.
   if (ageMs < CLAIM_GRACE_MS) return status;
 
   const fixed: UpdateStatus = {
     ...status,
     state: "error",
     message:
-      "Update is not running (no active request on disk). Use Reset stuck update, then try again.",
+      "Update did not start (no active job). Click Reset stuck update, then Update to latest again.",
     finishedAt: new Date().toISOString(),
   };
   try {
@@ -80,10 +80,28 @@ export function writeUpdateStatus(status: UpdateStatus) {
 }
 
 export function isUpdateInProgress(): boolean {
-  // Disk claim is the source of truth — stale JSON alone must not block forever.
   if (hasClaimFiles()) return true;
   const s = readUpdateStatus();
   return s.state === "running" || s.state === "requested";
+}
+
+function kickUpdaterService() {
+  // Best-effort: PathExists should start the unit; sudoers allows an explicit start.
+  execFile(
+    "sudo",
+    ["-n", "systemctl", "reset-failed", "veninspect-update.service"],
+    { timeout: 5000 },
+    () => {
+      execFile(
+        "sudo",
+        ["-n", "systemctl", "start", "veninspect-update.service"],
+        { timeout: 5000 },
+        () => {
+          /* ignore — path unit is the primary trigger */
+        },
+      );
+    },
+  );
 }
 
 export function requestUpdate(opts: {
@@ -91,28 +109,38 @@ export function requestUpdate(opts: {
   fromVersion: string;
 }) {
   if (isUpdateInProgress()) {
-    throw new Error("An update is already in progress");
+    throw new Error("An update is already in progress — use Reset if it is stuck");
   }
   const dir = getDataDir();
   fs.mkdirSync(dir, { recursive: true });
+
+  const channel =
+    opts.channel === "github" || opts.channel === "gitea" ? opts.channel : "gitea";
+
+  // Must delete first so PathExists sees a new file creation (overwrite alone may not fire).
+  for (const p of [requestPath(), activePath()]) {
+    try {
+      fs.unlinkSync(p);
+    } catch {
+      /* ignore */
+    }
+  }
+
   const payload = {
     requestedAt: new Date().toISOString(),
-    channel: opts.channel,
+    channel,
     fromVersion: opts.fromVersion,
   };
-  try {
-    fs.unlinkSync(activePath());
-  } catch {
-    /* ignore */
-  }
   fs.writeFileSync(requestPath(), JSON.stringify(payload, null, 2), "utf8");
   writeUpdateStatus({
     state: "requested",
-    message: "Update queued — waiting for updater service…",
+    message: `Update queued (${channel}) — starting updater…`,
     requestedAt: payload.requestedAt,
     fromVersion: opts.fromVersion,
-    channel: opts.channel,
+    channel,
+    logTail: "",
   });
+  kickUpdaterService();
 }
 
 /** Clear stuck UI / claim files so a new update can be requested. */
@@ -126,10 +154,16 @@ export function resetUpdateState(): UpdateStatus {
       /* ignore */
     }
   }
+  try {
+    fs.writeFileSync(logPath(), "", "utf8");
+  } catch {
+    /* ignore */
+  }
   const next: UpdateStatus = {
     state: "idle",
     message: "Update state cleared. Safe to request a new update.",
     finishedAt: new Date().toISOString(),
+    logTail: "",
   };
   writeUpdateStatus(next);
   return next;

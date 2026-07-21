@@ -59,8 +59,6 @@ export function SystemUpdatePanel({
   }, [refreshStatus]);
 
   useEffect(() => {
-    // Keep polling while busy, and also once after load if status looks stuck
-    // so normalizeStale can clear abandoned "running" JSON.
     const shouldPoll =
       updating ||
       status?.state === "running" ||
@@ -93,7 +91,7 @@ export function SystemUpdatePanel({
   async function onUpdate() {
     if (
       !window.confirm(
-        "Build the latest release in the background, then restart VenInspect briefly (a few seconds). Continue?",
+        `Update from ${channel === "github" ? "GitHub" : "Gitea"}?\n\nThe app stays up during the build, then restarts briefly to swap.`,
       )
     ) {
       return;
@@ -122,7 +120,7 @@ export function SystemUpdatePanel({
   async function onReset() {
     if (
       !window.confirm(
-        "Clear stuck update state? Only do this if the updater is not actually building right now.",
+        "Clear stuck update state? Only if the updater is not actually building right now.",
       )
     ) {
       return;
@@ -159,11 +157,15 @@ export function SystemUpdatePanel({
           <span className="font-medium text-[color:var(--ventia-muted)]">Update source</span>
           <select
             value={channel}
-            onChange={(e) => setChannel(e.target.value as "gitea" | "github")}
+            onChange={(e) => {
+              setChannel(e.target.value as "gitea" | "github");
+              setCheck(null);
+            }}
+            disabled={updating}
             className="field-input"
           >
-            <option value="gitea">Gitea (LAN / McKraken)</option>
-            <option value="github">GitHub (McKrackenAU)</option>
+            <option value="gitea">Gitea (LAN)</option>
+            <option value="github">GitHub (remote / internet)</option>
           </select>
         </label>
         <div className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--ventia-green-tint)] px-4 py-3">
@@ -230,7 +232,14 @@ export function SystemUpdatePanel({
 
       {status && status.state !== "idle" ? (
         <div className="rounded-xl border border-[color:var(--ventia-border)] px-4 py-3 text-sm">
-          <p className="font-semibold capitalize">{status.state}</p>
+          <p className="font-semibold capitalize">
+            {status.state}
+            {status.channel ? (
+              <span className="ml-2 text-xs font-normal text-[color:var(--ventia-muted)]">
+                via {status.channel}
+              </span>
+            ) : null}
+          </p>
           <p className="mt-1 text-[color:var(--ventia-muted)]">{status.message}</p>
           {status.toVersion ? (
             <p className="mt-1 text-xs">
@@ -238,18 +247,12 @@ export function SystemUpdatePanel({
             </p>
           ) : null}
           {status.logTail ? (
-            <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-black/90 p-3 text-[0.7rem] text-emerald-200">
+            <pre className="mt-3 max-h-48 overflow-auto rounded-lg bg-black/90 p-3 text-[0.7rem] text-emerald-200">
               {status.logTail}
             </pre>
           ) : null}
         </div>
       ) : null}
-
-      <p className="text-xs text-[color:var(--ventia-muted)]">
-        App admins only queue an update (write a request file). systemd runs the build as root —
-        no Linux “super admin” login is required in the web UI. Only one updater runs at a time.
-        If status stays on “running” with no progress, use Reset stuck update.
-      </p>
     </div>
   );
 }

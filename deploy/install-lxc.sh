@@ -119,9 +119,12 @@ fi
 chown_safe -R "$APP_USER:$APP_USER" "$APP_DIR" "$DATA_DIR"
 
 install -m 644 "$APP_DIR/deploy/veninspect.service" /etc/systemd/system/veninspect.service
-install -m 755 "$APP_DIR/deploy/update.sh" "$APP_DIR/deploy/update.sh"
+chmod 755 "$APP_DIR/deploy/update.sh" "$APP_DIR/deploy/manual-update.sh" 2>/dev/null || true
 install -m 644 "$APP_DIR/deploy/veninspect-update.service" /etc/systemd/system/veninspect-update.service
 install -m 644 "$APP_DIR/deploy/veninspect-update.path" /etc/systemd/system/veninspect-update.path
+if [[ -f "$APP_DIR/deploy/veninspect-update.sudoers" ]]; then
+  install -m 440 "$APP_DIR/deploy/veninspect-update.sudoers" /etc/sudoers.d/veninspect-update
+fi
 systemctl daemon-reload
 systemctl enable --now veninspect
 systemctl enable --now veninspect-update.path
