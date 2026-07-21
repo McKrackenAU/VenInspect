@@ -22,7 +22,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATA_DIR=/data
-ENV PORT=3000
+ENV PORT=8181
 ENV HOSTNAME=0.0.0.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
@@ -43,7 +43,7 @@ COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh && chown -R node:node /app
 
 USER node
-EXPOSE 3000
+EXPOSE 8181
 VOLUME ["/data"]
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["npm", "run", "start"]

@@ -4,9 +4,10 @@ services:
     container_name: veninspect
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "8181:8181"
     environment:
       DATA_DIR: /data
+      PORT: "8181"
       NODE_ENV: production
     volumes:
       # Persist SQLite + compressed photos outside the container filesystem

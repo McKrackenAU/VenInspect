@@ -13,6 +13,6 @@
 # (created with: pct set <CTID> -mp1 <storage>:size=100G,mp=/var/lib/veninspect)
 
 # Networking tip: give the CT a static IP or DHCP reservation so phones
-# and office PCs can reach http://<ct-ip>:3000 (or 443 via reverse proxy).
+# and office PCs can reach http://<ct-ip>:8181 (or 443 via reverse proxy).
 
-# Firewall tip: allow 3000 from LAN only, or terminate TLS on the CT / another proxy CT.
+# Firewall tip: allow 8181 from LAN only, or terminate TLS on the CT / another proxy CT.

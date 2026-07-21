@@ -20,7 +20,7 @@ bash -c "$(curl -fsSL http://192.168.13.9:3000/McKraken/VenInspect/raw/branch/ma
 
 The menu asks for CT ID, hostname, CPU/RAM/disk, storage, network, git source (Gitea vs GitHub), and optional separate photo storage.
 
-When finished, open `http://<ct-ip>:3000`.
+When finished, open `http://<ct-ip>:8181`.
 
 | Script | Where it runs |
 |--------|----------------|
@@ -37,7 +37,7 @@ If you prefer creating the CT yourself first, continue below.
 - App code at `/opt/veninspect`
 - Database (SQLite) under `DATA_DIR` (default `/var/lib/veninspect`)
 - Photos under `PHOTO_DIR` (default `{DATA_DIR}/photos`, or a separate large disk)
-- Service listening on **port 3000**: `http://<ct-ip>:3000`
+- Service listening on **port 8181**: `http://<ct-ip>:8181`
 
 ---
 
@@ -205,7 +205,7 @@ bash deploy/install-lxc.sh https://github.com/McKrackenAU/VenInspect.git
 1. Installs Node.js **22**, git, build tools  
 2. Creates system user `veninspect`  
 3. Clones/updates app to `/opt/veninspect`  
-4. Writes `/etc/veninspect.env` (`DATA_DIR`, `PORT=3000`, …)  
+4. Writes `/etc/veninspect.env` (`DATA_DIR`, `PORT=8181`, …)  
 5. `npm ci` → Prisma generate → production build → migrations  
 6. Enables systemd unit `veninspect`  
 
@@ -217,20 +217,20 @@ Expect several minutes on first build.
 
 ```bash
 systemctl status veninspect
-curl -I http://127.0.0.1:3000
+curl -I http://127.0.0.1:8181
 hostname -I
 ```
 
 From a PC or phone on the LAN open:
 
 ```text
-http://<ct-ip>:3000
+http://<ct-ip>:8181
 ```
 
 | Portal | URL |
 |--------|-----|
-| Field (inspect) | `http://<ct-ip>:3000/` |
-| Office (manage) | `http://<ct-ip>:3000/manage` |
+| Field (inspect) | `http://<ct-ip>:8181/` |
+| Office (manage) | `http://<ct-ip>:8181/manage` |
 
 ### Optional demo data (lab only — not for real production)
 
@@ -288,9 +288,9 @@ If you used the install script with a clone URL, `/opt/veninspect` already has t
 
 ## 9. Network / firewall tips
 
-- Allow **TCP 3000** from the office/field LAN to the CT IP.
+- Allow **TCP 8181** from the office/field LAN to the CT IP.
 - Prefer a **static IP** or DHCP reservation so bookmarks and phone home-screen installs stay stable.
-- For HTTPS later: put **Caddy** or **nginx** on this CT (or a reverse-proxy CT) and proxy to `127.0.0.1:3000`.
+- For HTTPS later: put **Caddy** or **nginx** on this CT (or a reverse-proxy CT) and proxy to `127.0.0.1:8181`.
 
 ---
 
@@ -333,7 +333,7 @@ ls -la /var/lib/veninspect
 - [ ] Data mount at `/var/lib/veninspect` (and optional photo mount)  
 - [ ] `bash deploy/install-lxc.sh <repo-url>` completed  
 - [ ] `systemctl status veninspect` is active  
-- [ ] Browser opens `http://<ct-ip>:3000`  
+- [ ] Browser opens `http://<ct-ip>:8181`  
 - [ ] (Optional) separate `PHOTO_DIR` set for large photo volume  
 - [ ] (Optional) demo seed only if this is a test box  
 

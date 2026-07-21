@@ -91,14 +91,14 @@ cd /path/to/VenInspect
 sudo bash deploy/install-lxc.sh
 ```
 
-That installs Node 22, builds the app under `/opt/veninspect`, stores data in `/var/lib/veninspect`, and enables the `veninspect` systemd service on port **3000**.
+That installs Node 22, builds the app under `/opt/veninspect`, stores data in `/var/lib/veninspect`, and enables the `veninspect` systemd service on port **8181**.
 
 ```bash
 systemctl status veninspect
-curl -I http://127.0.0.1:3000
+curl -I http://127.0.0.1:8181
 ```
 
-Reach it on the LAN at `http://<ct-ip>:3000`. Add Caddy/nginx later for HTTPS if needed.
+Reach it on the LAN at `http://<ct-ip>:8181`. Add Caddy/nginx later for HTTPS if needed.
 
 Optional demo data (not for real production):
 
@@ -128,7 +128,7 @@ npm run db:seed
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:8181](http://localhost:8181).
 
 ### Demo users
 

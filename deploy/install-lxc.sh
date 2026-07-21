@@ -57,7 +57,7 @@ chown -R "$APP_USER:$APP_USER" "$DATA_DIR"
 cat >/etc/veninspect.env <<EOF
 NODE_ENV=production
 DATA_DIR=$DATA_DIR
-PORT=3000
+PORT=8181
 HOSTNAME=0.0.0.0
 EOF
 chmod 640 /etc/veninspect.env
@@ -78,7 +78,7 @@ echo
 echo "VenInspect is installed as the main server on this LXC."
 echo "  App:      $APP_DIR"
 echo "  Data:     $DATA_DIR  (SQLite + compressed photos — mount a Proxmox disk here)"
-echo "  Listen:   http://0.0.0.0:3000"
+echo "  Listen:   http://0.0.0.0:8181"
 echo "  Service:  systemctl status veninspect"
 echo
 echo "Optional demo seed (once):"

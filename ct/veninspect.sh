@@ -13,7 +13,7 @@
 set -euo pipefail
 
 APP="VenInspect"
-APP_PORT="3000"
+APP_PORT="8181"
 # Default clone sources (overridable in GUI)
 REPO_GITHUB="https://github.com/McKrackenAU/VenInspect.git"
 REPO_GITEA="http://192.168.13.9:3000/McKraken/VenInspect.git"
