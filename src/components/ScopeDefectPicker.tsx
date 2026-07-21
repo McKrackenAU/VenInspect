@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
+import { PrintButton } from "@/components/PrintButton";
 
 export type ScopeDefect = {
   id: string;
@@ -9,22 +10,32 @@ export type ScopeDefect = {
   description: string;
   comments: string | null;
   severity: string;
+  severityLabel: string;
   category: string | null;
   subcategory: string | null;
   photoPath: string | null;
+  comparisonPhotoPath: string | null;
 };
+
+function photoUrl(path: string) {
+  return `/api/uploads/${path.split(/[/\\]/).map(encodeURIComponent).join("/")}`;
+}
 
 export function ScopeDefectPicker({
   titleLabel,
   roadName,
   assetNumber,
+  assetName,
   submittedAtIso,
+  inspectorName,
   defects,
 }: {
   titleLabel: string;
   roadName: string;
   assetNumber: string;
+  assetName: string;
   submittedAtIso: string;
+  inspectorName: string;
   defects: ScopeDefect[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(
@@ -51,7 +62,7 @@ export function ScopeDefectPicker({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2 print:hidden">
+      <div className="no-print flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => selectAll(true)}
@@ -69,16 +80,13 @@ export function ScopeDefectPicker({
         <span className="text-xs text-[color:var(--ventia-muted)]">
           {chosen.length} of {defects.length} selected
         </span>
-        <button
-          type="button"
-          onClick={() => window.print()}
+        <PrintButton
+          label="Export scope PDF"
           className="ml-auto rounded-md bg-[color:var(--ventia-green)] px-3 py-1.5 text-sm font-medium text-white"
-        >
-          Export scope (Print / PDF)
-        </button>
+        />
       </div>
 
-      <ul className="space-y-2 print:hidden">
+      <ul className="no-print space-y-2">
         {defects.map((d) => (
           <li
             key={d.id}
@@ -94,7 +102,7 @@ export function ScopeDefectPicker({
               <p className="font-mono text-sm font-semibold text-[color:var(--ventia-green)]">
                 {d.defectCode}{" "}
                 <span className="font-sans text-xs uppercase text-[color:var(--ventia-muted)]">
-                  {d.severity}
+                  {d.severityLabel}
                 </span>
               </p>
               <p className="text-sm">{d.description}</p>
@@ -103,20 +111,33 @@ export function ScopeDefectPicker({
         ))}
       </ul>
 
-      <article className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-8 text-[color:var(--ventia-ink)] shadow-sm print:border-0 print:shadow-none">
-        <header className="border-b border-[color:var(--ventia-border)] pb-4">
+      <article className="scope-sheet mx-auto max-w-3xl rounded-xl border border-[color:var(--ventia-border)] bg-white p-8 text-[color:var(--ventia-ink)] shadow-sm print:max-w-none print:border-0 print:p-0 print:shadow-none">
+        <header className="border-b-2 border-[color:var(--ventia-green)] pb-4">
           <p className="text-xs font-semibold uppercase tracking-widest text-[color:var(--ventia-muted)]">
-            VenInspect · Works scope (selected defects)
+            VenInspect · Works scope
           </p>
-          <h1 className="mt-2 text-xl font-bold">{titleLabel}</h1>
-          <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-            {roadName} · {assetNumber} · submitted{" "}
-            {format(new Date(submittedAtIso), "dd MMM yyyy HH:mm:ss")}
-          </p>
-          <p className="mt-2 text-sm">
-            Scope includes <strong>{chosen.length}</strong> of {defects.length} recorded
-            defects.
-          </p>
+          <h1 className="mt-2 text-xl font-bold text-[color:var(--ventia-green)]">
+            {assetNumber} — {assetName}
+          </h1>
+          <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">{titleLabel}</p>
+          <dl className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
+            <div>
+              <span className="text-[color:var(--ventia-muted)]">Road: </span>
+              {roadName}
+            </div>
+            <div>
+              <span className="text-[color:var(--ventia-muted)]">Inspected: </span>
+              {format(new Date(submittedAtIso), "dd MMM yyyy")}
+            </div>
+            <div>
+              <span className="text-[color:var(--ventia-muted)]">Inspector: </span>
+              {inspectorName}
+            </div>
+            <div>
+              <span className="text-[color:var(--ventia-muted)]">Defects in scope: </span>
+              <strong>{chosen.length}</strong> of {defects.length}
+            </div>
+          </dl>
         </header>
 
         {chosen.length === 0 ? (
@@ -124,31 +145,67 @@ export function ScopeDefectPicker({
             No defects selected.
           </p>
         ) : (
-          <ol className="mt-6 list-decimal space-y-4 pl-5 text-sm">
-            {chosen.map((d) => (
-              <li key={d.id} className="pl-1">
-                <p className="font-mono font-bold">{d.defectCode}</p>
-                <p className="mt-1">{d.description}</p>
-                {d.comments && (
-                  <p className="mt-1 text-[color:var(--ventia-muted)]">{d.comments}</p>
+          <ol className="mt-6 list-none space-y-5 p-0">
+            {chosen.map((d, index) => (
+              <li
+                key={d.id}
+                className="break-inside-avoid rounded-lg border border-[color:var(--ventia-border)] p-4"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="font-mono text-base font-bold text-[color:var(--ventia-green)]">
+                    {index + 1}. {d.defectCode}
+                  </p>
+                  <span className="rounded-full bg-[color:var(--ventia-green-tint)] px-2 py-0.5 text-xs font-semibold uppercase text-[color:var(--ventia-green)]">
+                    {d.severityLabel}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm font-medium">{d.description}</p>
+                {d.comments ? (
+                  <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
+                    {d.comments}
+                  </p>
+                ) : null}
+                {(d.category || d.subcategory) && (
+                  <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
+                    Location: {[d.category, d.subcategory].filter(Boolean).join(" · ")}
+                  </p>
                 )}
-                <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
-                  Severity: {d.severity}
-                  {d.category ? ` · ${d.category}` : ""}
-                  {d.subcategory ? ` / ${d.subcategory}` : ""}
-                </p>
-                {d.photoPath && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={`/api/uploads/${d.photoPath.split(/[/\\]/).map(encodeURIComponent).join("/")}`}
-                    alt={d.defectCode}
-                    className="mt-2 max-h-40 rounded border border-[color:var(--ventia-border)] object-contain"
-                  />
-                )}
+                <div className="mt-3 flex flex-wrap gap-4">
+                  {d.comparisonPhotoPath ? (
+                    <figure>
+                      <figcaption className="text-[0.65rem] uppercase tracking-wide text-[color:var(--ventia-muted)]">
+                        Prior condition
+                      </figcaption>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photoUrl(d.comparisonPhotoPath)}
+                        alt="Prior"
+                        className="mt-1 max-h-44 rounded border border-[color:var(--ventia-border)] object-contain"
+                      />
+                    </figure>
+                  ) : null}
+                  {d.photoPath ? (
+                    <figure>
+                      <figcaption className="text-[0.65rem] uppercase tracking-wide text-[color:var(--ventia-muted)]">
+                        {d.comparisonPhotoPath ? "Current condition" : "Photo"}
+                      </figcaption>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photoUrl(d.photoPath)}
+                        alt={d.defectCode}
+                        className="mt-1 max-h-44 rounded border border-[color:var(--ventia-border)] object-contain"
+                      />
+                    </figure>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ol>
         )}
+
+        <footer className="mt-8 border-t border-[color:var(--ventia-border)] pt-3 text-xs text-[color:var(--ventia-muted)]">
+          VenInspect works scope · print or save as PDF from your browser
+        </footer>
       </article>
     </div>
   );

@@ -73,12 +73,15 @@ if [[ -n "${PHOTO_DIR:-}" ]]; then
   chown_safe -R "$APP_USER:$APP_USER" "$PHOTO_DIR"
 fi
 
-# Preserve existing SESSION_SECRET on reinstall
+# Preserve existing SESSION_SECRET / Maps key on reinstall
 EXISTING_SECRET=""
+EXISTING_MAPS_KEY=""
 if [[ -f /etc/veninspect.env ]]; then
   EXISTING_SECRET="$(grep -E '^SESSION_SECRET=' /etc/veninspect.env | cut -d= -f2- || true)"
+  EXISTING_MAPS_KEY="$(grep -E '^(GOOGLE_MAPS_API_KEY|NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)=' /etc/veninspect.env | head -1 | cut -d= -f2- || true)"
 fi
 SESSION_SECRET="${SESSION_SECRET:-${EXISTING_SECRET:-$(openssl rand -hex 32)}}"
+MAPS_KEY="${GOOGLE_MAPS_API_KEY:-${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-${EXISTING_MAPS_KEY:-}}}"
 
 {
   echo "NODE_ENV=production"
@@ -88,6 +91,9 @@ SESSION_SECRET="${SESSION_SECRET:-${EXISTING_SECRET:-$(openssl rand -hex 32)}}"
   echo "SESSION_SECRET=$SESSION_SECRET"
   if [[ -n "${PHOTO_DIR:-}" ]]; then
     echo "PHOTO_DIR=$PHOTO_DIR"
+  fi
+  if [[ -n "$MAPS_KEY" ]]; then
+    echo "GOOGLE_MAPS_API_KEY=$MAPS_KEY"
   fi
 } >/etc/veninspect.env
 
@@ -113,8 +119,12 @@ fi
 chown_safe -R "$APP_USER:$APP_USER" "$APP_DIR" "$DATA_DIR"
 
 install -m 644 "$APP_DIR/deploy/veninspect.service" /etc/systemd/system/veninspect.service
+install -m 755 "$APP_DIR/deploy/update.sh" "$APP_DIR/deploy/update.sh"
+install -m 644 "$APP_DIR/deploy/veninspect-update.service" /etc/systemd/system/veninspect-update.service
+install -m 644 "$APP_DIR/deploy/veninspect-update.path" /etc/systemd/system/veninspect-update.path
 systemctl daemon-reload
 systemctl enable --now veninspect
+systemctl enable --now veninspect-update.path
 systemctl --no-pager --full status veninspect || true
 
 echo
@@ -123,6 +133,7 @@ echo "  App:      $APP_DIR"
 echo "  Data:     $DATA_DIR  (SQLite + compressed photos — mount a Proxmox disk here)"
 echo "  Listen:   http://0.0.0.0:8181"
 echo "  Login:    root / calvin"
+echo "  Updates:  Admin → System (Gitea/GitHub) via veninspect-update.path"
 echo "  Service:  systemctl status veninspect"
 echo
 echo "Optional demo seed (once):"

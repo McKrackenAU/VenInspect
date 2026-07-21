@@ -16,14 +16,20 @@ export function latestApprovedForLevel(
   inspections: Pick<Inspection, "level" | "status" | "inspectedAt" | "approvedAt">[],
   level: InspectionLevel,
 ) {
-  const approved = inspections
-    .filter((i) => i.level === level && i.status === "APPROVED")
+  const completed = inspections
+    .filter(
+      (i) =>
+        i.level === level &&
+        (i.status === "APPROVED" ||
+          i.status === "SUBMITTED" ||
+          i.status === "PENDING_APPROVAL"),
+    )
     .sort(
       (a, b) =>
         (b.approvedAt ?? b.inspectedAt).getTime() -
         (a.approvedAt ?? a.inspectedAt).getTime(),
     );
-  return approved[0] ?? null;
+  return completed[0] ?? null;
 }
 
 export function computeLevelSchedule(

@@ -28,6 +28,8 @@ export default async function ManageHomePage() {
       <section className="grid gap-4 sm:grid-cols-3">
         <Stat label="Assets in registry" value={String(assetCount)} href="/manage/assets" />
         <Stat label="Users" value={String(userCount)} href="/manage/users" />
+        <Stat label="System / updates" value="→" href="/manage/system" />
+        <Stat label="Severities" value="→" href="/manage/severities" />
         <Stat label="Import Excel / CSV" value="→" href="/manage/assets/import" />
       </section>
 

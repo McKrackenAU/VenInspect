@@ -1,18 +1,41 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { format } from "date-fns";
 import { prisma } from "@/lib/db";
-import { linkAsChildInspection, updateCategoryComment } from "@/lib/actions";
+import { requireUser } from "@/lib/auth";
+import {
+  canEditInspection,
+  canViewInspection,
+} from "@/lib/inspection-access";
+import {
+  linkAsChildInspection,
+  submitInspection,
+  updateGeneralComments,
+} from "@/lib/actions";
 import { DefectAddForm } from "@/components/DefectAddForm";
-import { formatLevel, formatStatus } from "@/lib/inspection";
+import { CategoryCommentsEditor } from "@/components/CategoryCommentsEditor";
+import { CarryForwardDefects } from "@/components/CarryForwardDefects";
+import {
+  BRIDGE_CATEGORIES,
+  DRAINAGE_CATEGORIES,
+  NOISE_WALL_CATEGORIES,
+  formatLevel,
+  formatStatus,
+} from "@/lib/inspection";
+import { getSeverityOptions, severityLabel } from "@/lib/severities";
 
 export const dynamic = "force-dynamic";
+
+function photoUrl(path: string) {
+  return `/api/uploads/${path.split(/[/\\]/).map(encodeURIComponent).join("/")}`;
+}
 
 export default async function InspectionPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireUser();
   const { id } = await params;
   const inspection = await prisma.inspection.findUnique({
     where: { id },
@@ -27,16 +50,49 @@ export default async function InspectionPage({
     },
   });
   if (!inspection) notFound();
+  if (!canViewInspection(user, inspection)) redirect("/assets");
+
+  const editable = canEditInspection(user, inspection);
+  const isDraft =
+    inspection.status === "DRAFT" || inspection.status === "REJECTED";
+  const severities = getSeverityOptions();
+
+  const catalog =
+    inspection.asset.type === "BRIDGE"
+      ? BRIDGE_CATEGORIES
+      : inspection.asset.type === "NOISE_WALL"
+        ? NOISE_WALL_CATEGORIES
+        : DRAINAGE_CATEGORIES;
 
   const siblings = await prisma.inspection.findMany({
     where: {
       assetId: inspection.assetId,
       id: { not: inspection.id },
       relationKind: { not: "CHILD" },
+      OR:
+        user.role === "ADMIN"
+          ? undefined
+          : [{ status: { not: "DRAFT" } }, { createdById: user.id }],
     },
     orderBy: { submittedAt: "desc" },
     take: 20,
   });
+
+  const priorDefects =
+    editable && isDraft
+      ? await prisma.defect.findMany({
+          where: {
+            inspection: {
+              assetId: inspection.assetId,
+              id: { not: inspection.id },
+              status: { not: "DRAFT" },
+            },
+          },
+          include: { inspection: { select: { titleLabel: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 40,
+        })
+      : [];
 
   return (
     <div className="space-y-8">
@@ -54,132 +110,129 @@ export default async function InspectionPage({
             {inspection.titleLabel}
           </h1>
           <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-            {formatLevel(inspection.level)} · {formatStatus(inspection.status)} · submitted{" "}
-            {format(inspection.submittedAt, "dd MMM yyyy HH:mm:ss")} · by{" "}
+            {formatLevel(inspection.level)} · {formatStatus(inspection.status)}
+            {isDraft ? " · draft (only you & admins)" : ""} ·{" "}
+            {format(inspection.submittedAt, "dd MMM yyyy HH:mm")} · by{" "}
             {inspection.createdBy.name}
-            {inspection.requiresLevel2Approval ? " · awaiting L2 verification" : ""}
             {" · folder "}
             <code className="text-xs">{inspection.folderKey}</code>
           </p>
-          {inspection.parent && (
-            <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
-              Child of{" "}
-              <Link
-                href={`/inspections/${inspection.parent.id}`}
-                className="text-[color:var(--ventia-blue)] hover:underline"
-              >
-                {inspection.parent.titleLabel}
-              </Link>
-            </p>
-          )}
-          {inspection.children.length > 0 && (
-            <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
-              Parent of:{" "}
-              {inspection.children.map((c, i) => (
-                <span key={c.id}>
-                  {i > 0 ? ", " : ""}
-                  <Link
-                    href={`/inspections/${c.id}`}
-                    className="text-[color:var(--ventia-blue)] hover:underline"
-                  >
-                    {c.titleLabel}
-                  </Link>
-                </span>
-              ))}
-            </p>
-          )}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/inspections/${inspection.id}/report`}
-            className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
-          >
-            Full report
-          </Link>
-          <Link
-            href={`/inspections/${inspection.id}/scope`}
-            className="rounded-md bg-[color:var(--ventia-green)] px-3 py-2 text-sm font-medium text-white"
-          >
-            Scope export
-          </Link>
-        </div>
+        {!isDraft ? (
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/inspections/${inspection.id}/report`}
+              className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+            >
+              Full report
+            </Link>
+            <Link
+              href={`/inspections/${inspection.id}/scope`}
+              className="rounded-md bg-[color:var(--ventia-green)] px-3 py-2 text-sm font-medium text-white"
+            >
+              Scope export
+            </Link>
+          </div>
+        ) : null}
       </div>
 
-      {inspection.generalComments && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-          <h2 className="text-sm font-medium text-slate-300">General comments</h2>
-          <p className="mt-1 text-sm text-slate-200">{inspection.generalComments}</p>
-        </section>
-      )}
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-medium text-white">Category comments</h2>
-        <ul className="space-y-3">
-          {inspection.categories.map((cat) => (
-            <li key={cat.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-              <p className="text-sm font-medium text-teal-200">
-                {cat.category} · {cat.subcategory}
-              </p>
-              <form action={updateCategoryComment} className="mt-2 space-y-2">
-                <input type="hidden" name="id" value={cat.id} />
-                <textarea
-                  name="comments"
-                  rows={2}
-                  defaultValue={cat.comments ?? ""}
-                  placeholder="Notes for this subcategory…"
-                  className="w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
-                />
-                <button
-                  type="submit"
-                  className="rounded-md bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600"
-                >
-                  Save
-                </button>
-              </form>
-            </li>
-          ))}
-        </ul>
+      <section className="card p-4">
+        <h2 className="text-sm font-semibold text-[color:var(--ventia-muted)]">
+          General comments
+        </h2>
+        {editable ? (
+          <form action={updateGeneralComments} className="mt-2 space-y-2">
+            <input type="hidden" name="inspectionId" value={inspection.id} />
+            <textarea
+              name="generalComments"
+              rows={3}
+              defaultValue={inspection.generalComments ?? ""}
+              className="field-input min-h-[5rem]"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-[color:var(--ventia-green)] px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              Save notes
+            </button>
+          </form>
+        ) : (
+          <p className="mt-2 text-sm">
+            {inspection.generalComments?.trim() || "—"}
+          </p>
+        )}
       </section>
 
+      <CategoryCommentsEditor
+        inspectionId={inspection.id}
+        categories={inspection.categories}
+        catalog={catalog.map((g) => ({
+          category: g.category,
+          subcategories: [...g.subcategories],
+        }))}
+        editable={editable}
+      />
+
       <section className="space-y-3">
-        <h2 className="text-lg font-medium text-white">Defects</h2>
+        <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
+          Defects
+        </h2>
         {inspection.defects.length === 0 ? (
-          <p className="text-sm text-slate-400">
-            No defects yet. Photo is required — stored compressed as WebP on the data volume.
+          <p className="text-sm text-[color:var(--ventia-muted)]">
+            No defects yet. Photo is required — stored compressed as WebP.
           </p>
         ) : (
           <ul className="space-y-2">
             {inspection.defects.map((d) => (
-              <li
-                key={d.id}
-                className="rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-3"
-              >
+              <li key={d.id} className="card px-4 py-3">
                 <div className="flex flex-wrap gap-4">
-                  {d.photoPath && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={`/api/uploads/${d.photoPath.split(/[/\\]/).map(encodeURIComponent).join("/")}`}
-                      alt={d.defectCode}
-                      className="h-24 w-32 rounded-md object-cover ring-1 ring-slate-700"
-                    />
-                  )}
+                  {d.photoPath || d.comparisonPhotoPath ? (
+                    <div className="flex gap-2">
+                      {d.comparisonPhotoPath ? (
+                        <div>
+                          <p className="mb-1 text-[0.65rem] uppercase text-[color:var(--ventia-muted)]">
+                            Was
+                          </p>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={photoUrl(d.comparisonPhotoPath)}
+                            alt="Prior"
+                            className="h-24 w-28 rounded-md object-cover"
+                          />
+                        </div>
+                      ) : null}
+                      {d.photoPath ? (
+                        <div>
+                          {d.comparisonPhotoPath ? (
+                            <p className="mb-1 text-[0.65rem] uppercase text-[color:var(--ventia-muted)]">
+                              Now
+                            </p>
+                          ) : null}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={photoUrl(d.photoPath)}
+                            alt={d.defectCode}
+                            className="h-24 w-28 rounded-md object-cover"
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="font-mono text-sm font-semibold text-amber-200">
+                      <span className="font-mono text-sm font-semibold text-[color:var(--ventia-green)]">
                         {d.defectCode}
                       </span>
-                      <span className="text-xs uppercase tracking-wide text-slate-400">
-                        {d.severity}
+                      <span className="text-xs uppercase tracking-wide text-[color:var(--ventia-muted)]">
+                        {severityLabel(d.severity)}
                       </span>
                     </div>
-                    <p className="mt-1 text-sm text-slate-100">{d.description}</p>
-                    {d.comments && (
-                      <p className="mt-1 text-sm text-slate-400">{d.comments}</p>
-                    )}
-                    <p className="mt-1 text-xs text-slate-500">
-                      {[d.category, d.subcategory].filter(Boolean).join(" · ") ||
-                        "Uncategorised"}
-                    </p>
+                    <p className="mt-1 text-sm">{d.description}</p>
+                    {d.comments ? (
+                      <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
+                        {d.comments}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </li>
@@ -187,18 +240,52 @@ export default async function InspectionPage({
           </ul>
         )}
 
-        <DefectAddForm inspectionId={inspection.id} />
+        {editable ? (
+          <DefectAddForm inspectionId={inspection.id} severities={severities} />
+        ) : null}
       </section>
 
-      {siblings.length > 0 && inspection.relationKind !== "CHILD" && (
-        <section className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-4">
+      {editable && isDraft ? (
+        <CarryForwardDefects
+          inspectionId={inspection.id}
+          severities={severities}
+          priors={priorDefects.map((d) => ({
+            id: d.id,
+            defectCode: d.defectCode,
+            description: d.description,
+            comments: d.comments,
+            severity: d.severity,
+            photoPath: d.photoPath,
+            inspectionLabel: d.inspection.titleLabel,
+          }))}
+        />
+      ) : null}
+
+      {editable && isDraft ? (
+        <form
+          action={submitInspection}
+          className="sticky bottom-20 z-10 rounded-2xl border border-[color:var(--ventia-border)] bg-white p-4 shadow-lg md:static md:shadow-sm"
+        >
+          <input type="hidden" name="inspectionId" value={inspection.id} />
+          <p className="mb-3 text-sm text-[color:var(--ventia-muted)]">
+            This stays a private draft until you submit. After submit you get the
+            full report and can export PDF / scope.
+          </p>
+          <button type="submit" className="btn-primary w-full text-base">
+            Submit inspection → view report
+          </button>
+        </form>
+      ) : null}
+
+      {siblings.length > 0 && inspection.relationKind !== "CHILD" && editable ? (
+        <section className="card p-4">
           <h2 className="text-sm font-medium">Link as child of another report</h2>
           <form action={linkAsChildInspection} className="mt-2 flex flex-wrap gap-2">
             <input type="hidden" name="childId" value={inspection.id} />
             <select
               name="parentId"
               required
-              className="min-w-[16rem] flex-1 rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+              className="field-input min-w-[16rem] flex-1"
               defaultValue=""
             >
               <option value="" disabled>
@@ -218,7 +305,7 @@ export default async function InspectionPage({
             </button>
           </form>
         </section>
-      )}
+      ) : null}
     </div>
   );
 }

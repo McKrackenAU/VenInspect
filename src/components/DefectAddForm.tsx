@@ -3,12 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { addDefect } from "@/lib/actions";
+import type { SeverityOption } from "@/lib/severities";
 
-export function DefectAddForm({ inspectionId }: { inspectionId: string }) {
+export function DefectAddForm({
+  inspectionId,
+  severities,
+}: {
+  inspectionId: string;
+  severities: SeverityOption[];
+}) {
   const router = useRouter();
   const [preview, setPreview] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const defaultSeverity =
+    severities.find((s) => s.value === "MEDIUM")?.value ??
+    severities[0]?.value ??
+    "MEDIUM";
 
   return (
     <form
@@ -40,7 +51,9 @@ export function DefectAddForm({ inspectionId }: { inspectionId: string }) {
         <span className="text-sm font-bold text-[color:var(--ventia-green)]">
           {preview ? "Change photo" : "Tap to take / choose photo"}
         </span>
-        <span className="text-xs text-[color:var(--ventia-muted)]">Required · saved compressed</span>
+        <span className="text-xs text-[color:var(--ventia-muted)]">
+          Required · saved compressed
+        </span>
         <input
           name="photo"
           type="file"
@@ -78,11 +91,12 @@ export function DefectAddForm({ inspectionId }: { inspectionId: string }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block space-y-1.5">
           <span className="text-sm font-semibold">How serious?</span>
-          <select name="severity" defaultValue="MEDIUM" className="field-input">
-            <option value="LOW">Low</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="HIGH">High</option>
-            <option value="CRITICAL">Critical</option>
+          <select name="severity" defaultValue={defaultSeverity} className="field-input">
+            {severities.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="block space-y-1.5">

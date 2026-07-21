@@ -24,7 +24,15 @@ export function AssetPicker({
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return assets.slice(0, 40);
+    if (!term) {
+      // Prefer showing the preselected asset + a useful slice of the registry
+      if (defaultAssetId) {
+        const pre = assets.find((a) => a.id === defaultAssetId);
+        const rest = assets.filter((a) => a.id !== defaultAssetId).slice(0, 80);
+        return pre ? [pre, ...rest] : assets.slice(0, 80);
+      }
+      return assets.slice(0, 80);
+    }
     return assets
       .filter(
         (a) =>
@@ -32,14 +40,29 @@ export function AssetPicker({
           a.name.toLowerCase().includes(term) ||
           a.roadName.toLowerCase().includes(term),
       )
-      .slice(0, 40);
-  }, [assets, q]);
+      .slice(0, 100);
+  }, [assets, q, defaultAssetId]);
 
   const selectedAsset = assets.find((a) => a.id === selected);
+
+  if (assets.length === 0) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        No assets in the registry yet. An admin must import or add assets under{" "}
+        <strong>Admin → Assets</strong> before you can start an inspection.
+        <input type="hidden" name={name} value="" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
       <input type="hidden" name={name} value={selected} required />
+      {!selected ? (
+        <p className="text-xs text-rose-700" role="status">
+          Select an asset below to continue.
+        </p>
+      ) : null}
       <label className="block space-y-1.5">
         <span className="text-sm font-semibold">Search by road or code</span>
         <input
@@ -73,10 +96,10 @@ export function AssetPicker({
       )}
 
       {!selected && (
-        <ul className="max-h-64 overflow-auto rounded-xl border border-[color:var(--ventia-border)] bg-white">
+        <ul className="max-h-72 overflow-auto rounded-xl border border-[color:var(--ventia-border)] bg-white">
           {filtered.length === 0 ? (
             <li className="px-4 py-6 text-center text-sm text-[color:var(--ventia-muted)]">
-              No matches — try another road or code
+              No matches — try another road or code ({assets.length} in registry)
             </li>
           ) : (
             filtered.map((a) => (
@@ -97,6 +120,11 @@ export function AssetPicker({
           )}
         </ul>
       )}
+      {!selected && !q.trim() && assets.length > 80 ? (
+        <p className="text-xs text-[color:var(--ventia-muted)]">
+          Showing first 80 of {assets.length}. Type a road name or code to search all.
+        </p>
+      ) : null}
     </div>
   );
 }

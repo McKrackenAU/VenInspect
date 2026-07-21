@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { inspectionVisibilityWhere } from "@/lib/inspection-access";
 import {
   computeLevelSchedule,
   formatAssetType,
@@ -18,11 +20,13 @@ export default async function AssetDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requireUser();
   const { id } = await params;
   const asset = await prisma.asset.findUnique({
     where: { id },
     include: {
       inspections: {
+        where: inspectionVisibilityWhere(user),
         include: { createdBy: true, defects: true, children: true, parent: true },
         orderBy: { submittedAt: "desc" },
       },
@@ -32,8 +36,9 @@ export default async function AssetDetailPage({
 
   const l1 = computeLevelSchedule(asset, asset.inspections, "LEVEL_1");
   const l2 = computeLevelSchedule(asset, asset.inspections, "LEVEL_2");
-  const standalones = asset.inspections.filter(
-    (i) => i.relationKind !== "CHILD",
+  const standalones = asset.inspections.filter((i) => i.relationKind !== "CHILD");
+  const myDrafts = asset.inspections.filter(
+    (i) => i.status === "DRAFT" && i.createdById === user.id,
   );
 
   return (
@@ -52,9 +57,6 @@ export default async function AssetDetailPage({
           <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
             {formatAssetType(asset.type)} · {asset.roadName}
             {asset.location ? ` · ${asset.location}` : ""}
-            {asset.latitude != null && asset.longitude != null
-              ? ` · ${asset.latitude}, ${asset.longitude}`
-              : ""}
           </p>
         </div>
         <Link
@@ -65,6 +67,24 @@ export default async function AssetDetailPage({
         </Link>
       </div>
 
+      {myDrafts.length > 0 ? (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <h2 className="font-semibold text-amber-900">Your drafts on this asset</h2>
+          <ul className="mt-2 space-y-1">
+            {myDrafts.map((d) => (
+              <li key={d.id}>
+                <Link
+                  href={`/inspections/${d.id}`}
+                  className="text-sm font-medium text-[color:var(--ventia-green)] hover:underline"
+                >
+                  Continue: {d.titleLabel}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="grid gap-3 sm:grid-cols-2">
         <ScheduleCard title="Level 1" interval={asset.level1IntervalYears} schedule={l1} />
         <ScheduleCard title="Level 2" interval={asset.level2IntervalYears} schedule={l2} />
@@ -73,8 +93,8 @@ export default async function AssetDetailPage({
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Previous reports</h2>
         <p className="text-xs text-[color:var(--ventia-muted)]">
-          Labels use road · code · date. Same-day inspections also show submission time so
-          you can pick the right export.
+          Drafts are only visible to the inspector who created them and to admins.
+          Submitted reports stay here so you can reopen history and carry defects forward.
         </p>
         {asset.inspections.length === 0 ? (
           <p className="text-sm text-[color:var(--ventia-muted)]">No inspections yet.</p>
@@ -91,34 +111,39 @@ export default async function AssetDetailPage({
                     className="font-medium text-[color:var(--ventia-green)] hover:underline"
                   >
                     {insp.titleLabel}
+                    {insp.status === "DRAFT" ? " (draft)" : ""}
                   </Link>
                   <p className="text-xs text-[color:var(--ventia-muted)]">
-                    {formatLevel(insp.level)} · {formatStatus(insp.status)} · submitted{" "}
-                    {format(insp.submittedAt, "dd MMM yyyy HH:mm:ss")} · by{" "}
+                    {formatLevel(insp.level)} · {formatStatus(insp.status)} ·{" "}
+                    {format(insp.submittedAt, "dd MMM yyyy HH:mm")} · by{" "}
                     {insp.createdBy.name} · {insp.defects.length} defect
                     {insp.defects.length === 1 ? "" : "s"}
-                    {insp.relationKind !== "STANDALONE"
-                      ? ` · ${insp.relationKind.toLowerCase()}`
-                      : ""}
-                    {insp.parent ? ` of ${insp.parent.titleLabel}` : ""}
-                    {insp.children.length
-                      ? ` · ${insp.children.length} child report(s)`
-                      : ""}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
-                  <Link
-                    href={`/inspections/${insp.id}/report`}
-                    className="text-[color:var(--ventia-blue)] hover:underline"
-                  >
-                    Full report
-                  </Link>
-                  <Link
-                    href={`/inspections/${insp.id}/scope`}
-                    className="text-[color:var(--ventia-blue)] hover:underline"
-                  >
-                    Scope export
-                  </Link>
+                  {insp.status !== "DRAFT" ? (
+                    <>
+                      <Link
+                        href={`/inspections/${insp.id}/report`}
+                        className="text-[color:var(--ventia-blue)] hover:underline"
+                      >
+                        Full report
+                      </Link>
+                      <Link
+                        href={`/inspections/${insp.id}/scope`}
+                        className="text-[color:var(--ventia-blue)] hover:underline"
+                      >
+                        Scope export
+                      </Link>
+                    </>
+                  ) : (
+                    <Link
+                      href={`/inspections/${insp.id}`}
+                      className="text-[color:var(--ventia-blue)] hover:underline"
+                    >
+                      Continue draft
+                    </Link>
+                  )}
                 </div>
               </li>
             ))}
@@ -126,12 +151,11 @@ export default async function AssetDetailPage({
         )}
       </section>
 
-      {standalones.length >= 2 && (
+      {standalones.filter((i) => i.status !== "DRAFT").length >= 2 && (
         <section className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-5">
           <h2 className="font-medium">Combine two reports</h2>
           <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
-            Creates a parent inspection and links both as children (for combined export /
-            review). Photos stay in each child&apos;s dated folder.
+            Creates a parent inspection and links both as children.
           </p>
           <form action={combineInspectionsAsParent} className="mt-3 grid gap-3 sm:grid-cols-2">
             <input type="hidden" name="assetId" value={asset.id} />
@@ -144,11 +168,13 @@ export default async function AssetDetailPage({
               <option value="" disabled>
                 First report…
               </option>
-              {standalones.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.titleLabel}
-                </option>
-              ))}
+              {standalones
+                .filter((i) => i.status !== "DRAFT")
+                .map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.titleLabel}
+                  </option>
+                ))}
             </select>
             <select
               name="inspectionB"
@@ -159,11 +185,13 @@ export default async function AssetDetailPage({
               <option value="" disabled>
                 Second report…
               </option>
-              {standalones.map((i) => (
-                <option key={`b-${i.id}`} value={i.id}>
-                  {i.titleLabel}
-                </option>
-              ))}
+              {standalones
+                .filter((i) => i.status !== "DRAFT")
+                .map((i) => (
+                  <option key={`b-${i.id}`} value={i.id}>
+                    {i.titleLabel}
+                  </option>
+                ))}
             </select>
             <button
               type="submit"

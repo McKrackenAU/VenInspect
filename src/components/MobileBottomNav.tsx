@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const userTabs = [
   { href: "/", label: "Home", icon: HomeIcon },
+  { href: "/map", label: "Map", icon: MapIcon },
   { href: "/assets", label: "Find", icon: SearchIcon },
   { href: "/inspect", label: "Inspect", icon: CameraIcon, primary: true },
   { href: "/approvals", label: "Approve", icon: CheckIcon },
@@ -33,7 +34,7 @@ export function MobileBottomNav() {
 
   return (
     <nav
-      className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-[color:var(--ventia-border)] bg-white/95 backdrop-blur md:hidden"
+      className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-[color:var(--ventia-border)] bg-[color:var(--nav-bg)] backdrop-blur md:hidden"
       style={{ paddingBottom: "var(--safe-bottom)" }}
       aria-label="Main"
     >
@@ -92,6 +93,15 @@ function SearchIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+function MapIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M9 4 3 6.5v13L9 17l6 2.5L21 17V4l-6 2.5L9 4z" />
+      <path d="M9 4v13M15 6.5V19" />
     </svg>
   );
 }

@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/lib/auth-actions";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const userLinks = [
   { href: "/", label: "Home" },
+  { href: "/map", label: "Map" },
   { href: "/assets", label: "Find asset" },
   { href: "/inspect", label: "Start inspection" },
   { href: "/approvals", label: "Approvals" },
@@ -16,7 +18,9 @@ const manageLinks = [
   { href: "/manage/assets", label: "Assets" },
   { href: "/manage/assets/import", label: "Import" },
   { href: "/manage/storage", label: "Photos" },
+  { href: "/manage/severities", label: "Severities" },
   { href: "/manage/users", label: "People" },
+  { href: "/manage/system", label: "System" },
 ];
 
 type Props = {
@@ -34,7 +38,7 @@ export function AppNav({ userName, isAdmin }: Props) {
   const links = isManage ? manageLinks : userLinks;
 
   return (
-    <header className="no-print sticky top-0 z-20 border-b border-[color:var(--ventia-border)] bg-white/95 backdrop-blur">
+    <header className="no-print sticky top-0 z-20 border-b border-[color:var(--ventia-border)] bg-[color:var(--nav-bg)] backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
         <Link href={isManage ? "/manage" : "/"} className="flex items-center gap-2">
           <span
@@ -58,23 +62,23 @@ export function AppNav({ userName, isAdmin }: Props) {
         </Link>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Clear portal switch */}
-          <div
-            className="inline-flex rounded-lg border border-[color:var(--ventia-border)] p-0.5 text-xs font-semibold"
-            role="group"
-            aria-label="Portal"
-          >
-            <Link
-              href="/"
-              className={`rounded-md px-3 py-1.5 ${
-                !isManage
-                  ? "bg-[color:var(--ventia-green)] text-white"
-                  : "text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
-              }`}
+          {/* Admin-only portal switch — hidden entirely for inspectors */}
+          {isAdmin ? (
+            <div
+              className="inline-flex rounded-lg border border-[color:var(--ventia-border)] p-0.5 text-xs font-semibold"
+              role="group"
+              aria-label="Portal"
             >
-              User
-            </Link>
-            {isAdmin ? (
+              <Link
+                href="/"
+                className={`rounded-md px-3 py-1.5 ${
+                  !isManage
+                    ? "bg-[color:var(--ventia-green)] text-white"
+                    : "text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
+                }`}
+              >
+                User
+              </Link>
               <Link
                 href="/manage"
                 className={`rounded-md px-3 py-1.5 ${
@@ -85,21 +89,16 @@ export function AppNav({ userName, isAdmin }: Props) {
               >
                 Admin
               </Link>
-            ) : (
-              <span
-                className="cursor-not-allowed rounded-md px-3 py-1.5 text-[color:var(--ventia-border)]"
-                title="Admin only"
-              >
-                Admin
-              </span>
-            )}
-          </div>
+            </div>
+          ) : null}
 
           {userName ? (
             <span className="hidden text-xs text-[color:var(--ventia-muted)] sm:inline">
               {userName}
             </span>
           ) : null}
+
+          <ThemeToggle />
 
           <form action={logoutAction}>
             <button

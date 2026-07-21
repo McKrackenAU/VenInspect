@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
 import { computeLevelSchedule, formatLevel } from "@/lib/inspection";
 import { StatusPill } from "@/components/StatusPill";
 import { InstallHint } from "@/components/InstallHint";
@@ -8,13 +9,20 @@ import { InstallHint } from "@/components/InstallHint";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [assetCount, pendingCount, attentionPreview] = await Promise.all([
+  const user = await requireUser();
+  const [assetCount, pendingCount, attentionPreview, myDrafts] = await Promise.all([
     prisma.asset.count(),
     prisma.inspection.count({ where: { status: "PENDING_APPROVAL" } }),
     prisma.asset.findMany({
       include: { inspections: true },
       orderBy: { roadName: "asc" },
       take: 80,
+    }),
+    prisma.inspection.findMany({
+      where: { createdById: user.id, status: "DRAFT" },
+      include: { asset: true },
+      orderBy: { updatedAt: "desc" },
+      take: 8,
     }),
   ]);
 
@@ -37,15 +45,41 @@ export default async function DashboardPage() {
           What do you need to do?
         </h1>
         <p className="text-base text-[color:var(--ventia-muted)]">
-          Tap a big button. No extra steps.
+          Tap a big button. Drafts are saved until you submit.
         </p>
       </section>
 
       <InstallHint />
 
+      {myDrafts.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold">Your drafts</h2>
+          <ul className="card divide-y divide-[color:var(--ventia-border)] overflow-hidden">
+            {myDrafts.map((d) => (
+              <li key={d.id}>
+                <Link
+                  href={`/inspections/${d.id}`}
+                  className="flex min-h-[3.25rem] flex-col justify-center px-4 py-3 active:bg-[color:var(--ventia-green-tint)]"
+                >
+                  <span className="font-semibold text-[color:var(--ventia-green)]">
+                    {d.asset.assetNumber} · continue draft
+                  </span>
+                  <span className="text-xs text-[color:var(--ventia-muted)]">
+                    {d.titleLabel}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="grid gap-3">
         <Link href="/inspect" className="btn-primary text-lg shadow-sm">
           Start an inspection
+        </Link>
+        <Link href="/map" className="btn-secondary w-full">
+          Map · nearby assets
         </Link>
         <Link href="/assets" className="btn-secondary w-full">
           Find an asset

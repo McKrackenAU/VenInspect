@@ -1,0 +1,17 @@
+[Unit]
+Description=VenInspect application update (staging build + brief restart)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Nice=10
+EnvironmentFile=-/etc/veninspect.env
+Environment=APP_DIR=/opt/veninspect
+Environment=APP_STAGE=/opt/veninspect-staging
+Environment=DATA_DIR=/var/lib/veninspect
+ExecStart=/bin/bash /opt/veninspect/deploy/update.sh
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

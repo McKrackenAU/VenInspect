@@ -91,7 +91,9 @@ export function AssetFinder({ assets }: { assets: AssetRow[] }) {
         ))}
         {byRoad.length === 0 && (
           <p className="card px-4 py-8 text-center text-[color:var(--ventia-muted)]">
-            Nothing matches. Check the code or try the road name.
+            {assets.length === 0
+              ? "No assets in the registry yet. Ask an admin to import assets (Admin → Assets → Import)."
+              : "Nothing matches. Check the code or try the road name."}
           </p>
         )}
       </div>

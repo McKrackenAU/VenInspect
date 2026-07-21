@@ -33,13 +33,6 @@ enum InspectionStatus {
   REJECTED
 }
 
-enum DefectSeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
 /// How this inspection relates to others (combine / parent-child)
 enum InspectionRelationKind {
   STANDALONE
@@ -145,17 +138,21 @@ model InspectionCategory {
 }
 
 model Defect {
-  id           String         @id @default(cuid())
-  defectCode   String
-  inspectionId String
-  category     String?
-  subcategory  String?
-  description  String
-  comments     String?
-  severity     DefectSeverity @default(MEDIUM)
-  photoPath    String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id                   String   @id @default(cuid())
+  defectCode           String
+  inspectionId         String
+  category             String?
+  subcategory          String?
+  description          String
+  comments             String?
+  /// Customisable via admin settings (defaults: LOW/MEDIUM/HIGH/CRITICAL)
+  severity             String   @default("MEDIUM")
+  photoPath            String?
+  /// Prior defect photo kept for side-by-side comparison when carried forward
+  comparisonPhotoPath  String?
+  carriedFromDefectId  String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
 

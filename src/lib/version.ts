@@ -1,0 +1,91 @@
+import fs from "node:fs";
+import path from "node:path";
+
+/** App semver — keep VERSION and package.json in sync. */
+export function getAppVersion(): string {
+  try {
+    const fromFile = fs
+      .readFileSync(path.join(process.cwd(), "VERSION"), "utf8")
+      .trim();
+    if (fromFile) return fromFile.replace(/^v/i, "");
+  } catch {
+    /* fall through */
+  }
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
+    ) as { version?: string };
+    if (pkg.version) return pkg.version.replace(/^v/i, "");
+  } catch {
+    /* fall through */
+  }
+  return "0.0.0";
+}
+
+export function formatAppVersion(version = getAppVersion()): string {
+  return `v${version.replace(/^v/i, "")}`;
+}
+
+export type UpdateChannel = "gitea" | "github";
+
+export function getConfiguredUpdateChannel(): UpdateChannel {
+  const raw = (process.env.UPDATE_CHANNEL || process.env.VENINSPECT_UPDATE_SOURCE || "")
+    .trim()
+    .toLowerCase();
+  if (raw === "github" || raw === "gh") return "github";
+  if (raw === "gitea") return "gitea";
+  // Prefer Gitea on LAN installs when unset
+  return "gitea";
+}
+
+export function remoteVersionUrls(channel: UpdateChannel): {
+  packageJson: string;
+  versionFile: string;
+  repoLabel: string;
+} {
+  if (channel === "github") {
+    return {
+      packageJson:
+        "https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/package.json",
+      versionFile:
+        "https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/VERSION",
+      repoLabel: "GitHub (McKrackenAU/VenInspect)",
+    };
+  }
+  const base =
+    process.env.GITEA_RAW_BASE?.trim() ||
+    "http://192.168.13.9:3000/McKraken/VenInspect/raw/branch/main";
+  return {
+    packageJson: `${base}/package.json`,
+    versionFile: `${base}/VERSION`,
+    repoLabel: "Gitea (McKraken/VenInspect)",
+  };
+}
+
+export function parseRemoteVersion(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("{")) {
+    try {
+      const pkg = JSON.parse(trimmed) as { version?: string };
+      return pkg.version?.replace(/^v/i, "") ?? null;
+    } catch {
+      return null;
+    }
+  }
+  return trimmed.replace(/^v/i, "").split(/\s/)[0] || null;
+}
+
+/** Compare semver-ish a vs b: 1 if a>b, -1 if a<b, 0 if equal. */
+export function compareSemver(a: string, b: string): number {
+  const pa = a.replace(/^v/i, "").split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const pb = b.replace(/^v/i, "").split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const x = pa[i] ?? 0;
+    const y = pb[i] ?? 0;
+    if (x > y) return 1;
+    if (x < y) return -1;
+  }
+  return 0;
+}

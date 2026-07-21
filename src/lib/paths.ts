@@ -19,6 +19,8 @@ import { format } from "date-fns";
 
 export type StorageSettings = {
   photoDir?: string;
+  /** Admin-customisable defect severity dropdown options */
+  severities?: { value: string; label: string }[];
 };
 
 function settingsPath() {
@@ -44,8 +46,9 @@ export function writeStorageSettings(next: StorageSettings) {
   const dir = getDataDirFromEnvOnly();
   fs.mkdirSync(dir, { recursive: true });
   const merged: StorageSettings = { ...readStorageSettings(), ...next };
-  if (next.photoDir === undefined || next.photoDir === "") {
-    delete merged.photoDir;
+  // Only clear photoDir when the caller explicitly sets it (including empty string)
+  if (Object.prototype.hasOwnProperty.call(next, "photoDir")) {
+    if (!next.photoDir) delete merged.photoDir;
   }
   fs.writeFileSync(settingsPath(), JSON.stringify(merged, null, 2), "utf8");
   return merged;

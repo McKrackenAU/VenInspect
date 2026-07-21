@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { createUser, updateUserQualifications } from "@/lib/actions";
 import { requireAdmin } from "@/lib/auth";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +95,14 @@ export default async function ManageUsersPage() {
                   </>
                 ) : null}
                 {u.email}
+              </p>
+              <p className="mt-1">
+                <Link
+                  href={`/manage/users/${u.id}`}
+                  className="text-xs font-semibold text-[color:var(--ventia-blue)] hover:underline"
+                >
+                  View inspection history →
+                </Link>
               </p>
               <form
                 action={updateUserQualifications}

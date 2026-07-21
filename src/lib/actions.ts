@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireAdmin, requireUser } from "@/lib/auth";
+import { canEditInspection } from "@/lib/inspection-access";
 import { nextDefectCode } from "@/lib/inspection";
 import { saveCompressedDefectPhoto } from "@/lib/photos";
 import {
@@ -12,7 +13,8 @@ import {
   ensureDataDirs,
   writeStorageSettings,
 } from "@/lib/paths";
-import type { DefectSeverity, InspectionLevel } from "@/generated/prisma/client";
+import { saveSeverityOptions } from "@/lib/severities";
+import type { InspectionLevel } from "@/generated/prisma/client";
 
 export async function createInspection(formData: FormData) {
   const assetId = String(formData.get("assetId") ?? "");
@@ -27,37 +29,36 @@ export async function createInspection(formData: FormData) {
   }
 
   const asset = await prisma.asset.findUniqueOrThrow({ where: { id: assetId } });
-  const submittedAt = new Date();
+  const createdAt = new Date();
   const existing = await prisma.inspection.findMany({
     where: { assetId },
     select: { folderKey: true },
   });
   const { folderKey, includeTimeInLabel } = allocateInspectionFolderKey(
-    submittedAt,
+    createdAt,
     existing.map((e) => e.folderKey),
   );
   const roadName = asset.roadName || "Unknown Road";
   const titleLabel = buildInspectionLabel({
     roadName,
     assetNumber: asset.assetNumber,
-    at: submittedAt,
+    at: createdAt,
     includeTime: includeTimeInLabel,
   });
 
   ensureDataDirs();
 
   const requiresLevel2Approval = level === "LEVEL_2" && !actor.level2Qualified;
-  const status = requiresLevel2Approval ? "PENDING_APPROVAL" : "SUBMITTED";
 
   const inspection = await prisma.inspection.create({
     data: {
       assetId,
       level,
-      status,
+      status: "DRAFT",
       generalComments,
       createdById: actor.id,
-      submittedAt,
-      inspectedAt: submittedAt,
+      submittedAt: createdAt,
+      inspectedAt: createdAt,
       requiresLevel2Approval,
       folderKey,
       titleLabel,
@@ -95,7 +96,44 @@ export async function createInspection(formData: FormData) {
     })),
   });
 
-  if (requiresLevel2Approval) {
+  revalidatePath("/");
+  revalidatePath("/assets");
+  revalidatePath(`/assets/${assetId}`);
+  revalidatePath(`/inspections/${inspection.id}`);
+
+  redirect(`/inspections/${inspection.id}`);
+}
+
+export async function submitInspection(formData: FormData) {
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const actor = await requireUser();
+  const inspection = await prisma.inspection.findUniqueOrThrow({
+    where: { id: inspectionId },
+    include: { asset: true, createdBy: true },
+  });
+
+  if (!canEditInspection(actor, inspection)) {
+    throw new Error("You cannot submit this inspection");
+  }
+  if (inspection.status !== "DRAFT" && inspection.status !== "REJECTED") {
+    throw new Error("Only drafts can be submitted");
+  }
+
+  const now = new Date();
+  const status = inspection.requiresLevel2Approval
+    ? "PENDING_APPROVAL"
+    : "SUBMITTED";
+
+  await prisma.inspection.update({
+    where: { id: inspectionId },
+    data: {
+      status,
+      submittedAt: now,
+      inspectedAt: now,
+    },
+  });
+
+  if (inspection.requiresLevel2Approval) {
     const level2Users = await prisma.user.findMany({
       where: { level2Qualified: true },
     });
@@ -104,27 +142,89 @@ export async function createInspection(formData: FormData) {
         userId: u.id,
         inspectionId: inspection.id,
         title: "Level 2 verification required",
-        message: `${titleLabel} — Level 2 draft by ${actor.name} needs verification.`,
+        message: `${inspection.titleLabel} — submitted by ${inspection.createdBy.name}, needs verification.`,
       })),
     });
   }
 
   revalidatePath("/");
-  revalidatePath("/assets");
-  revalidatePath(`/assets/${assetId}`);
   revalidatePath("/approvals");
-  revalidatePath(`/inspections/${inspection.id}`);
+  revalidatePath(`/assets/${inspection.assetId}`);
+  revalidatePath(`/inspections/${inspectionId}`);
+  revalidatePath(`/inspections/${inspectionId}/report`);
 
-  redirect(`/inspections/${inspection.id}`);
+  redirect(`/inspections/${inspectionId}/report`);
+}
+
+export async function updateGeneralComments(formData: FormData) {
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const generalComments = String(formData.get("generalComments") ?? "") || null;
+  const actor = await requireUser();
+  const inspection = await prisma.inspection.findUniqueOrThrow({
+    where: { id: inspectionId },
+  });
+  if (!canEditInspection(actor, inspection)) {
+    throw new Error("Cannot edit this inspection");
+  }
+  await prisma.inspection.update({
+    where: { id: inspectionId },
+    data: { generalComments },
+  });
+  revalidatePath(`/inspections/${inspectionId}`);
 }
 
 export async function updateCategoryComment(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const comments = String(formData.get("comments") ?? "");
+  const actor = await requireUser();
+  const existing = await prisma.inspectionCategory.findUniqueOrThrow({
+    where: { id },
+    include: { inspection: true },
+  });
+  if (!canEditInspection(actor, existing.inspection)) {
+    throw new Error("Cannot edit this inspection");
+  }
   const row = await prisma.inspectionCategory.update({
     where: { id },
     data: { comments },
   });
+  revalidatePath(`/inspections/${row.inspectionId}`);
+}
+
+export async function addInspectionCategory(formData: FormData) {
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const category = String(formData.get("category") ?? "").trim();
+  const subcategory = String(formData.get("subcategory") ?? "").trim();
+  const actor = await requireUser();
+
+  if (!inspectionId || !category || !subcategory) {
+    throw new Error("Category and subcategory required");
+  }
+
+  const inspection = await prisma.inspection.findUniqueOrThrow({
+    where: { id: inspectionId },
+  });
+  if (!canEditInspection(actor, inspection)) {
+    throw new Error("Cannot edit this inspection");
+  }
+
+  await prisma.inspectionCategory.create({
+    data: { inspectionId, category, subcategory, comments: null },
+  });
+  revalidatePath(`/inspections/${inspectionId}`);
+}
+
+export async function removeInspectionCategory(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const actor = await requireUser();
+  const row = await prisma.inspectionCategory.findUniqueOrThrow({
+    where: { id },
+    include: { inspection: true },
+  });
+  if (!canEditInspection(actor, row.inspection)) {
+    throw new Error("Cannot edit this inspection");
+  }
+  await prisma.inspectionCategory.delete({ where: { id } });
   revalidatePath(`/inspections/${row.inspectionId}`);
 }
 
@@ -134,9 +234,9 @@ export async function addDefect(formData: FormData) {
   const comments = String(formData.get("comments") ?? "") || null;
   const category = String(formData.get("category") ?? "") || null;
   const subcategory = String(formData.get("subcategory") ?? "") || null;
-  const severity = (String(formData.get("severity") ?? "MEDIUM") ||
-    "MEDIUM") as DefectSeverity;
+  const severity = String(formData.get("severity") ?? "MEDIUM").trim() || "MEDIUM";
   const photo = formData.get("photo");
+  const actor = await requireUser();
 
   if (!inspectionId || !description) {
     throw new Error("Inspection and description required");
@@ -150,6 +250,9 @@ export async function addDefect(formData: FormData) {
     where: { id: inspectionId },
     include: { asset: true, defects: true },
   });
+  if (!canEditInspection(actor, inspection)) {
+    throw new Error("Cannot edit this inspection");
+  }
 
   const defectCode = nextDefectCode(
     inspection.asset.assetNumber,
@@ -179,6 +282,85 @@ export async function addDefect(formData: FormData) {
   });
 
   revalidatePath(`/inspections/${inspectionId}`);
+}
+
+/** Bring a prior defect into the current draft; old photo becomes comparison. */
+export async function carryForwardDefect(formData: FormData) {
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const sourceDefectId = String(formData.get("sourceDefectId") ?? "");
+  const description = String(formData.get("description") ?? "").trim();
+  const comments = String(formData.get("comments") ?? "") || null;
+  const severity = String(formData.get("severity") ?? "MEDIUM").trim() || "MEDIUM";
+  const photo = formData.get("photo");
+  const actor = await requireUser();
+
+  if (!inspectionId || !sourceDefectId) {
+    throw new Error("Inspection and source defect required");
+  }
+
+  const inspection = await prisma.inspection.findUniqueOrThrow({
+    where: { id: inspectionId },
+    include: { asset: true, defects: true },
+  });
+  if (!canEditInspection(actor, inspection)) {
+    throw new Error("Cannot edit this inspection");
+  }
+
+  const source = await prisma.defect.findUniqueOrThrow({
+    where: { id: sourceDefectId },
+    include: { inspection: true },
+  });
+  if (source.inspection.assetId !== inspection.assetId) {
+    throw new Error("Source defect must be on the same asset");
+  }
+
+  const defectCode = nextDefectCode(
+    inspection.asset.assetNumber,
+    inspection.defects.map((d) => d.defectCode),
+  );
+
+  let photoPath: string | null = null;
+  if (photo instanceof File && photo.size > 0) {
+    const buffer = Buffer.from(await photo.arrayBuffer());
+    const saved = await saveCompressedDefectPhoto({
+      buffer,
+      roadName: inspection.asset.roadName || "Unknown Road",
+      assetNumber: inspection.asset.assetNumber,
+      folderKey: inspection.folderKey,
+      defectCode,
+    });
+    photoPath = saved.relativePath;
+  }
+
+  await prisma.defect.create({
+    data: {
+      inspectionId,
+      defectCode,
+      description: description || source.description,
+      comments: comments ?? source.comments,
+      category: source.category,
+      subcategory: source.subcategory,
+      severity,
+      photoPath,
+      comparisonPhotoPath: source.photoPath,
+      carriedFromDefectId: source.id,
+    },
+  });
+
+  revalidatePath(`/inspections/${inspectionId}`);
+}
+
+export async function saveSeverities(formData: FormData) {
+  await requireAdmin();
+  const raw = String(formData.get("severitiesJson") ?? "[]");
+  let parsed: { value: string; label: string }[] = [];
+  try {
+    parsed = JSON.parse(raw) as { value: string; label: string }[];
+  } catch {
+    throw new Error("Invalid severities JSON");
+  }
+  saveSeverityOptions(parsed);
+  revalidatePath("/manage/severities");
 }
 
 export async function approveInspection(formData: FormData) {
@@ -342,6 +524,7 @@ export async function importAssetsFromFile(formData: FormData) {
 }
 
 export async function upsertAssetManual(formData: FormData) {
+  await requireAdmin();
   const assetNumber = String(formData.get("assetNumber") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const type = String(formData.get("type") ?? "BRIDGE") as
@@ -387,13 +570,13 @@ export async function upsertAssetManual(formData: FormData) {
 }
 
 export async function savePhotoStoragePath(formData: FormData) {
+  await requireAdmin();
   const photoDir = String(formData.get("photoDir") ?? "").trim();
   if (process.env.PHOTO_DIR?.trim()) {
     throw new Error(
       "PHOTO_DIR is set in the environment and takes priority. Update /etc/veninspect.env (or .env) instead.",
     );
   }
-  // Empty clears override → fall back to {DATA_DIR}/photos
   writeStorageSettings({ photoDir: photoDir || undefined });
   ensureDataDirs();
   revalidatePath("/manage/storage");
@@ -437,13 +620,6 @@ export async function unlinkChildInspection(formData: FormData) {
     where: { id: childId },
     data: { relationKind: "STANDALONE", parentInspectionId: null },
   });
-
-  const siblings = await prisma.inspection.count({
-    where: { parentInspectionId: child.parentInspectionId ?? "__none__" },
-  });
-  // If parent had this as only child, leave parent as PARENT or reset — check remaining children
-  // (parentInspectionId already cleared on child; fetch previous via form if needed)
-  void siblings;
 
   revalidatePath(`/inspections/${childId}`);
   revalidatePath(`/assets/${child.assetId}`);

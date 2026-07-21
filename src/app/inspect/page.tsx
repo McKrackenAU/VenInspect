@@ -29,7 +29,8 @@ export default async function InspectPage({
           Start inspection
         </h1>
         <p className="mt-1 text-base text-[color:var(--ventia-muted)]">
-          Find the structure, choose the level, then tap continue. Photos come next.
+          Find the structure, choose the level, then continue. A private draft is saved so
+          you can leave and come back. Submit when you are finished.
         </p>
       </div>
 
@@ -80,7 +81,7 @@ export default async function InspectPage({
         </label>
 
         <button type="submit" className="btn-primary">
-          Continue — add defects & photos
+          Continue — save draft & add defects
         </button>
       </form>
     </div>

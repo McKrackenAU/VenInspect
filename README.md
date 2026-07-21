@@ -157,6 +157,7 @@ Next.js · TypeScript · Prisma · SQLite · Sharp (WebP) · Tailwind · systemd
 |---------|---------|
 | `npm run dev` | Dev server |
 | `npm run db:seed` | Reset demo data |
+| `npm run db:ensure-admin` | Ensure `root` / `calvin` admin exists |
 | `npm run db:migrate` | Dev migrations |
 | `npx prisma migrate deploy` | Production migrations |
 | `bash deploy/install-lxc.sh` | Install/update on Proxmox LXC |

@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppNav } from "@/components/AppNav";
+import { AppFooter } from "@/components/AppFooter";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { THEME_BOOT_SCRIPT } from "@/components/ThemeToggle";
 import { getSession } from "@/lib/auth";
 import "./globals.css";
 
@@ -35,7 +37,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#004825",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#004825" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1117" },
+  ],
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -52,8 +57,12 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col text-[color:var(--ventia-ink)]">
         <AppNav
           userName={session?.name ?? null}
@@ -62,6 +71,7 @@ export default async function RootLayout({
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 pb-24 md:pb-8">
           {children}
         </main>
+        <AppFooter />
         <MobileBottomNav />
       </body>
     </html>

@@ -25,7 +25,6 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (
-    isPublic(pathname) ||
     pathname.endsWith(".svg") ||
     pathname.endsWith(".png") ||
     pathname.endsWith(".ico") ||
@@ -37,17 +36,42 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySession(token, sessionSecret()) : null;
 
+  // Bare host / IP with no session → login (clean URL, no ?next=/)
+  if (!session && (pathname === "/" || pathname === "")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
+  if (isPublic(pathname)) {
+    // Already signed in → leave login page
+    if (session && pathname === "/login") {
+      const next = request.nextUrl.searchParams.get("next");
+      const dest =
+        next && next.startsWith("/") && !next.startsWith("/login") ? next : "/";
+      const url = request.nextUrl.clone();
+      url.pathname = dest;
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
+
   if (!session) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("next", pathname);
+    url.search = "";
+    if (pathname !== "/") {
+      url.searchParams.set("next", pathname);
+    }
     return NextResponse.redirect(url);
   }
 
   if (pathname.startsWith("/manage") && session.role !== "ADMIN") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
-    url.searchParams.set("denied", "manage");
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
