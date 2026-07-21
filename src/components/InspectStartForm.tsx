@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { createInspection } from "@/lib/actions";
 import { AssetPicker } from "@/components/AssetPicker";
-import { ASSET_PERMIT_FLAGS, INSPECTION_TYPES } from "@/lib/inspection";
+import { ASSET_PERMIT_FLAGS } from "@/lib/inspection";
+import type { InspectionTypeOption } from "@/lib/inspection-types";
 
 export type InspectAssetOption = {
   id: string;
@@ -23,9 +24,11 @@ type PermitAnswer = {
 
 export function InspectStartForm({
   assets,
+  inspectionTypes,
   defaultAssetId,
 }: {
   assets: InspectAssetOption[];
+  inspectionTypes: InspectionTypeOption[];
   defaultAssetId?: string;
 }) {
   const [assetId, setAssetId] = useState(defaultAssetId ?? "");
@@ -96,10 +99,7 @@ export function InspectStartForm({
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-semibold">Inspection type</legend>
-        <p className="text-xs text-[color:var(--ventia-muted)]">
-          Types are driven from a shared list so more inspection kinds can be added later.
-        </p>
-        {INSPECTION_TYPES.map((t, i) => (
+        {inspectionTypes.map((t, i) => (
           <label
             key={t.value}
             className="flex min-h-[3.25rem] cursor-pointer items-center gap-3 rounded-xl border border-[color:var(--ventia-border)] px-4 py-3 has-[:checked]:border-[color:var(--ventia-green)] has-[:checked]:bg-[color:var(--ventia-green-tint)]"
@@ -113,7 +113,9 @@ export function InspectStartForm({
             />
             <span>
               <span className="block font-semibold">{t.label}</span>
-              <span className="text-xs text-[color:var(--ventia-muted)]">{t.description}</span>
+              {t.description ? (
+                <span className="text-xs text-[color:var(--ventia-muted)]">{t.description}</span>
+              ) : null}
             </span>
           </label>
         ))}

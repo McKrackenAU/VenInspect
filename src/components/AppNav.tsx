@@ -20,6 +20,7 @@ const manageLinks = [
   { href: "/manage/assets/import", label: "Import" },
   { href: "/manage/storage", label: "Photos" },
   { href: "/manage/severities", label: "Severities" },
+  { href: "/manage/inspection-types", label: "Insp. types" },
   { href: "/manage/users", label: "People" },
   { href: "/manage/system", label: "System" },
 ];

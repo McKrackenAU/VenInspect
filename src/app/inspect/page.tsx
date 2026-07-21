@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { InspectStartForm } from "@/components/InspectStartForm";
+import { getInspectionTypes } from "@/lib/inspection-types";
 
 export const dynamic = "force-dynamic";
 
@@ -9,19 +10,22 @@ export default async function InspectPage({
   searchParams: Promise<{ assetId?: string }>;
 }) {
   const { assetId: preselect } = await searchParams;
-  const assets = await prisma.asset.findMany({
-    orderBy: [{ roadName: "asc" }, { assetNumber: "asc" }],
-    select: {
-      id: true,
-      assetNumber: true,
-      name: true,
-      roadName: true,
-      type: true,
-      requireConfinedSpace: true,
-      requireTrafficManagement: true,
-      requireWorkingAtHeights: true,
-    },
-  });
+  const [assets, inspectionTypes] = await Promise.all([
+    prisma.asset.findMany({
+      orderBy: [{ roadName: "asc" }, { assetNumber: "asc" }],
+      select: {
+        id: true,
+        assetNumber: true,
+        name: true,
+        roadName: true,
+        type: true,
+        requireConfinedSpace: true,
+        requireTrafficManagement: true,
+        requireWorkingAtHeights: true,
+      },
+    }),
+    Promise.resolve(getInspectionTypes()),
+  ]);
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
@@ -36,7 +40,11 @@ export default async function InspectPage({
         </p>
       </div>
 
-      <InspectStartForm assets={assets} defaultAssetId={preselect} />
+      <InspectStartForm
+        assets={assets}
+        inspectionTypes={inspectionTypes}
+        defaultAssetId={preselect}
+      />
     </div>
   );
 }

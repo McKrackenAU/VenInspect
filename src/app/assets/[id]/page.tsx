@@ -11,6 +11,7 @@ import {
   formatStatus,
 } from "@/lib/inspection";
 import { StatusPill } from "@/components/StatusPill";
+import { DeleteDraftButton } from "@/components/DeleteDraftButton";
 import { combineInspectionsAsParent } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
@@ -70,15 +71,20 @@ export default async function AssetDetailPage({
       {myDrafts.length > 0 ? (
         <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40">
           <h2 className="font-semibold text-amber-900 dark:text-amber-100">Your drafts on this asset</h2>
-          <ul className="mt-2 space-y-1">
+          <ul className="mt-2 space-y-2">
             {myDrafts.map((d) => (
-              <li key={d.id}>
+              <li key={d.id} className="flex flex-wrap items-center gap-2">
                 <Link
                   href={`/inspections/${d.id}`}
-                  className="text-sm font-medium text-[color:var(--ventia-green)] hover:underline"
+                  className="flex-1 text-sm font-medium text-[color:var(--ventia-green)] hover:underline"
                 >
                   Continue: {d.titleLabel}
                 </Link>
+                <DeleteDraftButton
+                  inspectionId={d.id}
+                  next={`/assets/${asset.id}`}
+                  label="Delete"
+                />
               </li>
             ))}
           </ul>

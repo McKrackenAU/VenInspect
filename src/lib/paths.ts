@@ -21,6 +21,13 @@ export type StorageSettings = {
   photoDir?: string;
   /** Admin-customisable defect severity dropdown options */
   severities?: { value: string; label: string }[];
+  /** Admin-customisable inspection types (Start inspection radio list) */
+  inspectionTypes?: {
+    value: string;
+    label: string;
+    description?: string;
+    requiresLevel2Approval?: boolean;
+  }[];
   /** Optional Maps JS key when not set in environment */
   googleMapsApiKey?: string;
 };
@@ -55,6 +62,10 @@ export function writeStorageSettings(next: StorageSettings) {
   if (Object.prototype.hasOwnProperty.call(next, "googleMapsApiKey")) {
     if (!next.googleMapsApiKey?.trim()) delete merged.googleMapsApiKey;
     else merged.googleMapsApiKey = next.googleMapsApiKey.trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "inspectionTypes")) {
+    if (!next.inspectionTypes?.length) delete merged.inspectionTypes;
+    else merged.inspectionTypes = next.inspectionTypes;
   }
   fs.writeFileSync(settingsPath(), JSON.stringify(merged, null, 2), "utf8");
   return merged;

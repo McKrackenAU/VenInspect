@@ -30,6 +30,7 @@ export default async function ManageHomePage() {
         <Stat label="Users" value={String(userCount)} href="/manage/users" />
         <Stat label="System / updates" value="→" href="/manage/system" />
         <Stat label="Severities" value="→" href="/manage/severities" />
+        <Stat label="Inspection types" value="→" href="/manage/inspection-types" />
         <Stat label="Import Excel / CSV" value="→" href="/manage/assets/import" />
       </section>
 

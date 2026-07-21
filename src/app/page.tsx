@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { computeLevelSchedule, formatLevel } from "@/lib/inspection";
 import { StatusPill } from "@/components/StatusPill";
 import { InstallHint } from "@/components/InstallHint";
+import { DeleteDraftButton } from "@/components/DeleteDraftButton";
 
 export const dynamic = "force-dynamic";
 
@@ -86,18 +87,22 @@ export default async function DashboardPage() {
           <h2 className="text-lg font-semibold">Your drafts</h2>
           <ul className="card divide-y divide-[color:var(--ventia-border)] overflow-hidden">
             {myDrafts.map((d) => (
-              <li key={d.id}>
+              <li
+                key={d.id}
+                className="flex flex-wrap items-center gap-2 px-4 py-3"
+              >
                 <Link
                   href={`/inspections/${d.id}`}
-                  className="flex min-h-[3.25rem] flex-col justify-center px-4 py-3 active:bg-[color:var(--ventia-green-tint)]"
+                  className="min-w-0 flex-1 flex-col justify-center active:bg-[color:var(--ventia-green-tint)]"
                 >
-                  <span className="font-semibold text-[color:var(--ventia-green)]">
+                  <span className="block font-semibold text-[color:var(--ventia-green)]">
                     {d.asset.assetNumber} · continue draft
                   </span>
-                  <span className="text-xs text-[color:var(--ventia-muted)]">
+                  <span className="block text-xs text-[color:var(--ventia-muted)]">
                     {d.titleLabel}
                   </span>
                 </Link>
+                <DeleteDraftButton inspectionId={d.id} next="/" label="Delete" />
               </li>
             ))}
           </ul>

@@ -1,10 +1,14 @@
 import { addYears, isBefore, differenceInCalendarDays, format } from "date-fns";
-import type { Asset, Inspection, InspectionLevel } from "@/generated/prisma/client";
+import type { Asset, Inspection } from "@/generated/prisma/client";
+import { getInspectionTypes, inspectionTypeLabel } from "@/lib/inspection-types";
 
 export type ScheduleStatus = "ok" | "due_soon" | "overdue" | "never";
 
+/** Built-in schedule keys (asset still has level1/level2 interval fields). */
+export type ScheduleLevel = "LEVEL_1" | "LEVEL_2";
+
 export type LevelSchedule = {
-  level: InspectionLevel;
+  level: ScheduleLevel;
   intervalYears: number;
   lastInspectedAt: Date | null;
   nextDueAt: Date | null;
@@ -14,7 +18,7 @@ export type LevelSchedule = {
 
 export function latestApprovedForLevel(
   inspections: Pick<Inspection, "level" | "status" | "inspectedAt" | "approvedAt">[],
-  level: InspectionLevel,
+  level: string,
 ) {
   const completed = inspections
     .filter(
@@ -35,7 +39,7 @@ export function latestApprovedForLevel(
 export function computeLevelSchedule(
   asset: Pick<Asset, "level1IntervalYears" | "level2IntervalYears">,
   inspections: Pick<Inspection, "level" | "status" | "inspectedAt" | "approvedAt">[],
-  level: InspectionLevel,
+  level: ScheduleLevel,
   now = new Date(),
 ): LevelSchedule {
   const intervalYears =
@@ -71,30 +75,13 @@ export function computeLevelSchedule(
   };
 }
 
-/**
- * Inspection type options shown on Start inspection.
- * Add new entries here when extending beyond Level 1 / Level 2
- * (also add matching enum values + migration when needed).
- */
-export const INSPECTION_TYPES: {
-  value: InspectionLevel;
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: "LEVEL_1",
-    label: "Level 1",
-    description: "Routine check (about every 3 years)",
-  },
-  {
-    value: "LEVEL_2",
-    label: "Level 2",
-    description: "Detailed check — may need a Level 2 person to approve",
-  },
-];
+/** Reactive list for Start inspection — from Admin settings (or defaults). */
+export function getInspectionTypeOptions() {
+  return getInspectionTypes();
+}
 
-export function formatLevel(level: InspectionLevel) {
-  return INSPECTION_TYPES.find((t) => t.value === level)?.label ?? level.replaceAll("_", " ");
+export function formatLevel(level: string) {
+  return inspectionTypeLabel(level);
 }
 
 export function formatStatus(status: string) {

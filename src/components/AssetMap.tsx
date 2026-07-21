@@ -62,6 +62,10 @@ function loadGoogleMaps(apiKey: string): Promise<void> {
   );
   if (existing) {
     return new Promise((resolve, reject) => {
+      if (getMaps()) {
+        resolve();
+        return;
+      }
       existing.addEventListener("load", () => resolve());
       existing.addEventListener("error", () =>
         reject(new Error("Google Maps failed to load")),
@@ -70,11 +74,22 @@ function loadGoogleMaps(apiKey: string): Promise<void> {
   }
 
   return new Promise((resolve, reject) => {
+    const w = window as unknown as {
+      __veninspectMapsReady?: () => void;
+      gm_authFailure?: () => void;
+    };
+    w.__veninspectMapsReady = () => {
+      if (getMaps()) resolve();
+      else reject(new Error("Google Maps loaded without maps API"));
+    };
+    w.gm_authFailure = () => {
+      reject(new Error("Google Maps authentication failed (key / referrer)"));
+    };
     const script = document.createElement("script");
     script.dataset.veninspectMaps = "1";
     script.async = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
-    script.onload = () => resolve();
+    script.defer = true;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&callback=__veninspectMapsReady&v=weekly`;
     script.onerror = () => reject(new Error("Google Maps failed to load"));
     document.head.appendChild(script);
   });
@@ -318,9 +333,20 @@ export function AssetMap({ assets, apiKey }: Props) {
         </p>
       ) : null}
 
+      {withCoords.length === 0 ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          No assets have coordinates yet — the map may show Melbourne as a default centre, but
+          there are no pins. Admins: open{" "}
+          <Link href="/manage/assets" className="font-semibold underline">
+            Admin → Assets
+          </Link>
+          , edit an asset, and set latitude / longitude.
+        </p>
+      ) : null}
+
       <div
         ref={mapEl}
-        className="h-[min(55vh,420px)] w-full overflow-hidden rounded-2xl border border-[color:var(--ventia-border)] bg-[color:var(--ventia-green-tint)]"
+        className="h-[min(55vh,420px)] min-h-[280px] w-full overflow-hidden rounded-2xl border border-[color:var(--ventia-border)] bg-[#e5e3df]"
         role="region"
         aria-label="Asset map"
       />

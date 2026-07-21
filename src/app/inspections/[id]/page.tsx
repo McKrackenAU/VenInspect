@@ -15,6 +15,7 @@ import {
 import { DefectAddForm } from "@/components/DefectAddForm";
 import { CategoryCommentsEditor } from "@/components/CategoryCommentsEditor";
 import { CarryForwardDefects } from "@/components/CarryForwardDefects";
+import { DeleteDraftButton } from "@/components/DeleteDraftButton";
 import {
   BRIDGE_CATEGORIES,
   DRAINAGE_CATEGORIES,
@@ -134,6 +135,12 @@ export default async function InspectionPage({
               Scope export
             </Link>
           </div>
+        ) : editable ? (
+          <DeleteDraftButton
+            inspectionId={inspection.id}
+            next={`/assets/${inspection.assetId}`}
+            label="Delete draft"
+          />
         ) : null}
       </div>
 

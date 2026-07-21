@@ -20,11 +20,6 @@ enum AssetType {
   NOISE_WALL
 }
 
-enum InspectionLevel {
-  LEVEL_1
-  LEVEL_2
-}
-
 enum InspectionStatus {
   DRAFT
   SUBMITTED
@@ -95,7 +90,8 @@ model Asset {
 model Inspection {
   id                     String                 @id @default(cuid())
   assetId                String
-  level                  InspectionLevel
+  /// Inspection type code (e.g. LEVEL_1) — admin-editable list in settings
+  level                  String
   status                 InspectionStatus       @default(DRAFT)
   inspectedAt            DateTime               @default(now())
   createdAt              DateTime               @default(now())

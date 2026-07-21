@@ -14,18 +14,29 @@ import {
   writeStorageSettings,
 } from "@/lib/paths";
 import { saveSeverityOptions } from "@/lib/severities";
+import { getInspectionTypes, saveInspectionTypes } from "@/lib/inspection-types";
 import { ASSET_PERMIT_FLAGS } from "@/lib/inspection";
-import type { InspectionLevel } from "@/generated/prisma/client";
 
 export async function createInspection(formData: FormData) {
   const assetId = String(formData.get("assetId") ?? "");
-  const level = String(formData.get("level") ?? "LEVEL_1") as InspectionLevel;
+  const level = String(formData.get("level") ?? "LEVEL_1")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
   const generalComments = String(formData.get("generalComments") ?? "") || null;
   const actor = await requireUser();
 
   if (!assetId) throw new Error("Asset required");
 
-  if (level === "LEVEL_2" && !actor.level2Qualified && !actor.level1Qualified) {
+  const types = getInspectionTypes();
+  const typeDef = types.find((t) => t.value === level);
+  if (!typeDef) throw new Error("Unknown inspection type");
+
+  if (
+    (level === "LEVEL_2" || typeDef.requiresLevel2Approval) &&
+    !actor.level2Qualified &&
+    !actor.level1Qualified
+  ) {
     throw new Error("Inspector not qualified");
   }
 
@@ -49,7 +60,8 @@ export async function createInspection(formData: FormData) {
 
   ensureDataDirs();
 
-  const requiresLevel2Approval = level === "LEVEL_2" && !actor.level2Qualified;
+  const requiresLevel2Approval =
+    Boolean(typeDef.requiresLevel2Approval) && !actor.level2Qualified;
 
   const inspection = await prisma.inspection.create({
     data: {
@@ -381,6 +393,54 @@ export async function saveSeverities(formData: FormData) {
   }
   saveSeverityOptions(parsed);
   revalidatePath("/manage/severities");
+}
+
+export async function saveInspectionTypesAction(formData: FormData) {
+  await requireAdmin();
+  const raw = String(formData.get("typesJson") ?? "[]");
+  let parsed: {
+    value: string;
+    label: string;
+    description: string;
+    requiresLevel2Approval?: boolean;
+  }[] = [];
+  try {
+    parsed = JSON.parse(raw) as typeof parsed;
+  } catch {
+    throw new Error("Invalid inspection types JSON");
+  }
+  saveInspectionTypes(parsed);
+  revalidatePath("/manage/inspection-types");
+  revalidatePath("/inspect");
+}
+
+export async function deleteDraftInspection(formData: FormData) {
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const actor = await requireUser();
+  if (!inspectionId) throw new Error("Inspection required");
+
+  const inspection = await prisma.inspection.findUniqueOrThrow({
+    where: { id: inspectionId },
+  });
+
+  if (inspection.status !== "DRAFT") {
+    throw new Error("Only drafts can be deleted");
+  }
+  if (inspection.createdById !== actor.id && actor.role !== "ADMIN") {
+    throw new Error("You can only delete your own drafts");
+  }
+
+  const assetId = inspection.assetId;
+  await prisma.inspection.delete({ where: { id: inspectionId } });
+
+  revalidatePath("/");
+  revalidatePath("/assets");
+  revalidatePath(`/assets/${assetId}`);
+  revalidatePath("/approvals");
+
+  const next = String(formData.get("next") ?? "").trim();
+  if (next.startsWith("/")) redirect(next);
+  redirect("/");
 }
 
 export async function approveInspection(formData: FormData) {
