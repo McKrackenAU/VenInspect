@@ -4,7 +4,15 @@ Web app for **bridge and drainage asset inspections** — field capture, compres
 
 **Production target:** Proxmox **LXC** as the main server (native Node + systemd). Local `npm run dev` is for development only.
 
-**Full install walkthrough:** [docs/LXC-INSTALL.md](docs/LXC-INSTALL.md)
+**One-liner (Proxmox host shell, whiptail GUI):**
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/ct/veninspect.sh)"
+```
+
+LAN / Gitea: `http://192.168.13.9:3000/McKraken/VenInspect/raw/branch/main/ct/veninspect.sh`
+
+**Full guide:** [docs/LXC-INSTALL.md](docs/LXC-INSTALL.md)
 
 ## Git remotes
 

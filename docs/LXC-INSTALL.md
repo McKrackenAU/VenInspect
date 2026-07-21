@@ -1,8 +1,38 @@
 # VenInspect — Proxmox LXC install guide
 
-This guide installs VenInspect as the **main server** on an unprivileged Proxmox LXC (Debian 12), with systemd — not Docker, not a Windows `.bat`.
+This guide covers installing VenInspect as the **main server** on Proxmox.
 
-By the end you will have:
+## Fastest path (helper-scripts style — recommended)
+
+Run this **on the Proxmox host shell** (not inside a CT). It opens a **whiptail GUI** (same idea as community-scripts), creates a Debian LXC, and installs VenInspect.
+
+**From GitHub (live):**
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/ct/veninspect.sh)"
+```
+
+**From Gitea (LAN / dev):**
+
+```bash
+bash -c "$(curl -fsSL http://192.168.13.9:3000/McKraken/VenInspect/raw/branch/main/ct/veninspect.sh)"
+```
+
+The menu asks for CT ID, hostname, CPU/RAM/disk, storage, network, git source (Gitea vs GitHub), and optional separate photo storage.
+
+When finished, open `http://<ct-ip>:3000`.
+
+| Script | Where it runs |
+|--------|----------------|
+| `ct/veninspect.sh` | Proxmox **host** — GUI + create CT |
+| `deploy/install-lxc.sh` | **Inside** the CT — Node/app/systemd |
+| `install/veninspect-install.sh` | Thin wrapper → `deploy/install-lxc.sh` |
+
+---
+
+## Manual install (more control)
+
+If you prefer creating the CT yourself first, continue below.
 
 - App code at `/opt/veninspect`
 - Database (SQLite) under `DATA_DIR` (default `/var/lib/veninspect`)
