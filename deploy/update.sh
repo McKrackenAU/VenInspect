@@ -189,9 +189,7 @@ fi
 if [[ -f "$APP_LIVE/deploy/veninspect-update.path" ]]; then
   install -m 644 "$APP_LIVE/deploy/veninspect-update.path" /etc/systemd/system/veninspect-update.path
 fi
-if [[ -f "$APP_LIVE/deploy/update.sh" ]]; then
-  install -m 755 "$APP_LIVE/deploy/update.sh" /opt/veninspect/deploy/update.sh
-fi
+chmod 755 "$APP_LIVE/deploy/update.sh" "$APP_LIVE/deploy/manual-update.sh" 2>/dev/null || true
 systemctl daemon-reload
 
 systemctl start veninspect

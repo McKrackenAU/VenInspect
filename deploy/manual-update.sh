@@ -79,11 +79,11 @@ cd "$APP_DIR"
 as_app npx prisma migrate deploy || true
 as_app npm run db:ensure-admin || true
 
+# Refresh systemd units (scripts already live under $APP_DIR after rsync)
 install -m 644 "$APP_DIR/deploy/veninspect.service" /etc/systemd/system/veninspect.service
 install -m 644 "$APP_DIR/deploy/veninspect-update.service" /etc/systemd/system/veninspect-update.service
 install -m 644 "$APP_DIR/deploy/veninspect-update.path" /etc/systemd/system/veninspect-update.path
-install -m 755 "$APP_DIR/deploy/update.sh" "$APP_DIR/deploy/update.sh"
-install -m 755 "$APP_DIR/deploy/manual-update.sh" "$APP_DIR/deploy/manual-update.sh"
+chmod 755 "$APP_DIR/deploy/update.sh" "$APP_DIR/deploy/manual-update.sh" 2>/dev/null || true
 systemctl daemon-reload
 systemctl enable --now veninspect-update.path
 systemctl start veninspect
