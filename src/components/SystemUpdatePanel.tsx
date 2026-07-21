@@ -25,6 +25,7 @@ type StatusPayload = {
     channel?: string;
     logTail?: string;
   };
+  inProgress?: boolean;
 };
 
 export function SystemUpdatePanel({
@@ -46,12 +47,11 @@ export function SystemUpdatePanel({
     if (!res.ok) return;
     const data = (await res.json()) as StatusPayload;
     setStatus(data.status);
-    if (data.status.state === "running" || data.status.state === "requested") {
-      setUpdating(true);
-    }
-    if (data.status.state === "success" || data.status.state === "error") {
-      setUpdating(false);
-    }
+    const busy =
+      data.inProgress === true ||
+      data.status.state === "running" ||
+      data.status.state === "requested";
+    setUpdating(busy);
   }, []);
 
   useEffect(() => {
@@ -59,12 +59,19 @@ export function SystemUpdatePanel({
   }, [refreshStatus]);
 
   useEffect(() => {
-    if (!updating) return;
+    // Keep polling while busy, and also once after load if status looks stuck
+    // so normalizeStale can clear abandoned "running" JSON.
+    const shouldPoll =
+      updating ||
+      status?.state === "running" ||
+      status?.state === "requested" ||
+      status?.state === "error";
+    if (!shouldPoll) return;
     const id = setInterval(() => {
       void refreshStatus();
     }, 3000);
     return () => clearInterval(id);
-  }, [updating, refreshStatus]);
+  }, [updating, status?.state, refreshStatus]);
 
   async function onCheck() {
     setChecking(true);
@@ -112,6 +119,39 @@ export function SystemUpdatePanel({
     }
   }
 
+  async function onReset() {
+    if (
+      !window.confirm(
+        "Clear stuck update state? Only do this if the updater is not actually building right now.",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Reset failed");
+        return;
+      }
+      setStatus(data.status);
+      setUpdating(false);
+    } catch {
+      setError("Reset failed");
+    }
+  }
+
+  const showReset =
+    status?.state === "running" ||
+    status?.state === "requested" ||
+    status?.state === "error" ||
+    updating;
+
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -151,6 +191,15 @@ export function SystemUpdatePanel({
         >
           {updating ? "Updating…" : "Update to latest"}
         </button>
+        {showReset ? (
+          <button
+            type="button"
+            onClick={() => void onReset()}
+            className="rounded-xl border border-amber-500/50 px-4 py-2.5 text-sm font-semibold text-amber-800 dark:text-amber-200"
+          >
+            Reset stuck update
+          </button>
+        ) : null}
       </div>
 
       {error ? (
@@ -197,10 +246,9 @@ export function SystemUpdatePanel({
       ) : null}
 
       <p className="text-xs text-[color:var(--ventia-muted)]">
-        Updates build in a staging folder while the live app stays up, then restart the service
-        for a few seconds to swap. Requires the{" "}
-        <code className="font-mono">veninspect-update.path</code> unit on the LXC (installed by
-        the LXC installer).
+        App admins only queue an update (write a request file). systemd runs the build as root —
+        no Linux “super admin” login is required in the web UI. Only one updater runs at a time.
+        If status stays on “running” with no progress, use Reset stuck update.
       </p>
     </div>
   );

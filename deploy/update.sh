@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# VenInspect in-place updater — builds in a staging tree, then swaps with a short restart window.
-# Invoked by systemd (veninspect-update.service) when /var/lib/veninspect/update.request appears.
+# VenInspect in-place updater — builds in staging, then swaps with a short restart.
+# Only one instance may run (flock). Claim update.request immediately so systemd.path
+# does not re-fire while the update is in progress.
 set -euo pipefail
 
 APP_LIVE="${APP_DIR:-/opt/veninspect}"
@@ -8,6 +9,8 @@ APP_STAGE="${APP_STAGE:-/opt/veninspect-staging}"
 DATA_DIR="${DATA_DIR:-/var/lib/veninspect}"
 APP_USER="${APP_USER:-veninspect}"
 REQUEST_FILE="${DATA_DIR}/update.request"
+ACTIVE_FILE="${DATA_DIR}/update.request.active"
+LOCK_FILE="${DATA_DIR}/update.lock"
 STATUS_FILE="${DATA_DIR}/update-status.json"
 LOG_FILE="${DATA_DIR}/update.log"
 
@@ -53,25 +56,36 @@ if os.environ.get("TO_V"):
 if os.environ.get("CH_V"):
     status["channel"] = os.environ["CH_V"]
 now = datetime.datetime.utcnow().isoformat() + "Z"
-if status["state"] == "running" and "startedAt" not in status:
-    status["startedAt"] = now
+if status["state"] == "running":
+    status["startedAt"] = status.get("startedAt") or now
+    status.pop("finishedAt", None)
 if status["state"] in ("success", "error"):
     status["finishedAt"] = now
 path.write_text(json.dumps(status, indent=2))
 PY
 }
 
-if [[ ! -f "$REQUEST_FILE" ]]; then
+# --- single-flight lock ---
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  log "Another update holds the lock — exiting cleanly"
+  exit 0
+fi
+
+# Claim request immediately (stops PathExists from re-triggering)
+if [[ -f "$REQUEST_FILE" ]]; then
+  mv -f "$REQUEST_FILE" "$ACTIVE_FILE"
+elif [[ ! -f "$ACTIVE_FILE" ]]; then
   log "No update.request — exiting"
   exit 0
 fi
 
 if command -v python3 >/dev/null 2>&1; then
-  CHANNEL=$(REQUEST_FILE="$REQUEST_FILE" CHANNEL="$CHANNEL" python3 <<'PY'
+  CHANNEL=$(ACTIVE_FILE="$ACTIVE_FILE" CHANNEL="$CHANNEL" python3 <<'PY'
 import json, os
 from pathlib import Path
 try:
-    d = json.loads(Path(os.environ["REQUEST_FILE"]).read_text())
+    d = json.loads(Path(os.environ["ACTIVE_FILE"]).read_text())
     print(d.get("channel") or os.environ["CHANNEL"])
 except Exception:
     print(os.environ["CHANNEL"])
@@ -92,10 +106,26 @@ elif [[ -f "$APP_LIVE/package.json" ]]; then
   FROM_VER=$(python3 -c "import json;print(json.load(open('$APP_LIVE/package.json')).get('version',''))" 2>/dev/null || echo unknown)
 fi
 
-write_status "running" "Updating from ${FROM_VER} via ${CHANNEL}…" "$FROM_VER" "" "$CHANNEL"
-log "Starting update channel=${CHANNEL} repo=${REPO_URL} from=${FROM_VER}"
+write_status "running" "Updating from ${FROM_VER} via ${CHANNEL} (locked single run)…" "$FROM_VER" "" "$CHANNEL"
+log "Starting update channel=${CHANNEL} repo=${REPO_URL} from=${FROM_VER} pid=$$"
+
+cleanup_active() {
+  rm -f "$ACTIVE_FILE" "$REQUEST_FILE"
+}
+trap cleanup_active EXIT
 
 export DEBIAN_FRONTEND=noninteractive
+
+as_app() {
+  # Prefer runuser (no sudo on many LXCs); fall back to root.
+  if command -v runuser >/dev/null 2>&1; then
+    runuser -u "$APP_USER" -- env HOME="$1" DATA_DIR="$DATA_DIR" "${@:2}"
+  elif command -v sudo >/dev/null 2>&1 && sudo -u "$APP_USER" true 2>/dev/null; then
+    sudo -u "$APP_USER" -H env HOME="$1" DATA_DIR="$DATA_DIR" "${@:2}"
+  else
+    env HOME="$1" DATA_DIR="$DATA_DIR" "${@:2}"
+  fi
+}
 
 if [[ -d "$APP_STAGE/.git" ]]; then
   log "Refreshing staging checkout"
@@ -118,16 +148,9 @@ export DATA_DIR="${DATA_DIR:-/var/lib/veninspect}"
 
 log "Installing deps + building in staging (live app still up)"
 cd "$APP_STAGE"
-run_stage() {
-  if sudo -u "$APP_USER" test -w "$APP_STAGE" 2>/dev/null; then
-    sudo -u "$APP_USER" -H env HOME="$APP_STAGE" DATA_DIR="$DATA_DIR" "$@"
-  else
-    env HOME="$APP_STAGE" DATA_DIR="$DATA_DIR" "$@"
-  fi
-}
-run_stage npm ci
-run_stage npx prisma generate
-run_stage npm run build
+as_app "$APP_STAGE" npm ci
+as_app "$APP_STAGE" npx prisma generate
+as_app "$APP_STAGE" npm run build
 
 TO_VER="$FROM_VER"
 if [[ -f "$APP_STAGE/VERSION" ]]; then
@@ -153,13 +176,8 @@ fi
 chown -R "$APP_USER:$APP_USER" "$APP_LIVE" 2>/dev/null || true
 
 cd "$APP_LIVE"
-if sudo -u "$APP_USER" test -w "$APP_LIVE" 2>/dev/null; then
-  sudo -u "$APP_USER" -H env HOME="$APP_LIVE" DATA_DIR="$DATA_DIR" npx prisma migrate deploy || true
-  sudo -u "$APP_USER" -H env HOME="$APP_LIVE" DATA_DIR="$DATA_DIR" npm run db:ensure-admin || true
-else
-  env HOME="$APP_LIVE" DATA_DIR="$DATA_DIR" npx prisma migrate deploy || true
-  env HOME="$APP_LIVE" DATA_DIR="$DATA_DIR" npm run db:ensure-admin || true
-fi
+as_app "$APP_LIVE" npx prisma migrate deploy || true
+as_app "$APP_LIVE" npm run db:ensure-admin || true
 
 if [[ -f "$APP_LIVE/deploy/veninspect.service" ]]; then
   install -m 644 "$APP_LIVE/deploy/veninspect.service" /etc/systemd/system/veninspect.service
@@ -175,7 +193,6 @@ if [[ -f "$APP_LIVE/deploy/update.sh" ]]; then
 fi
 systemctl daemon-reload
 
-rm -f "$REQUEST_FILE"
 systemctl start veninspect
 systemctl enable --now veninspect-update.path 2>/dev/null || true
 

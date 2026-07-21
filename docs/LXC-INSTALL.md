@@ -280,23 +280,35 @@ cat /etc/veninspect.env
 
 ## 8. Updating after new git pushes
 
-Inside the CT:
+### Preferred (in-app, 0.0.3+)
+
+Admin → System → Check for updates → Update to latest.  
+App **ADMIN** users only queue the job; systemd (root) runs the build. You do **not** need a Linux “super admin” inside the web app.
+
+### One-shot shell update (safe recovery / first install of updater fixes)
+
+As **root** inside the CT (no `sudo` — many CTs have none):
+
+```bash
+curl -fsSL http://192.168.13.9:3000/McKraken/VenInspect/raw/branch/main/deploy/manual-update.sh \
+  -o /tmp/manual-update.sh
+bash /tmp/manual-update.sh
+```
+
+This clears stuck update status, builds in staging, swaps, and enables `veninspect-update.path`.
+
+### Classic pull + rebuild
 
 ```bash
 cd /opt/veninspect
-
-# Dev CT tracking Gitea:
-sudo -u veninspect git remote -v
-sudo -u veninspect git pull origin main
-
-# Or live CT tracking GitHub:
-# sudo -u veninspect git pull origin main   # if cloned from GitHub
-# (or add a github remote and pull from it)
-
-sudo -u veninspect npm ci
-sudo -u veninspect npx prisma generate
-sudo -u veninspect env DATA_DIR=/var/lib/veninspect npm run build
-sudo -u veninspect env DATA_DIR=/var/lib/veninspect npx prisma migrate deploy
+runuser -u veninspect -- git pull origin main
+runuser -u veninspect -- npm ci
+runuser -u veninspect -- npx prisma generate
+runuser -u veninspect -- env DATA_DIR=/var/lib/veninspect npm run build
+runuser -u veninspect -- env DATA_DIR=/var/lib/veninspect npx prisma migrate deploy
+# clear leftover “running” UI if needed:
+rm -f /var/lib/veninspect/update.request /var/lib/veninspect/update.request.active
+printf '%s\n' '{"state":"idle","message":"Cleared after shell update"}' > /var/lib/veninspect/update-status.json
 systemctl restart veninspect
 ```
 
@@ -324,7 +336,7 @@ If you used the install script with a clone URL, `/opt/veninspect` already has t
 | Out of disk on rootfs | You put photos on root — move `PHOTO_DIR` to a large mount |
 | Map says “not configured” | Set `GOOGLE_MAPS_API_KEY` in `/etc/veninspect.env`, enable Maps JavaScript API, `systemctl restart veninspect` |
 | No nearby assets | Assets need `latitude`/`longitude` in the registry; import or edit them in Admin |
-| In-app update stuck | `systemctl status veninspect-update.path veninspect-update.service`; `journalctl -u veninspect-update -n 80`; ensure `veninspect-update.path` is enabled |
+| In-app update stuck / UI says “running” forever | Status JSON left behind. Clear now: `rm -f /var/lib/veninspect/update.request /var/lib/veninspect/update.request.active`; `printf '%s\n' '{"state":"idle","message":"cleared"}' > /var/lib/veninspect/update-status.json`; then refresh Admin. Prefer `deploy/manual-update.sh` for 0.0.3+. |
 
 Confirm mounts inside the CT:
 

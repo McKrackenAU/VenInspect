@@ -3,8 +3,12 @@ Description=Watch for VenInspect update requests
 After=network-online.target
 
 [Path]
+# Activate once when the request file appears. update.sh renames it immediately
+# so this does not keep re-firing during a long build.
 PathExists=/var/lib/veninspect/update.request
 Unit=veninspect-update.service
+TriggerLimitIntervalSec=120
+TriggerLimitBurst=1
 
 [Install]
 WantedBy=multi-user.target

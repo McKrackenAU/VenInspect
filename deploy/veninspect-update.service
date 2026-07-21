@@ -2,6 +2,8 @@
 Description=VenInspect application update (staging build + brief restart)
 After=network-online.target
 Wants=network-online.target
+# Do not start a second update while one is already running
+RefuseManualStart=false
 
 [Service]
 Type=oneshot
@@ -10,8 +12,11 @@ EnvironmentFile=-/etc/veninspect.env
 Environment=APP_DIR=/opt/veninspect
 Environment=APP_STAGE=/opt/veninspect-staging
 Environment=DATA_DIR=/var/lib/veninspect
+# Serialize at systemd level as well as flock inside the script
 ExecStart=/bin/bash /opt/veninspect/deploy/update.sh
 TimeoutStartSec=1800
+# If somehow started again while active, queue instead of racing
+RemainAfterExit=no
 
 [Install]
 WantedBy=multi-user.target
