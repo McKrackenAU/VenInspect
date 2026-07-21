@@ -50,8 +50,11 @@ enum InspectionRelationKind {
 model User {
   id              String   @id @default(cuid())
   email           String   @unique
+  /// Login name (e.g. root). Optional — email also works for login.
+  username        String?  @unique
   name            String
   role            Role     @default(INSPECTOR)
+  passwordHash    String?
   microsoftOid    String?  @unique
   level1Qualified Boolean  @default(false)
   level2Qualified Boolean  @default(false)

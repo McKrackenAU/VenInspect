@@ -22,6 +22,10 @@ export function MobileBottomNav() {
   const isManage = pathname.startsWith("/manage");
   const tabs = isManage ? manageTabs : userTabs;
 
+  if (pathname === "/login" || pathname.startsWith("/login/")) {
+    return null;
+  }
+
   // Hide on print / report-heavy pages where bottom chrome gets in the way
   if (pathname.includes("/report") || pathname.includes("/scope")) {
     return null;

@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/db";
 import { createUser, updateUserQualifications } from "@/lib/actions";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function ManageUsersPage() {
+  await requireAdmin();
   const users = await prisma.user.findMany({ orderBy: { name: "asc" } });
 
   return (
@@ -13,9 +15,10 @@ export default async function ManageUsersPage() {
           Users & qualifications
         </h1>
         <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-          Assign Admin vs Inspector and Level 1 / Level 2 inspection qualifications.
-          When Microsoft Entra ID login is enabled, accounts will link by work email /
-          OID — MFA stays with your Microsoft tenant.
+          Create logins for field and office staff. Default admin is{" "}
+          <code className="font-mono text-xs">root</code> /{" "}
+          <code className="font-mono text-xs">calvin</code>. Microsoft Entra ID
+          can replace passwords later.
         </p>
       </div>
 
@@ -33,6 +36,18 @@ export default async function ManageUsersPage() {
             type="email"
             required
             placeholder="work.email@ventia.com"
+            className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+          />
+          <input
+            name="username"
+            placeholder="Username (optional)"
+            className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+          />
+          <input
+            name="password"
+            type="password"
+            required
+            placeholder="Password"
             className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
           />
           <select
@@ -71,7 +86,15 @@ export default async function ManageUsersPage() {
               className="rounded-xl border border-[color:var(--ventia-border)] bg-white p-4 shadow-sm"
             >
               <p className="font-medium">{u.name}</p>
-              <p className="text-sm text-[color:var(--ventia-muted)]">{u.email}</p>
+              <p className="text-sm text-[color:var(--ventia-muted)]">
+                {u.username ? (
+                  <>
+                    <span className="font-mono">{u.username}</span>
+                    {" · "}
+                  </>
+                ) : null}
+                {u.email}
+              </p>
               <form
                 action={updateUserQualifications}
                 className="mt-3 flex flex-wrap items-center gap-3"
@@ -103,6 +126,12 @@ export default async function ManageUsersPage() {
                   />
                   L2
                 </label>
+                <input
+                  name="password"
+                  type="password"
+                  placeholder="New password (optional)"
+                  className="min-w-[10rem] flex-1 rounded-md border border-[color:var(--ventia-border)] px-2 py-1.5 text-sm"
+                />
                 <button
                   type="submit"
                   className="rounded-md bg-[color:var(--ventia-green-tint)] px-3 py-1.5 text-xs font-medium text-[color:var(--ventia-green)]"

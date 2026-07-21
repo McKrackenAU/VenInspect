@@ -2,6 +2,7 @@ import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "../src/lib/db";
+import { hashPassword } from "../src/lib/passwords";
 import type { AssetType } from "../src/generated/prisma/client";
 
 type SeedAsset = {
@@ -33,9 +34,11 @@ async function main() {
 
   const admin = await prisma.user.create({
     data: {
-      email: "admin@veninspect.local",
-      name: "Alex Admin",
+      username: "root",
+      email: "root@veninspect.local",
+      name: "Root Admin",
       role: "ADMIN",
+      passwordHash: hashPassword("calvin"),
       level1Qualified: true,
       level2Qualified: true,
     },
@@ -43,9 +46,11 @@ async function main() {
 
   const l1 = await prisma.user.create({
     data: {
+      username: "l1",
       email: "l1@veninspect.local",
       name: "Sam Level1",
       role: "INSPECTOR",
+      passwordHash: hashPassword("calvin"),
       level1Qualified: true,
       level2Qualified: false,
     },
@@ -53,13 +58,17 @@ async function main() {
 
   const l2 = await prisma.user.create({
     data: {
+      username: "l2",
       email: "l2@veninspect.local",
       name: "Jordan Level2",
       role: "INSPECTOR",
+      passwordHash: hashPassword("calvin"),
       level1Qualified: true,
       level2Qualified: true,
     },
   });
+
+  console.log(`Admin user: ${admin.username} (${admin.email})`);
 
   const seedPath = path.join(__dirname, "seed-data", "assets-bridges-culverts.json");
   const assetsJson = JSON.parse(fs.readFileSync(seedPath, "utf8")) as SeedAsset[];

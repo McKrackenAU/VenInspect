@@ -20,11 +20,12 @@ bash -c "$(curl -fsSL http://192.168.13.9:3000/McKraken/VenInspect/raw/branch/ma
 
 The menu asks for CT ID, hostname, CPU/RAM/disk, storage, network, git source (Gitea vs GitHub), and optional separate photo storage.
 
-When finished, open `http://<ct-ip>:8181`.
+When finished, open `http://<ct-ip>:8181/login` — default **root** / **calvin**.
 
 | Script | Where it runs |
 |--------|----------------|
 | `ct/veninspect.sh` | Proxmox **host** — GUI + create CT |
+| `ct/finish-install.sh` | Proxmox **host** — finish/repair an existing CT |
 | `deploy/install-lxc.sh` | **Inside** the CT — Node/app/systemd |
 | `install/veninspect-install.sh` | Thin wrapper → `deploy/install-lxc.sh` |
 
@@ -229,8 +230,11 @@ http://<ct-ip>:8181
 
 | Portal | URL |
 |--------|-----|
-| Field (inspect) | `http://<ct-ip>:8181/` |
-| Office (manage) | `http://<ct-ip>:8181/manage` |
+| Login | `http://<ct-ip>:8181/login` |
+| User (field) | `http://<ct-ip>:8181/` |
+| Admin (manage) | `http://<ct-ip>:8181/manage` |
+
+Default credentials (created on install): **root** / **calvin**
 
 ### Optional demo data (lab only — not for real production)
 
@@ -238,13 +242,27 @@ http://<ct-ip>:8181
 sudo -u veninspect env DATA_DIR=/var/lib/veninspect npm --prefix /opt/veninspect run db:seed
 ```
 
-Demo logins (seeded):
+Seeded logins (password `calvin`):
 
-| Email | Role |
-|-------|------|
-| `admin@veninspect.local` | Admin |
-| `l1@veninspect.local` | Level 1 inspector |
-| `l2@veninspect.local` | Level 2 inspector |
+| Username | Role |
+|----------|------|
+| `root` | Admin |
+| `l1` | Level 1 inspector |
+| `l2` | Level 2 inspector |
+
+### Finish a failed first install
+
+If the helper stopped on `chown … Operation not permitted` (bind-mounted photos on an unprivileged CT), the app was never installed. On the Proxmox host:
+
+```bash
+curl -fsSL http://192.168.13.9:3000/McKraken/VenInspect/raw/branch/main/ct/finish-install.sh \
+  -o /tmp/veninspect-finish.sh
+bash /tmp/veninspect-finish.sh 969 /monolith/VenInspect
+```
+
+(GitHub raw URL works the same with `McKrackenAU/VenInspect`.)
+
+Omit the photo path if you are not using a separate photo mount.
 
 ---
 

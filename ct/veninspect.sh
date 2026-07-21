@@ -240,12 +240,11 @@ create_container() {
     --rootfs "${STORAGE}:${DISK}" \
     --net0 "$net_arg" \
     --unprivileged 1 \
-    --features nesting=0 \
+    --features nesting=1 \
     --onboot 1 \
     --start 0
 
-  # Data dir bind (optional — use CT disk by default; create host stub for clarity)
-  # Separate photos mount
+  # Separate photos mount (host path → CT). Ownership is fixed on the HOST after install.
   if [[ "$PHOTO_SEPARATE" == "1" ]]; then
     mkdir -p "$PHOTO_MP"
     echo "mp0: ${PHOTO_MP},mp=/mnt/veninspect-photos" >>"/etc/pve/lxc/${CTID}.conf"
@@ -272,34 +271,55 @@ wait_for_network() {
 
 install_inside() {
   msg_info "Installing ${APP} inside CT ${CTID} (Node build — several minutes)…"
-  # Push a tiny bootstrap that clones repo and runs deploy/install-lxc.sh
   pct exec "$CTID" -- bash -c "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git ca-certificates curl >/dev/null"
 
   pct exec "$CTID" -- bash -c "rm -rf /tmp/VenInspect && git clone --depth 1 '${REPO_URL}' /tmp/VenInspect"
 
+  # Never chown bind mounts from inside an unprivileged CT (Operation not permitted).
   if [[ "$PHOTO_SEPARATE" == "1" ]]; then
-    pct exec "$CTID" -- bash -c "mkdir -p /mnt/veninspect-photos /var/lib/veninspect && chown -R root:root /mnt/veninspect-photos"
-  fi
-
-  pct exec "$CTID" -- bash -c "cd /tmp/VenInspect && bash deploy/install-lxc.sh '${REPO_URL}'"
-
-  if [[ "$PHOTO_SEPARATE" == "1" ]]; then
-    pct exec "$CTID" -- bash -c '
-      set -e
-      touch /etc/veninspect.env
-      if grep -q "^PHOTO_DIR=" /etc/veninspect.env; then
-        sed -i "s|^PHOTO_DIR=.*|PHOTO_DIR=/mnt/veninspect-photos|" /etc/veninspect.env
-      else
-        echo "PHOTO_DIR=/mnt/veninspect-photos" >> /etc/veninspect.env
-      fi
-      mkdir -p /mnt/veninspect-photos /var/lib/veninspect/photos
-      chown -R veninspect:veninspect /mnt/veninspect-photos /var/lib/veninspect
-      systemctl restart veninspect
-    '
+    pct exec "$CTID" -- mkdir -p /mnt/veninspect-photos /var/lib/veninspect
+    pct exec "$CTID" -- bash -c 'cd /tmp/VenInspect && PHOTO_DIR=/mnt/veninspect-photos bash deploy/install-lxc.sh "'"${REPO_URL}"'"'
+    fix_photo_mount_ownership
     msg_ok "PHOTO_DIR set to /mnt/veninspect-photos"
+  else
+    pct exec "$CTID" -- bash -c "cd /tmp/VenInspect && bash deploy/install-lxc.sh '${REPO_URL}'"
   fi
 
   msg_ok "${APP} installed"
+}
+
+# Map host photo directory ownership to the CT's veninspect UID (unprivileged idmap).
+fix_photo_mount_ownership() {
+  [[ "$PHOTO_SEPARATE" == "1" ]] || return 0
+  mkdir -p "$PHOTO_MP"
+
+  local ct_uid ct_gid host_uid host_gid
+  ct_uid=$(pct exec "$CTID" -- id -u veninspect 2>/dev/null || echo 0)
+  ct_gid=$(pct exec "$CTID" -- id -g veninspect 2>/dev/null || echo 0)
+
+  # Default Proxmox unprivileged mapping: CT uid N → host (100000 + N)
+  host_uid=$((100000 + ct_uid))
+  host_gid=$((100000 + ct_gid))
+
+  if chown -R "${host_uid}:${host_gid}" "$PHOTO_MP" 2>/dev/null; then
+    chmod -R u+rwX,g+rwX "$PHOTO_MP" 2>/dev/null || true
+    msg_ok "Host photo path ownership mapped for CT user (uid ${host_uid})"
+  else
+    msg_info "Could not chown ${PHOTO_MP} on host — trying world-writable fallback"
+    chmod -R a+rwX "$PHOTO_MP" 2>/dev/null || true
+  fi
+
+  # Ensure env + restart (install-lxc already wrote PHOTO_DIR when PHOTO_DIR was set)
+  pct exec "$CTID" -- bash -c '
+    set -e
+    touch /etc/veninspect.env
+    if grep -q "^PHOTO_DIR=" /etc/veninspect.env; then
+      sed -i "s|^PHOTO_DIR=.*|PHOTO_DIR=/mnt/veninspect-photos|" /etc/veninspect.env
+    else
+      echo "PHOTO_DIR=/mnt/veninspect-photos" >> /etc/veninspect.env
+    fi
+    systemctl restart veninspect
+  '
 }
 
 show_done() {
@@ -310,9 +330,11 @@ show_done() {
   echo
   msg_ok "Completed successfully!"
   echo -e "${BOLD}${APP}${CL} is running in CT ${BOLD}${CTID}${CL} (${HN})"
-  echo -e "  Field app:  ${GN}http://${ip}:${APP_PORT}/${CL}"
-  echo -e "  Manage:     ${GN}http://${ip}:${APP_PORT}/manage${CL}"
-  echo -e "  Status:     pct exec ${CTID} -- systemctl status veninspect"
+  echo -e "  Login:      ${GN}http://${ip}:${APP_PORT}/login${CL}"
+  echo -e "  User:        ${BOLD}root${CL} / ${BOLD}calvin${CL}"
+  echo -e "  Field app:   ${GN}http://${ip}:${APP_PORT}/${CL}"
+  echo -e "  Manage:      ${GN}http://${ip}:${APP_PORT}/manage${CL}"
+  echo -e "  Status:      pct exec ${CTID} -- systemctl status veninspect"
   echo
   echo -e "Docs: docs/LXC-INSTALL.md in the repo"
   echo

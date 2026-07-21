@@ -128,17 +128,24 @@ npm run db:seed
 npm run dev
 ```
 
-Open [http://localhost:8181](http://localhost:8181).
+Open [http://localhost:8181](http://localhost:8181) → sign in.
 
-### Demo users
+### Default login
 
-| Email | Role | Qualifications |
-|-------|------|----------------|
-| admin@veninspect.local | Admin | L1 + L2 |
-| l1@veninspect.local | Inspector | L1 only |
-| l2@veninspect.local | Inspector | L1 + L2 |
+| Username | Password | Role |
+|----------|----------|------|
+| `root` | `calvin` | Admin (user + management portals) |
+
+After `npm run db:seed`, additional demo accounts (password `calvin`):
+
+| Username | Role |
+|----------|------|
+| `l1` | Inspector (L1) |
+| `l2` | Inspector (L1 + L2) |
 
 Demo asset: **SN2656 Forsyth Road Bridge**.
+
+Use the **User / Admin** switch in the header to move between field and management portals (Admin requires an admin account).
 
 ## Stack
 

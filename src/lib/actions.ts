@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { hashPassword, requireAdmin, requireUser } from "@/lib/auth";
 import { nextDefectCode } from "@/lib/inspection";
 import { saveCompressedDefectPhoto } from "@/lib/photos";
 import {
@@ -13,23 +14,11 @@ import {
 } from "@/lib/paths";
 import type { DefectSeverity, InspectionLevel } from "@/generated/prisma/client";
 
-async function demoUser(prefer: "l1" | "l2" | "admin" = "l1") {
-  const email =
-    prefer === "admin"
-      ? "admin@veninspect.local"
-      : prefer === "l2"
-        ? "l2@veninspect.local"
-        : "l1@veninspect.local";
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) throw new Error("Seed users missing — run npm run db:seed");
-  return user;
-}
-
 export async function createInspection(formData: FormData) {
   const assetId = String(formData.get("assetId") ?? "");
   const level = String(formData.get("level") ?? "LEVEL_1") as InspectionLevel;
   const generalComments = String(formData.get("generalComments") ?? "") || null;
-  const actor = await demoUser("l1");
+  const actor = await requireUser();
 
   if (!assetId) throw new Error("Asset required");
 
@@ -194,9 +183,9 @@ export async function addDefect(formData: FormData) {
 
 export async function approveInspection(formData: FormData) {
   const inspectionId = String(formData.get("inspectionId") ?? "");
-  const approver = await demoUser("l2");
+  const approver = await requireUser();
 
-  if (!approver.level2Qualified) {
+  if (!approver.level2Qualified && approver.role !== "ADMIN") {
     throw new Error("Approver must be Level 2 qualified");
   }
 
@@ -221,7 +210,7 @@ export async function approveInspection(formData: FormData) {
 
 export async function rejectInspection(formData: FormData) {
   const inspectionId = String(formData.get("inspectionId") ?? "");
-  const approver = await demoUser("l2");
+  const approver = await requireUser();
 
   await prisma.inspection.update({
     where: { id: inspectionId },
@@ -236,16 +225,31 @@ export async function rejectInspection(formData: FormData) {
 }
 
 export async function createUser(formData: FormData) {
+  await requireAdmin();
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const username =
+    String(formData.get("username") ?? "").trim().toLowerCase() || null;
+  const password = String(formData.get("password") ?? "");
   const role = String(formData.get("role") ?? "INSPECTOR") as "ADMIN" | "INSPECTOR";
   const level1Qualified = formData.get("level1Qualified") === "on";
   const level2Qualified = formData.get("level2Qualified") === "on";
 
   if (!name || !email) throw new Error("Name and email required");
+  if (!password || password.length < 4) {
+    throw new Error("Password required (min 4 characters)");
+  }
 
   await prisma.user.create({
-    data: { name, email, role, level1Qualified, level2Qualified },
+    data: {
+      name,
+      email,
+      username,
+      role,
+      level1Qualified,
+      level2Qualified,
+      passwordHash: hashPassword(password),
+    },
   });
 
   revalidatePath("/admin");
@@ -253,14 +257,21 @@ export async function createUser(formData: FormData) {
 }
 
 export async function updateUserQualifications(formData: FormData) {
+  await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const role = String(formData.get("role") ?? "INSPECTOR") as "ADMIN" | "INSPECTOR";
   const level1Qualified = formData.get("level1Qualified") === "on";
   const level2Qualified = formData.get("level2Qualified") === "on";
+  const password = String(formData.get("password") ?? "");
 
   await prisma.user.update({
     where: { id },
-    data: { role, level1Qualified, level2Qualified },
+    data: {
+      role,
+      level1Qualified,
+      level2Qualified,
+      ...(password.length >= 4 ? { passwordHash: hashPassword(password) } : {}),
+    },
   });
 
   revalidatePath("/admin");
@@ -443,7 +454,7 @@ export async function combineInspectionsAsParent(formData: FormData) {
   const assetId = String(formData.get("assetId") ?? "");
   const aId = String(formData.get("inspectionA") ?? "");
   const bId = String(formData.get("inspectionB") ?? "");
-  const actor = await demoUser("l1");
+  const actor = await requireUser();
 
   if (!assetId || !aId || !bId || aId === bId) {
     throw new Error("Select two different inspections on the asset");
