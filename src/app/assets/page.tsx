@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
-import { computeLevelSchedule, formatAssetType } from "@/lib/inspection";
-import { AssetFinder, formatNextDue } from "@/components/AssetFinder";
+import { computeLevelSchedule, formatAssetType, formatNextDue } from "@/lib/inspection";
+import { AssetFinder } from "@/components/AssetFinder";
 
 export const dynamic = "force-dynamic";
 

@@ -1,4 +1,4 @@
-import { addYears, isBefore, differenceInCalendarDays } from "date-fns";
+import { addYears, isBefore, differenceInCalendarDays, format } from "date-fns";
 import type { Asset, Inspection, InspectionLevel } from "@/generated/prisma/client";
 
 export type ScheduleStatus = "ok" | "due_soon" | "overdue" | "never";
@@ -99,6 +99,18 @@ export function formatLevel(level: InspectionLevel) {
 
 export function formatStatus(status: string) {
   return status.replaceAll("_", " ");
+}
+
+/** Human label for schedule due state (safe for server components). */
+export function formatNextDue(
+  status: string,
+  nextDueAt: Date | null,
+): string | null {
+  if (status === "overdue") return "Overdue";
+  if (status === "due_soon" && nextDueAt) {
+    return `Due soon (${format(nextDueAt, "dd MMM")})`;
+  }
+  return null;
 }
 
 /** Next defect code for an asset within an inspection, e.g. SN2656-D003 */
