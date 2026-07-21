@@ -31,7 +31,7 @@ echo "Node: $(node -v)  npm: $(npm -v)"
 
 id -u "$APP_USER" >/dev/null 2>&1 || useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin "$APP_USER"
 
-mkdir -p "$DATA_DIR/uploads" "$APP_DIR"
+mkdir -p "$DATA_DIR/photos" "$APP_DIR"
 
 if [[ -d "$APP_DIR/.git" ]]; then
   echo "Updating existing checkout in $APP_DIR"

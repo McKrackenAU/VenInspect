@@ -4,6 +4,8 @@ Web app for **bridge and drainage asset inspections** — field capture, compres
 
 **Production target:** Proxmox **LXC** as the main server (native Node + systemd). Local `npm run dev` is for development only.
 
+**Full install walkthrough:** [docs/LXC-INSTALL.md](docs/LXC-INSTALL.md)
+
 ## Git remotes
 
 | Remote | Where | When to use |
@@ -38,12 +40,14 @@ Entra ID / work accounts so corporate MFA applies. Stubs in `.env.example`. Do n
 | What | Where | Why |
 |------|--------|-----|
 | Assets, inspections, defects, users | **SQLite** (`{DATA_DIR}/veninspect.db`) | Tiny metadata — many reports stay cheap |
-| Defect photos | **Filesystem** (`{DATA_DIR}/uploads/...`) | Never in the DB |
+| Defect photos | **Filesystem** (`{PHOTO_DIR}/…`, default `{DATA_DIR}/photos`) | Never in the DB |
 | Photo format | **WebP**, ≤1600px, quality ~75 | Phone originals shrink before write |
 
-On Proxmox, set `DATA_DIR=/var/lib/veninspect` and **mount a separate disk/dataset** there so photos grow outside the CT rootfs.
+On Proxmox, set `DATA_DIR=/var/lib/veninspect` and optionally `PHOTO_DIR` on a **separate disk**. See [docs/LXC-INSTALL.md](docs/LXC-INSTALL.md).
 
 ## Production: Proxmox LXC (main server)
+
+See the step-by-step guide: **[docs/LXC-INSTALL.md](docs/LXC-INSTALL.md)** (CT create, storage mounts, install script, updates, troubleshooting).
 
 ### CT sizing (starting point)
 

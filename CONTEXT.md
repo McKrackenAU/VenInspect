@@ -70,7 +70,7 @@ Entra ID / work MFA — stubs in `.env.example`.
 
 ## Hosting
 
-Proxmox LXC — see `README.md` / `deploy/`.
+Proxmox LXC — see `docs/LXC-INSTALL.md` and `deploy/`.
 
 ## Repo
 
