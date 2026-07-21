@@ -326,7 +326,7 @@ export default async function InspectionPage({
       {editable && isDraft ? (
         <form
           action={submitInspection}
-          className="sticky bottom-20 z-10 rounded-2xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-4 shadow-lg md:static md:shadow-sm"
+          className="rounded-2xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-4 shadow-sm"
         >
           <input type="hidden" name="inspectionId" value={inspection.id} />
           <p className="mb-3 text-sm text-[color:var(--ventia-muted)]">

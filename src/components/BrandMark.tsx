@@ -16,7 +16,7 @@ export function BrandMark({
       alt=""
       width={size}
       height={size}
-      className={`shrink-0 rounded-full object-contain ${className}`}
+      className={`shrink-0 rounded-lg object-contain ${className}`}
       priority={priority}
     />
   );
