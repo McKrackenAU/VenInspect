@@ -51,7 +51,9 @@ export DATA_DIR="${DATA_DIR:-/var/lib/veninspect}"
 
 echo "==> Building in staging (live app stays up)"
 cd "$APP_STAGE"
-as_app npm ci
+# Always install build tooling — NODE_ENV=production in /etc/veninspect.env would
+# otherwise skip devDependencies (@tailwindcss/postcss, typescript, etc.).
+as_app npm ci --include=dev
 as_app npx prisma generate
 as_app npm run build
 

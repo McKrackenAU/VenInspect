@@ -148,7 +148,8 @@ export DATA_DIR="${DATA_DIR:-/var/lib/veninspect}"
 
 log "Installing deps + building in staging (live app still up)"
 cd "$APP_STAGE"
-as_app "$APP_STAGE" npm ci
+# --include=dev: production NODE_ENV must not strip Tailwind/TypeScript build deps
+as_app "$APP_STAGE" npm ci --include=dev
 as_app "$APP_STAGE" npx prisma generate
 as_app "$APP_STAGE" npm run build
 

@@ -110,7 +110,7 @@ else
   RUN=(env HOME="$APP_DIR" DATA_DIR="$DATA_DIR")
 fi
 
-"${RUN[@]}" npm ci
+"${RUN[@]}" npm ci --include=dev
 "${RUN[@]}" npx prisma generate
 "${RUN[@]}" npm run build
 "${RUN[@]}" npx prisma migrate deploy
