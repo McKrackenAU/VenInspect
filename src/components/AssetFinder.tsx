@@ -20,20 +20,21 @@ export function AssetFinder({ assets }: { assets: AssetRow[] }) {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return assets;
-    return assets.filter(
-      (a) =>
-        a.assetNumber.toLowerCase().includes(term) ||
-        a.name.toLowerCase().includes(term) ||
-        a.roadName.toLowerCase().includes(term),
-    );
+    return assets.filter((a) => {
+      const num = (a.assetNumber ?? "").toLowerCase();
+      const name = (a.name ?? "").toLowerCase();
+      const road = (a.roadName ?? "").toLowerCase();
+      return num.includes(term) || name.includes(term) || road.includes(term);
+    });
   }, [assets, q]);
 
   const byRoad = useMemo(() => {
     const map = new Map<string, AssetRow[]>();
     for (const a of filtered) {
-      const list = map.get(a.roadName) ?? [];
+      const road = a.roadName?.trim() || "Unknown Road";
+      const list = map.get(road) ?? [];
       list.push(a);
-      map.set(a.roadName, list);
+      map.set(road, list);
     }
     return [...map.entries()];
   }, [filtered]);
@@ -79,7 +80,7 @@ export function AssetFinder({ assets }: { assets: AssetRow[] }) {
                     </Link>
                     <Link
                       href={`/inspect?assetId=${a.id}`}
-                      className="inline-flex min-h-[2.75rem] shrink-0 items-center justify-center rounded-xl bg-[color:var(--ventia-green)] px-4 text-sm font-semibold text-white"
+                      className="inline-flex min-h-[2.75rem] shrink-0 items-center justify-center rounded-xl bg-[color:var(--ventia-green)] px-4 text-sm font-semibold text-[color:var(--panel)] dark:text-[#0d1117]"
                     >
                       Inspect
                     </Link>

@@ -96,7 +96,7 @@ export function AssetPicker({
       )}
 
       {!selected && (
-        <ul className="max-h-72 overflow-auto rounded-xl border border-[color:var(--ventia-border)] bg-white">
+        <ul className="max-h-72 overflow-auto rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)]">
           {filtered.length === 0 ? (
             <li className="px-4 py-6 text-center text-sm text-[color:var(--ventia-muted)]">
               No matches — try another road or code ({assets.length} in registry)
@@ -107,12 +107,12 @@ export function AssetPicker({
                 <button
                   type="button"
                   onClick={() => setSelected(a.id)}
-                  className="flex min-h-[3.25rem] w-full flex-col items-start px-4 py-3 text-left active:bg-[color:var(--ventia-green-tint)]"
+                  className="flex min-h-[3.25rem] w-full flex-col items-start px-4 py-3 text-left text-[color:var(--ventia-ink)] hover:bg-[color:var(--ventia-green-tint)] active:bg-[color:var(--ventia-green-tint)]"
                 >
                   <span className="font-mono font-semibold text-[color:var(--ventia-green)]">
                     {a.assetNumber}
                   </span>
-                  <span className="text-sm">{a.name}</span>
+                  <span className="text-sm text-[color:var(--ventia-ink)]">{a.name}</span>
                   <span className="text-xs text-[color:var(--ventia-muted)]">{a.roadName}</span>
                 </button>
               </li>
