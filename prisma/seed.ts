@@ -3,13 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "../src/lib/db";
 import { hashPassword } from "../src/lib/passwords";
-import type { AssetType } from "../src/generated/prisma/client";
 
 type SeedAsset = {
   assetVisionId: string | null;
   assetNumber: string;
   name: string;
-  type: AssetType;
+  type: string;
   roadName: string | null;
   location?: string | null;
   latitude?: number | null;
@@ -26,6 +25,8 @@ async function main() {
   console.log("Seeding VenInspect...");
 
   await prisma.notification.deleteMany();
+  await prisma.auditAssignment.deleteMany();
+  await prisma.assetDocument.deleteMany();
   await prisma.defect.deleteMany();
   await prisma.inspectionCategory.deleteMany();
   await prisma.inspection.deleteMany();

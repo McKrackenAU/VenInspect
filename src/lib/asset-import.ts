@@ -1,11 +1,10 @@
 import * as XLSX from "xlsx";
-import type { AssetType } from "@/generated/prisma/client";
 
 export type ImportedAssetRow = {
   assetVisionId: string | null;
   assetNumber: string;
   name: string;
-  type: AssetType;
+  type: string;
   roadName: string | null;
   location: string | null;
   latitude: number | null;
@@ -55,7 +54,7 @@ function mapHeaders(headerRow: unknown[]): Record<string, number> {
   return map;
 }
 
-export function inferAssetType(name: string, explicit?: string | null): AssetType {
+export function inferAssetType(name: string, explicit?: string | null): string {
   const e = (explicit ?? "").toLowerCase();
   if (e.includes("noise")) return "NOISE_WALL";
   if (e.includes("drain") || e.includes("culvert")) return "DRAINAGE";

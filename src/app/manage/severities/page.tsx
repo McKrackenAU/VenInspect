@@ -10,11 +10,11 @@ export default async function ManageSeveritiesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-[color:var(--ventia-green)]">
-          Defect severities
+          Condition states
         </h1>
         <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-          Customise the “How serious?” dropdown used when adding defects. Values are stored
-          as uppercase codes; labels are what inspectors see.
+          These drive the defect “Condition state” dropdown and Client Export / PDF
+          filters. Defaults: CS1 not significant → CS4 needs immediate attention.
         </p>
       </div>
       <div className="card p-5">

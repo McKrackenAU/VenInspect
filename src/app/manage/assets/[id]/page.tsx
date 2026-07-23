@@ -3,9 +3,21 @@ import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { updateAssetDetails } from "@/lib/actions";
+import {
+  importAssetAuditExportAction,
+  updateAssetDetails,
+} from "@/lib/actions";
 import { formatAssetType } from "@/lib/inspection";
 import { ASSET_PERMIT_FLAGS } from "@/lib/permits";
+import { getAssetTypes } from "@/lib/asset-types";
+import { getDocumentTags } from "@/lib/document-tags";
+import { parseAssetComponents, parseAssetProfile } from "@/lib/asset-profile";
+import { AssetComponentsEditor } from "@/components/AssetComponentsEditor";
+import { AssetAttributesEditor } from "@/components/AssetAttributesEditor";
+import {
+  AssetDocumentsPanel,
+  type AssetDocumentListItem,
+} from "@/components/AssetDocumentsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +31,34 @@ export default async function ManageAssetEditPage({
   await requireAdmin();
   const { id } = await params;
   const { saved } = await searchParams;
-  const asset = await prisma.asset.findUnique({ where: { id } });
+  const asset = await prisma.asset.findUnique({
+    where: { id },
+    include: {
+      documents: {
+        include: { uploadedBy: true },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
   if (!asset) notFound();
+  const assetTypes = getAssetTypes();
+  const documentTags = getDocumentTags();
+  const components = parseAssetComponents(asset.componentsJson);
+  const profile = parseAssetProfile(asset.profileJson);
+  const documents: AssetDocumentListItem[] = asset.documents.map((document) => ({
+    id: document.id,
+    title: document.title,
+    originalFilename: document.originalFilename,
+    storagePath: document.storagePath,
+    sizeBytes: document.sizeBytes,
+    tags: parseTags(document.tagsJson),
+    documentDate: document.documentDate?.toISOString() ?? null,
+    createdAt: document.createdAt.toISOString(),
+    uploadedByName: document.uploadedBy.name,
+  }));
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <div>
         <Link
           href="/manage/assets"
@@ -74,9 +109,11 @@ export default async function ManageAssetEditPage({
           <label className="block space-y-1 text-sm">
             <span className="font-medium text-[color:var(--ventia-muted)]">Type</span>
             <select name="type" defaultValue={asset.type} className="field-input w-full">
-              <option value="BRIDGE">Bridge</option>
-              <option value="DRAINAGE">Drainage</option>
-              <option value="NOISE_WALL">Noise wall</option>
+              {assetTypes.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
             </select>
           </label>
           <label className="block space-y-1 text-sm sm:col-span-2">
@@ -235,6 +272,77 @@ export default async function ManageAssetEditPage({
           Current type label: {formatAssetType(asset.type)}
         </p>
       </form>
+
+      <section className="card space-y-4 p-5">
+        <AssetAttributesEditor
+          assetId={asset.id}
+          initialValues={profile.values}
+          initialAutoPopulate={profile.autoPopulate ?? {}}
+          coreDefaults={{
+            __assetNumber: asset.assetNumber,
+            __roadName: asset.roadName,
+            __name: asset.name,
+            __location: asset.location ?? "",
+            __latitude: asset.latitude != null ? String(asset.latitude) : "",
+            __longitude: asset.longitude != null ? String(asset.longitude) : "",
+            __notes: asset.notes ?? "",
+          }}
+        />
+      </section>
+
+      <section className="card space-y-4 p-5">
+        <div>
+          <h2 className="font-semibold text-[color:var(--ventia-green)]">
+            Asset components
+          </h2>
+          <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
+            Register inspectable parts for consistent defect tagging.
+          </p>
+        </div>
+        <AssetComponentsEditor assetId={asset.id} initial={components} />
+      </section>
+
+      <form action={importAssetAuditExportAction} className="card space-y-4 p-5">
+        <input type="hidden" name="assetId" value={asset.id} />
+        <div>
+          <h2 className="font-semibold text-[color:var(--ventia-green)]">
+            Import Audit Export
+          </h2>
+          <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
+            Import profile attributes from an Asset Vision audit export.
+          </p>
+        </div>
+        <input name="file" type="file" required accept=".xlsx,.xls,.csv" />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="allowClears"
+            value="1"
+            className="accent-[color:var(--ventia-green)]"
+          />
+          Allow blank imported values to clear existing profile values
+        </label>
+        <button type="submit" className="btn-primary">
+          Import audit export
+        </button>
+      </form>
+
+      <AssetDocumentsPanel
+        documents={documents}
+        tags={documentTags}
+        assetId={asset.id}
+        canUpload
+        canDelete
+      />
     </div>
   );
+}
+
+function parseTags(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
 }

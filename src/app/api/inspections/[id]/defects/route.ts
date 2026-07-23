@@ -41,6 +41,7 @@ export async function POST(
   const comments = String(formData.get("comments") ?? "") || null;
   const category = String(formData.get("category") ?? "") || null;
   const subcategory = String(formData.get("subcategory") ?? "") || null;
+  const componentId = String(formData.get("componentId") ?? "") || null;
   const severity =
     String(formData.get("severity") ?? "MEDIUM").trim() || "MEDIUM";
   const photo = formData.get("photo");
@@ -94,6 +95,10 @@ export async function POST(
       folderKey: inspection.folderKey,
       defectCode,
       originalName,
+      fileLastModifiedMs:
+        photo instanceof File && Number.isFinite(photo.lastModified)
+          ? photo.lastModified
+          : null,
     });
 
     const defect = await prisma.defect.create({
@@ -104,6 +109,7 @@ export async function POST(
         comments,
         category,
         subcategory,
+        componentId,
         severity,
         photoPath: relativePath,
       },

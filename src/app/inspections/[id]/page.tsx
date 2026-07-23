@@ -22,6 +22,7 @@ import {
   parseFormPayload,
 } from "@/lib/inspection-templates";
 import { getSeverityOptions, severityLabel } from "@/lib/severities";
+import { parseAssetComponents } from "@/lib/asset-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -84,9 +85,11 @@ export default async function InspectionPage({
           },
           include: { inspection: { select: { titleLabel: true } } },
           orderBy: { createdAt: "desc" },
-          take: 40,
+          take: 200,
         })
       : [];
+
+  const assetComponents = parseAssetComponents(inspection.asset.componentsJson);
 
   const defectsSlot = (
     <section className="space-y-3">
@@ -157,13 +160,26 @@ export default async function InspectionPage({
       )}
 
       {editable ? (
-        <DefectAddForm inspectionId={inspection.id} severities={severities} />
+        <DefectAddForm
+          inspectionId={inspection.id}
+          severities={severities}
+          components={assetComponents.map((c) => ({
+            id: c.id,
+            name: c.name,
+            category: c.category,
+          }))}
+        />
       ) : null}
 
       {editable && isDraft ? (
         <CarryForwardDefects
           inspectionId={inspection.id}
           severities={severities}
+          components={assetComponents.map((c) => ({
+            id: c.id,
+            name: c.name,
+            category: c.category,
+          }))}
           priors={priorDefects.map((d) => ({
             id: d.id,
             defectCode: d.defectCode,
@@ -172,6 +188,9 @@ export default async function InspectionPage({
             severity: d.severity,
             photoPath: d.photoPath,
             inspectionLabel: d.inspection.titleLabel,
+            componentId: d.componentId,
+            category: d.category,
+            subcategory: d.subcategory,
           }))}
         />
       ) : null}
@@ -319,6 +338,7 @@ export default async function InspectionPage({
         template={template}
         initialPayload={formPayload}
         editable={editable}
+        assetType={inspection.asset.type}
         defectsSlot={defectsSlot}
         photosSlot={photosSlot}
       />

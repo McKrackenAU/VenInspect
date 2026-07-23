@@ -13,6 +13,11 @@ import {
 import { StatusPill } from "@/components/StatusPill";
 import { DeleteDraftButton } from "@/components/DeleteDraftButton";
 import { combineInspectionsAsParent } from "@/lib/actions";
+import { getDocumentTags } from "@/lib/document-tags";
+import {
+  AssetDocumentsPanel,
+  type AssetDocumentListItem,
+} from "@/components/AssetDocumentsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +36,10 @@ export default async function AssetDetailPage({
         include: { createdBy: true, defects: true, children: true, parent: true },
         orderBy: { submittedAt: "desc" },
       },
+      documents: {
+        include: { uploadedBy: true },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
   if (!asset) notFound();
@@ -41,6 +50,18 @@ export default async function AssetDetailPage({
   const myDrafts = asset.inspections.filter(
     (i) => i.status === "DRAFT" && i.createdById === user.id,
   );
+  const documentTags = getDocumentTags();
+  const documents: AssetDocumentListItem[] = asset.documents.map((document) => ({
+    id: document.id,
+    title: document.title,
+    originalFilename: document.originalFilename,
+    storagePath: document.storagePath,
+    sizeBytes: document.sizeBytes,
+    tags: parseTags(document.tagsJson),
+    documentDate: document.documentDate?.toISOString() ?? null,
+    createdAt: document.createdAt.toISOString(),
+    uploadedByName: document.uploadedBy.name,
+  }));
 
   return (
     <div className="space-y-8">
@@ -167,6 +188,14 @@ export default async function AssetDetailPage({
         )}
       </section>
 
+      <AssetDocumentsPanel
+        documents={documents}
+        tags={documentTags}
+        assetId={asset.id}
+        canUpload
+        canDelete={user.role === "ADMIN"}
+      />
+
       {standalones.filter((i) => i.status !== "DRAFT").length >= 2 && (
         <section className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5">
           <h2 className="font-medium">Combine two reports</h2>
@@ -220,6 +249,15 @@ export default async function AssetDetailPage({
       )}
     </div>
   );
+}
+
+function parseTags(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
 }
 
 function ScheduleCard({

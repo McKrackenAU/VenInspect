@@ -1,58 +1,81 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
+import {
+  loadAdminDashboard,
+  parseDashboardRange,
+} from "@/lib/admin-dashboard";
+import { AdminLiveDashboard } from "@/components/AdminLiveDashboard";
+import { getAssetTypes } from "@/lib/asset-types";
 
 export const dynamic = "force-dynamic";
 
-export default async function ManageHomePage() {
-  const [assetCount, userCount, byType] = await Promise.all([
+export default async function ManageHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
+  await requireAdmin();
+  const sp = await searchParams;
+  const range = parseDashboardRange(sp.range);
+  const [dashboard, assetCount, userCount, byType] = await Promise.all([
+    loadAdminDashboard(range),
     prisma.asset.count(),
     prisma.user.count(),
     prisma.asset.groupBy({ by: ["type"], _count: true }),
   ]);
-
   const typeMap = Object.fromEntries(byType.map((t) => [t.type, t._count]));
+  const assetTypes = getAssetTypes();
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-[color:var(--ventia-green)]">
-          Management portal
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm text-[color:var(--ventia-muted)]">
-          Maintain the asset registry and inspector accounts. Inspection work happens
-          in the inspection portal. Microsoft work-account login (Entra ID + MFA) is
-          planned — not enabled yet.
+    <div className="space-y-10">
+      <AdminLiveDashboard initial={dashboard} />
+
+      <section className="space-y-4 border-t border-[color:var(--ventia-border)] pt-8">
+        <div>
+          <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
+            Tools & settings
+          </h2>
+          <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
+            Registry, catalogues, and system configuration.
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat label="Assets in registry" value={String(assetCount)} href="/manage/assets" />
+          <Stat label="Users" value={String(userCount)} href="/manage/users" />
+          <Stat label="Schedule board" value="→" href="/manage/schedule" />
+          <Stat label="System / updates" value="→" href="/manage/system" />
+          <Stat label="Condition states" value="→" href="/manage/severities" />
+          <Stat label="Export configurator" value="→" href="/manage/export-config" />
+          <Stat label="Inspection types" value="→" href="/manage/inspection-types" />
+          <Stat label="Asset types" value="→" href="/manage/asset-types" />
+          <Stat label="Document tags" value="→" href="/manage/document-tags" />
+          <Stat
+            label="Inspection templates"
+            value="→"
+            href="/manage/inspection-templates"
+          />
+          <Stat label="Import Excel / CSV" value="→" href="/manage/assets/import" />
+        </div>
+
+        <div className="card p-4">
+          <h3 className="text-sm font-medium">Registry by type</h3>
+          <ul className="mt-2 grid gap-1 text-sm sm:grid-cols-3">
+            {assetTypes.map((t) => (
+              <li key={t.value}>
+                {t.label}: {typeMap[t.value] ?? 0}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="text-sm">
+          <Link href="/" className="text-[color:var(--ventia-blue)] hover:underline">
+            Open inspection portal
+          </Link>
         </p>
-      </div>
-
-      <section className="grid gap-4 sm:grid-cols-3">
-        <Stat label="Assets in registry" value={String(assetCount)} href="/manage/assets" />
-        <Stat label="Users" value={String(userCount)} href="/manage/users" />
-        <Stat label="System / updates" value="→" href="/manage/system" />
-        <Stat label="Severities" value="→" href="/manage/severities" />
-        <Stat label="Inspection types" value="→" href="/manage/inspection-types" />
-        <Stat
-          label="Inspection templates"
-          value="→"
-          href="/manage/inspection-templates"
-        />
-        <Stat label="Import Excel / CSV" value="→" href="/manage/assets/import" />
       </section>
-
-      <section className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5 shadow-sm">
-        <h2 className="font-medium text-[color:var(--ventia-ink)]">By type</h2>
-        <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
-          <li>Bridges: {typeMap.BRIDGE ?? 0}</li>
-          <li>Drainage / culverts: {typeMap.DRAINAGE ?? 0}</li>
-          <li>Noise walls: {typeMap.NOISE_WALL ?? 0}</li>
-        </ul>
-      </section>
-
-      <p className="text-sm">
-        <Link href="/" className="text-[color:var(--ventia-blue)] hover:underline">
-          Open inspection portal
-        </Link>
-      </p>
     </div>
   );
 }
@@ -74,7 +97,7 @@ function Stat({
       <p className="text-xs uppercase tracking-wide text-[color:var(--ventia-muted)]">
         {label}
       </p>
-      <p className="mt-1 text-3xl font-semibold text-[color:var(--ventia-green)]">
+      <p className="mt-1 text-2xl font-semibold text-[color:var(--ventia-green)]">
         {value}
       </p>
     </Link>

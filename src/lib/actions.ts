@@ -17,11 +17,29 @@ import { saveSeverityOptions } from "@/lib/severities";
 import { getInspectionTypes, saveInspectionTypes } from "@/lib/inspection-types";
 import {
   getInspectionTemplates,
+  getTemplateForLevel,
   resetTemplateToSeed,
   saveInspectionTemplates,
   type InspectionTemplate,
 } from "@/lib/inspection-templates";
 import { ASSET_PERMIT_FLAGS } from "@/lib/permits";
+import { seedFormPayloadFromAsset } from "@/lib/form-seed";
+import { serializeFormPayload } from "@/lib/inspection-template-types";
+import { saveAssetTypes } from "@/lib/asset-types";
+import { saveDocumentTags } from "@/lib/document-tags";
+import {
+  parseAssetComponents,
+  serializeAssetComponents,
+  serializeAssetProfile,
+  parseAssetProfile,
+  newComponentId,
+  type AssetComponent,
+} from "@/lib/asset-profile";
+import { saveAssetDocumentFile } from "@/lib/photos";
+import {
+  parseAssetAuditExport,
+  profileSyncHints,
+} from "@/lib/asset-audit-import";
 
 export async function createInspection(formData: FormData) {
   const assetId = String(formData.get("assetId") ?? "");
@@ -82,6 +100,14 @@ export async function createInspection(formData: FormData) {
       folderKey,
       titleLabel,
       relationKind: "STANDALONE",
+      formPayload: serializeFormPayload(
+        seedFormPayloadFromAsset({
+          asset,
+          template: getTemplateForLevel(level),
+          inspectorName: actor.name,
+          inspectedAt: createdAt,
+        }),
+      ),
     },
     include: { asset: true },
   });
@@ -381,6 +407,7 @@ export async function carryForwardDefect(formData: FormData) {
       comments: comments ?? source.comments,
       category: source.category,
       subcategory: source.subcategory,
+      componentId: source.componentId,
       severity,
       photoPath,
       comparisonPhotoPath: source.photoPath,
@@ -394,9 +421,9 @@ export async function carryForwardDefect(formData: FormData) {
 export async function saveSeverities(formData: FormData) {
   await requireAdmin();
   const raw = String(formData.get("severitiesJson") ?? "[]");
-  let parsed: { value: string; label: string }[] = [];
+  let parsed: { value: string; label: string; description?: string }[] = [];
   try {
-    parsed = JSON.parse(raw) as { value: string; label: string }[];
+    parsed = JSON.parse(raw) as typeof parsed;
   } catch {
     throw new Error("Invalid severities JSON");
   }
@@ -642,10 +669,11 @@ export async function upsertAssetManual(formData: FormData) {
   await requireAdmin();
   const assetNumber = String(formData.get("assetNumber") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
-  const type = String(formData.get("type") ?? "BRIDGE") as
-    | "BRIDGE"
-    | "DRAINAGE"
-    | "NOISE_WALL";
+  const type =
+    String(formData.get("type") ?? "BRIDGE")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "_") || "BRIDGE";
   const assetVisionId = String(formData.get("assetVisionId") ?? "").trim() || null;
   const roadName = String(formData.get("roadName") ?? "").trim() || "Unknown Road";
   const location = String(formData.get("location") ?? "").trim() || null;
@@ -691,10 +719,11 @@ export async function updateAssetDetails(formData: FormData) {
 
   const assetNumber = String(formData.get("assetNumber") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
-  const type = String(formData.get("type") ?? "BRIDGE") as
-    | "BRIDGE"
-    | "DRAINAGE"
-    | "NOISE_WALL";
+  const type =
+    String(formData.get("type") ?? "BRIDGE")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "_") || "BRIDGE";
   const assetVisionId = String(formData.get("assetVisionId") ?? "").trim() || null;
   const roadName = String(formData.get("roadName") ?? "").trim() || "Unknown Road";
   const location = String(formData.get("location") ?? "").trim() || null;
@@ -884,3 +913,305 @@ export async function combineInspectionsAsParent(formData: FormData) {
   revalidatePath(`/assets/${assetId}`);
   redirect(`/inspections/${parent.id}`);
 }
+
+export async function saveAssetTypesAction(formData: FormData) {
+  await requireAdmin();
+  const raw = String(formData.get("typesJson") ?? "[]");
+  let parsed: { value: string; label: string; description?: string }[] = [];
+  try {
+    parsed = JSON.parse(raw) as typeof parsed;
+  } catch {
+    throw new Error("Invalid asset types JSON");
+  }
+  saveAssetTypes(parsed);
+  revalidatePath("/manage");
+  revalidatePath("/manage/asset-types");
+  revalidatePath("/manage/assets");
+}
+
+export async function saveAssetProfileAction(formData: FormData) {
+  await requireAdmin();
+  const assetId = String(formData.get("assetId") ?? "");
+  if (!assetId) throw new Error("Asset required");
+  let values: Record<string, string> = {};
+  let autoPopulate: Record<string, boolean> = {};
+  try {
+    values = JSON.parse(String(formData.get("valuesJson") ?? "{}")) as Record<
+      string,
+      string
+    >;
+    autoPopulate = JSON.parse(
+      String(formData.get("autoPopulateJson") ?? "{}"),
+    ) as Record<string, boolean>;
+  } catch {
+    throw new Error("Invalid profile JSON");
+  }
+  const asset = await prisma.asset.findUniqueOrThrow({ where: { id: assetId } });
+  const existing = parseAssetProfile(asset.profileJson);
+  await prisma.asset.update({
+    where: { id: assetId },
+    data: {
+      profileJson: serializeAssetProfile({
+        values,
+        autoPopulate,
+        importedAt: existing.importedAt,
+        sourceFile: existing.sourceFile,
+      }),
+    },
+  });
+  revalidatePath(`/manage/assets/${assetId}`);
+  revalidatePath(`/assets/${assetId}`);
+}
+
+export async function saveExportConfigAction(formData: FormData) {
+  await requireAdmin();
+  const raw = String(formData.get("configJson") ?? "{}");
+  let parsed: import("@/lib/export-config").ExportConfig;
+  try {
+    parsed = JSON.parse(raw) as typeof parsed;
+  } catch {
+    throw new Error("Invalid export config JSON");
+  }
+  const { saveExportConfig } = await import("@/lib/export-config");
+  saveExportConfig(parsed);
+  revalidatePath("/manage");
+  revalidatePath("/manage/export-config");
+}
+
+export async function saveDocumentTagsAction(formData: FormData) {
+  await requireAdmin();
+  const raw = String(formData.get("tagsJson") ?? "[]");
+  let parsed: { value: string; label: string }[] = [];
+  try {
+    parsed = JSON.parse(raw) as typeof parsed;
+  } catch {
+    throw new Error("Invalid document tags JSON");
+  }
+  saveDocumentTags(parsed);
+  revalidatePath("/manage");
+  revalidatePath("/manage/document-tags");
+}
+
+export async function saveAssetComponentsAction(formData: FormData) {
+  await requireAdmin();
+  const assetId = String(formData.get("assetId") ?? "");
+  const raw = String(formData.get("componentsJson") ?? "[]");
+  if (!assetId) throw new Error("Asset required");
+  let parsed: AssetComponent[] = [];
+  try {
+    parsed = JSON.parse(raw) as AssetComponent[];
+  } catch {
+    throw new Error("Invalid components JSON");
+  }
+  const cleaned = parsed
+    .map((c, i) => ({
+      id: c.id?.trim() || newComponentId(),
+      name: String(c.name ?? "").trim(),
+      category: c.category ? String(c.category) : undefined,
+      qty: c.qty != null ? String(c.qty) : undefined,
+      unit: c.unit ? String(c.unit) : undefined,
+      sortOrder: i,
+    }))
+    .filter((c) => c.name);
+  await prisma.asset.update({
+    where: { id: assetId },
+    data: { componentsJson: serializeAssetComponents(cleaned) },
+  });
+  revalidatePath(`/manage/assets/${assetId}`);
+  revalidatePath(`/assets/${assetId}`);
+}
+
+export async function importAssetAuditExportAction(formData: FormData) {
+  await requireAdmin();
+  const assetId = String(formData.get("assetId") ?? "");
+  const file = formData.get("file");
+  const allowClears = String(formData.get("allowClears") ?? "") === "1";
+  if (!assetId) throw new Error("Asset required");
+  if (!(file instanceof Blob) || file.size === 0) {
+    throw new Error("Audit Export file required");
+  }
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { values } = parseAssetAuditExport(buffer);
+  const asset = await prisma.asset.findUniqueOrThrow({ where: { id: assetId } });
+  const existing = parseAssetProfile(asset.profileJson);
+  const merged = { ...existing.values };
+  const autoPopulate = { ...(existing.autoPopulate ?? {}) };
+  for (const [k, v] of Object.entries(values)) {
+    if (!v && !allowClears) continue;
+    merged[k] = v;
+    // Newly imported fields default to auto-fill so reports pick them up
+    if (autoPopulate[k] === undefined) autoPopulate[k] = true;
+  }
+  const sync = profileSyncHints(merged);
+  const originalName = file instanceof File ? file.name : "audit-export.xlsx";
+  await prisma.asset.update({
+    where: { id: assetId },
+    data: {
+      profileJson: serializeAssetProfile({
+        values: merged,
+        autoPopulate,
+        importedAt: new Date().toISOString(),
+        sourceFile: originalName,
+      }),
+      ...(sync.latitude != null ? { latitude: sync.latitude } : {}),
+      ...(sync.longitude != null ? { longitude: sync.longitude } : {}),
+      ...(sync.notes ? { notes: sync.notes } : {}),
+      ...(sync.lastLevel2At ? { lastLevel2At: sync.lastLevel2At } : {}),
+    },
+  });
+  revalidatePath(`/manage/assets/${assetId}`);
+  revalidatePath(`/assets/${assetId}`);
+}
+
+export async function uploadAssetDocumentAction(formData: FormData) {
+  const actor = await requireUser();
+  const assetId = String(formData.get("assetId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const tagsRaw = String(formData.get("tagsJson") ?? "[]");
+  const documentDateRaw = String(formData.get("documentDate") ?? "").trim();
+  const setBaseline = String(formData.get("setBaseline") ?? "");
+  const file = formData.get("file");
+  if (!assetId || !title) throw new Error("Asset and title required");
+  if (!(file instanceof Blob) || file.size === 0) {
+    throw new Error("File required");
+  }
+  let tags: string[] = [];
+  try {
+    tags = (JSON.parse(tagsRaw) as unknown[]).map(String);
+  } catch {
+    tags = [];
+  }
+  const asset = await prisma.asset.findUniqueOrThrow({ where: { id: assetId } });
+  const documentId = `doc_${Date.now().toString(36)}`;
+  const originalFilename =
+    file instanceof File ? file.name : "document.pdf";
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { relativePath } = await saveAssetDocumentFile({
+    buffer,
+    roadName: asset.roadName,
+    assetNumber: asset.assetNumber,
+    documentId,
+    originalFilename,
+  });
+  let documentDate: Date | null = null;
+  if (documentDateRaw) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(documentDateRaw);
+    if (m) {
+      documentDate = new Date(
+        Number(m[1]),
+        Number(m[2]) - 1,
+        Number(m[3]),
+        12,
+        0,
+        0,
+      );
+    }
+  }
+  await prisma.assetDocument.create({
+    data: {
+      assetId,
+      title,
+      originalFilename,
+      storagePath: relativePath,
+      mimeType: file.type || "application/octet-stream",
+      sizeBytes: buffer.byteLength,
+      tagsJson: JSON.stringify(tags),
+      documentDate,
+      notes,
+      uploadedById: actor.id,
+      updatedAt: new Date(),
+    },
+  });
+  if (documentDate && setBaseline === "LEVEL_1") {
+    await prisma.asset.update({
+      where: { id: assetId },
+      data: { lastLevel1At: documentDate },
+    });
+  }
+  if (documentDate && setBaseline === "LEVEL_2") {
+    await prisma.asset.update({
+      where: { id: assetId },
+      data: { lastLevel2At: documentDate },
+    });
+  }
+  revalidatePath(`/assets/${assetId}`);
+  revalidatePath(`/manage/assets/${assetId}`);
+}
+
+export async function deleteAssetDocumentAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("Document id required");
+  const doc = await prisma.assetDocument.delete({ where: { id } });
+  revalidatePath(`/assets/${doc.assetId}`);
+  revalidatePath(`/manage/assets/${doc.assetId}`);
+}
+
+export async function createAuditAssignmentAction(formData: FormData) {
+  await requireAdmin();
+  const actor = await requireUser();
+  const assetId = String(formData.get("assetId") ?? "");
+  const level = String(formData.get("level") ?? "LEVEL_1")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+  const dueDateRaw = String(formData.get("dueDate") ?? "");
+  const assignedToId = String(formData.get("assignedToId") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  if (!assetId || !dueDateRaw) throw new Error("Asset and due date required");
+  const dueDate = new Date(dueDateRaw + "T12:00:00");
+  await prisma.auditAssignment.create({
+    data: {
+      assetId,
+      level,
+      dueDate,
+      assignedToId,
+      createdById: actor.id,
+      notes,
+      status: assignedToId ? "ASSIGNED" : "PLANNED",
+      updatedAt: new Date(),
+    },
+  });
+  if (assignedToId) {
+    await prisma.notification.create({
+      data: {
+        userId: assignedToId,
+        title: "Audit assigned",
+        message: `You have been assigned a ${level} audit due ${dueDateRaw}.`,
+      },
+    });
+  }
+  revalidatePath("/manage/schedule");
+  revalidatePath("/");
+}
+
+export async function updateAuditAssignmentAction(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "").trim();
+  const assignedToId = String(formData.get("assignedToId") ?? "").trim() || null;
+  const dueDateRaw = String(formData.get("dueDate") ?? "").trim();
+  if (!id) throw new Error("Assignment id required");
+  await prisma.auditAssignment.update({
+    where: { id },
+    data: {
+      ...(status
+        ? {
+            status: status as
+              | "PLANNED"
+              | "ASSIGNED"
+              | "IN_PROGRESS"
+              | "DONE"
+              | "CANCELLED",
+          }
+        : {}),
+      assignedToId,
+      ...(dueDateRaw ? { dueDate: new Date(dueDateRaw + "T12:00:00") } : {}),
+      updatedAt: new Date(),
+    },
+  });
+  revalidatePath("/manage/schedule");
+  revalidatePath("/");
+}
+

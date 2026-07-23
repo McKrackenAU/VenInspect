@@ -19,8 +19,17 @@ import { format } from "date-fns";
 
 export type StorageSettings = {
   photoDir?: string;
-  /** Admin-customisable defect severity dropdown options */
-  severities?: { value: string; label: string }[];
+  /** Admin-customisable defect severity / condition-state dropdown options */
+  severities?: { value: string; label: string; description?: string }[];
+  /** Client Export / PDF pack options + default condition-state filter */
+  exportConfig?: {
+    includePdf?: boolean;
+    includePhotos?: boolean;
+    includePhotoIndex?: boolean;
+    includeComparisonPhotos?: boolean;
+    defaultConditionStates?: string[];
+    filterPdfByConditionStates?: boolean;
+  };
   /** Admin-customisable inspection types (Start inspection radio list) */
   inspectionTypes?: {
     value: string;
@@ -28,10 +37,16 @@ export type StorageSettings = {
     description?: string;
     requiresLevel2Approval?: boolean;
   }[];
+  /** Admin-customisable asset type catalogue */
+  assetTypes?: { value: string; label: string; description?: string }[];
+  /** Admin-customisable tags for asset document uploads */
+  documentTags?: { value: string; label: string }[];
   /** Optional Maps JS key when not set in environment */
   googleMapsApiKey?: string;
   /** Admin-editable L1/L2 (etc.) form templates keyed by inspection type code */
   inspectionTemplates?: Record<string, unknown>;
+  /** DisplayName → fieldId map for Audit Export Attributes import */
+  assetProfileFieldMap?: Record<string, string>;
 };
 
 function settingsPath() {
@@ -68,6 +83,28 @@ export function writeStorageSettings(next: StorageSettings) {
   if (Object.prototype.hasOwnProperty.call(next, "inspectionTypes")) {
     if (!next.inspectionTypes?.length) delete merged.inspectionTypes;
     else merged.inspectionTypes = next.inspectionTypes;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "assetTypes")) {
+    if (!next.assetTypes?.length) delete merged.assetTypes;
+    else merged.assetTypes = next.assetTypes;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "documentTags")) {
+    if (!next.documentTags?.length) delete merged.documentTags;
+    else merged.documentTags = next.documentTags;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "exportConfig")) {
+    if (!next.exportConfig) delete merged.exportConfig;
+    else merged.exportConfig = next.exportConfig;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "assetProfileFieldMap")) {
+    if (
+      !next.assetProfileFieldMap ||
+      Object.keys(next.assetProfileFieldMap).length === 0
+    ) {
+      delete merged.assetProfileFieldMap;
+    } else {
+      merged.assetProfileFieldMap = next.assetProfileFieldMap;
+    }
   }
   if (Object.prototype.hasOwnProperty.call(next, "inspectionTemplates")) {
     if (

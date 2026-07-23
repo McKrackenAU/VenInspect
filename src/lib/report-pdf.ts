@@ -301,31 +301,16 @@ export async function buildInspectionPdf(
     if (!input.scopeOnly && template) {
       for (const page of template.pages) {
         if (page.builtin === "defects" || page.builtin === "photos") continue;
-        if (
-          page.optional &&
-          input.formPayload &&
-          !input.formPayload.enabledOptionalPages.includes(page.id)
-        ) {
-          // Still include if any field on the page has a value
-          const anyFilled = page.sections.some((s) =>
-            s.fields.some((f) => fieldFilled(values[f.id])),
-          );
-          if (!anyFilled) continue;
-        }
 
-        const pageHasContent = page.sections.some((s) =>
-          s.fields.some((f) => fieldFilled(values[f.id])),
-        );
-        if (!pageHasContent) continue;
+        const sections = page.sections.filter((sec) => {
+          if (!sec.assetTypes || sec.assetTypes.length === 0) return true;
+          return sec.assetTypes.includes(input.asset.type);
+        });
+        if (sections.length === 0) continue;
 
         sectionTitle(page.title);
 
-        for (const sec of page.sections) {
-          const filledFields = sec.fields.filter((f) =>
-            fieldFilled(values[f.id]),
-          );
-          if (filledFields.length === 0) continue;
-
+        for (const sec of sections) {
           ensureSpace(28);
           doc
             .fillColor(GREEN)
@@ -348,8 +333,32 @@ export async function buildInspectionPdf(
           });
           doc.y = hy + 14;
 
-          filledFields.forEach((field, idx) => {
-            const result = values[field.id] || "—";
+          sec.fields.forEach((field, idx) => {
+            let result = values[field.id]?.trim() || "—";
+            if (field.type === "component_table" && values[field.id]) {
+              try {
+                const rows = JSON.parse(values[field.id]) as {
+                  name?: string;
+                  qty?: string;
+                  notes?: string;
+                  cs1?: string;
+                  cs2?: string;
+                  cs3?: string;
+                  cs4?: string;
+                }[];
+                if (Array.isArray(rows)) {
+                  result =
+                    rows
+                      .map(
+                        (r) =>
+                          `${r.name ?? "?"} qty=${r.qty ?? ""} CS=${[r.cs1, r.cs2, r.cs3, r.cs4].join("/")}${r.notes ? ` — ${r.notes}` : ""}`,
+                      )
+                      .join("\n") || "—";
+                }
+              } catch {
+                /* keep */
+              }
+            }
             const textH = Math.max(
               16,
               doc.heightOfString(result, {

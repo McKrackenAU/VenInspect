@@ -33,41 +33,54 @@ export function SeveritySettingsForm({ initial }: { initial: SeverityOption[] })
         });
       }}
     >
-      <ul className="space-y-2">
+      <ul className="space-y-3">
         {rows.map((row, i) => (
-          <li key={i} className="flex flex-wrap items-center gap-2">
+          <li
+            key={i}
+            className="space-y-2 rounded-xl border border-[color:var(--ventia-border)] p-3"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={row.value}
+                onChange={(e) => update(i, { value: e.target.value })}
+                placeholder="CS1"
+                className="field-input max-w-[8rem] font-mono text-sm uppercase"
+              />
+              <input
+                value={row.label}
+                onChange={(e) => update(i, { label: e.target.value })}
+                placeholder="Condition 1"
+                className="field-input min-w-[10rem] flex-1"
+              />
+              <button
+                type="button"
+                className="rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700"
+                onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
+              >
+                Remove
+              </button>
+            </div>
             <input
-              value={row.value}
-              onChange={(e) => update(i, { value: e.target.value })}
-              placeholder="VALUE"
-              className="field-input max-w-[10rem] font-mono text-sm uppercase"
+              value={row.description ?? ""}
+              onChange={(e) => update(i, { description: e.target.value })}
+              placeholder="Meaning shown to inspectors / export UI"
+              className="field-input w-full text-sm"
             />
-            <input
-              value={row.label}
-              onChange={(e) => update(i, { label: e.target.value })}
-              placeholder="Label shown in dropdown"
-              className="field-input min-w-[12rem] flex-1"
-            />
-            <button
-              type="button"
-              className="rounded-lg border border-rose-300 px-2 py-1 text-xs text-rose-700"
-              onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
-            >
-              Remove
-            </button>
           </li>
         ))}
       </ul>
       <button
         type="button"
         className="rounded-lg border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
-        onClick={() => setRows((prev) => [...prev, { value: "", label: "" }])}
+        onClick={() =>
+          setRows((prev) => [...prev, { value: "", label: "", description: "" }])
+        }
       >
-        + Add severity
+        + Add condition state
       </button>
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className="btn-primary">
-          {pending ? "Saving…" : "Save severities"}
+          {pending ? "Saving…" : "Save condition states"}
         </button>
         {message ? (
           <span className="text-sm text-[color:var(--ventia-muted)]">{message}</span>

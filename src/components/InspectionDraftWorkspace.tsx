@@ -27,6 +27,101 @@ function FieldInput({
   const common =
     "field-input w-full disabled:opacity-60";
 
+  if (field.type === "component_table") {
+    let rows: {
+      id?: string;
+      name?: string;
+      qty?: string;
+      unit?: string;
+      cs1?: string;
+      cs2?: string;
+      cs3?: string;
+      cs4?: string;
+      notes?: string;
+    }[] = [];
+    try {
+      rows = value ? (JSON.parse(value) as typeof rows) : [];
+    } catch {
+      rows = [];
+    }
+    if (!Array.isArray(rows)) rows = [];
+    return (
+      <div className="space-y-3">
+        {rows.length === 0 ? (
+          <p className="text-sm text-[color:var(--ventia-muted)]">
+            No components on this asset yet. An admin can add them under Manage → Assets.
+          </p>
+        ) : (
+          rows.map((row, i) => (
+            <div
+              key={row.id ?? i}
+              className="space-y-2 rounded-lg border border-[color:var(--ventia-border)] p-3"
+            >
+              <p className="text-sm font-semibold">{row.name || `Component ${i + 1}`}</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <label className="block text-xs">
+                  Qty
+                  <input
+                    className={common}
+                    disabled={disabled}
+                    value={row.qty ?? ""}
+                    onChange={(e) => {
+                      const next = [...rows];
+                      next[i] = { ...row, qty: e.target.value };
+                      onChange(JSON.stringify(next));
+                    }}
+                  />
+                </label>
+                <label className="block text-xs">
+                  Unit
+                  <input
+                    className={common}
+                    disabled={disabled}
+                    value={row.unit ?? ""}
+                    onChange={(e) => {
+                      const next = [...rows];
+                      next[i] = { ...row, unit: e.target.value };
+                      onChange(JSON.stringify(next));
+                    }}
+                  />
+                </label>
+                <div className="grid grid-cols-4 gap-1 text-xs">
+                  {(["cs1", "cs2", "cs3", "cs4"] as const).map((k) => (
+                    <label key={k} className="block">
+                      {k.toUpperCase()}
+                      <input
+                        className={common}
+                        disabled={disabled}
+                        value={row[k] ?? ""}
+                        onChange={(e) => {
+                          const next = [...rows];
+                          next[i] = { ...row, [k]: e.target.value };
+                          onChange(JSON.stringify(next));
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <textarea
+                className={`${common} min-h-[3rem]`}
+                rows={2}
+                disabled={disabled}
+                placeholder="Notes…"
+                value={row.notes ?? ""}
+                onChange={(e) => {
+                  const next = [...rows];
+                  next[i] = { ...row, notes: e.target.value };
+                  onChange(JSON.stringify(next));
+                }}
+              />
+            </div>
+          ))
+        )}
+      </div>
+    );
+  }
+
   if (field.type === "textarea") {
     return (
       <textarea
@@ -184,6 +279,7 @@ export function InspectionDraftWorkspace({
   template,
   initialPayload,
   editable,
+  assetType = "BRIDGE",
   defectsSlot,
   photosSlot,
 }: {
@@ -191,6 +287,8 @@ export function InspectionDraftWorkspace({
   template: InspectionTemplate;
   initialPayload: FormPayload;
   editable: boolean;
+  /** Current asset type code — gates sections with assetTypes */
+  assetType?: string;
   defectsSlot?: React.ReactNode;
   photosSlot?: React.ReactNode;
 }) {
@@ -205,22 +303,7 @@ export function InspectionDraftWorkspace({
   const latest = useRef(payload);
   latest.current = payload;
 
-  const visiblePages = useMemo(() => {
-    return template.pages.filter(
-      (p) =>
-        !p.optional ||
-        payload.enabledOptionalPages.includes(p.id) ||
-        p.id === pageId,
-    );
-  }, [template.pages, payload.enabledOptionalPages, pageId]);
-
-  const optionalClosed = useMemo(
-    () =>
-      template.pages.filter(
-        (p) => p.optional && !payload.enabledOptionalPages.includes(p.id),
-      ),
-    [template.pages, payload.enabledOptionalPages],
-  );
+  const visiblePages = useMemo(() => template.pages, [template.pages]);
 
   const activePage: TemplatePage | undefined =
     template.pages.find((p) => p.id === pageId) ?? visiblePages[0];
@@ -286,29 +369,17 @@ export function InspectionDraftWorkspace({
     });
   }
 
-  function enableOptionalPage(p: TemplatePage) {
-    const set = new Set(latest.current.enabledOptionalPages);
-    set.add(p.id);
-    const open = new Set(latest.current.openSections);
-    if (p.sections[0]) {
-      open.delete(`!${p.sections[0].id}`);
-      open.add(p.sections[0].id);
-    }
-    const next = {
-      ...latest.current,
-      enabledOptionalPages: [...set],
-      openSections: [...open],
-    };
-    scheduleSave(next);
-    setPageId(p.id);
-  }
-
   function isSectionOpen(section: TemplateSection): boolean {
     if (payload.openSections.includes(`!${section.id}`)) return false;
     if (payload.openSections.includes(section.id)) return true;
     if (sectionFilledCount(section, payload.values) > 0) return true;
     if (section.collapsedByDefault === false) return true;
     return false;
+  }
+
+  function sectionAllowed(section: TemplateSection) {
+    if (!section.assetTypes || section.assetTypes.length === 0) return true;
+    return section.assetTypes.includes(assetType);
   }
 
   return (
@@ -329,28 +400,6 @@ export function InspectionDraftWorkspace({
               {p.title}
             </button>
           ))}
-          {editable && optionalClosed.length > 0 ? (
-            <details className="relative">
-              <summary className="cursor-pointer list-none rounded-full border border-[color:var(--ventia-green)] px-2.5 py-1 text-lg font-bold leading-none text-[color:var(--ventia-green)]">
-                +
-              </summary>
-              <div className="absolute left-0 z-30 mt-1 min-w-[12rem] rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-2 shadow-lg">
-                <p className="px-2 pb-1 text-xs text-[color:var(--ventia-muted)]">
-                  Add page
-                </p>
-                {optionalClosed.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="block w-full rounded-lg px-2 py-1.5 text-left text-sm hover:bg-[color:var(--ventia-green-tint)]"
-                    onClick={() => enableOptionalPage(p)}
-                  >
-                    {p.title}
-                  </button>
-                ))}
-              </div>
-            </details>
-          ) : null}
           <span className="ml-auto text-xs text-[color:var(--ventia-muted)]">
             {saveState === "saving"
               ? "Saving…"
@@ -391,13 +440,12 @@ export function InspectionDraftWorkspace({
           <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
             {activePage.title}
           </h2>
-          {activePage.sections.length === 0 ? (
+          {activePage.sections.filter(sectionAllowed).length === 0 ? (
             <p className="text-sm text-[color:var(--ventia-muted)]">
-              No sections on this page yet. An admin can add them under Inspection
-              templates.
+              No sections on this page for this asset type.
             </p>
           ) : (
-            activePage.sections.map((sec) => (
+            activePage.sections.filter(sectionAllowed).map((sec) => (
               <SectionBlock
                 key={sec.id}
                 section={sec}

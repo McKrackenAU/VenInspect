@@ -8,7 +8,9 @@ export type FieldType =
   | "select"
   | "yesno"
   | "date"
-  | "checkbox";
+  | "checkbox"
+  | "component_table"
+  | "component_notes";
 
 export type TemplateField = {
   id: string;
@@ -16,6 +18,7 @@ export type TemplateField = {
   type: FieldType;
   options?: string[];
   hint?: string;
+  required?: boolean;
 };
 
 export type TemplateSection = {
@@ -23,6 +26,8 @@ export type TemplateSection = {
   title: string;
   /** When true, section starts collapsed until inspector presses + */
   collapsedByDefault?: boolean;
+  /** Only show for these asset type codes; omit = all types */
+  assetTypes?: string[];
   fields: TemplateField[];
 };
 

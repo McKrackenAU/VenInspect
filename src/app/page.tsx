@@ -11,7 +11,14 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [assetCount, pendingCount, attentionAssets, scheduleRows, myDrafts] =
+  const [
+    assetCount,
+    pendingCount,
+    attentionAssets,
+    scheduleRows,
+    myDrafts,
+    myAssignments,
+  ] =
     await Promise.all([
       prisma.asset.count(),
       prisma.inspection.count({ where: { status: "PENDING_APPROVAL" } }),
@@ -47,6 +54,15 @@ export default async function DashboardPage() {
         where: { createdById: user.id, status: "DRAFT" },
         include: { asset: true },
         orderBy: { updatedAt: "desc" },
+        take: 8,
+      }),
+      prisma.auditAssignment.findMany({
+        where: {
+          assignedToId: user.id,
+          status: { notIn: ["DONE", "CANCELLED"] },
+        },
+        include: { asset: true },
+        orderBy: { dueDate: "asc" },
         take: 8,
       }),
     ]);
@@ -105,6 +121,35 @@ export default async function DashboardPage() {
                   </span>
                 </Link>
                 <DeleteDraftButton inspectionId={d.id} next="/" label="Delete" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {myAssignments.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold">My schedule</h2>
+          <ul className="card divide-y divide-[color:var(--ventia-border)] overflow-hidden">
+            {myAssignments.map((assignment) => (
+              <li key={assignment.id}>
+                <Link
+                  href={`/inspect?assetId=${assignment.assetId}`}
+                  className="flex min-h-[3.5rem] items-center justify-between gap-3 px-4 py-3 active:bg-[color:var(--ventia-green-tint)]"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[color:var(--ventia-green)]">
+                      {assignment.asset.assetNumber} · {formatLevel(assignment.level)}
+                    </p>
+                    <p className="text-sm text-[color:var(--ventia-muted)]">
+                      {assignment.asset.roadName} · due{" "}
+                      {format(assignment.dueDate, "dd MMM yyyy")}
+                    </p>
+                  </div>
+                  <span className="text-sm font-medium text-[color:var(--ventia-blue)]">
+                    Start
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>

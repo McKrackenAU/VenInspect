@@ -14,12 +14,6 @@ enum Role {
   INSPECTOR
 }
 
-enum AssetType {
-  BRIDGE
-  DRAINAGE
-  NOISE_WALL
-}
-
 enum InspectionStatus {
   DRAFT
   SUBMITTED
@@ -33,6 +27,14 @@ enum InspectionRelationKind {
   STANDALONE
   PARENT
   CHILD
+}
+
+enum AuditAssignmentStatus {
+  PLANNED
+  ASSIGNED
+  IN_PROGRESS
+  DONE
+  CANCELLED
 }
 
 model User {
@@ -49,9 +51,12 @@ model User {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  inspectionsCreated  Inspection[]   @relation("InspectionCreator")
-  inspectionsApproved Inspection[]   @relation("InspectionApprover")
+  inspectionsCreated  Inspection[]      @relation("InspectionCreator")
+  inspectionsApproved Inspection[]      @relation("InspectionApprover")
   notifications       Notification[]
+  documentsUploaded   AssetDocument[]   @relation("DocumentUploader")
+  auditsAssigned      AuditAssignment[] @relation("AuditAssignee")
+  auditsCreated       AuditAssignment[] @relation("AuditCreator")
 }
 
 model Asset {
@@ -59,7 +64,8 @@ model Asset {
   assetNumber         String    @unique
   assetVisionId       String?
   name                String
-  type                AssetType
+  /// Admin-managed catalogue code (e.g. BRIDGE, DRAINAGE, NOISE_WALL)
+  type                String    @default("BRIDGE")
   /// Primary grouping key in registry & photo folders (e.g. Kororoit Creek Road)
   roadName            String    @default("Unknown Road")
   location            String?
@@ -80,14 +86,65 @@ model Asset {
   requireConfinedSpace      Boolean @default(false)
   requireTrafficManagement  Boolean @default(false)
   requireWorkingAtHeights   Boolean @default(false)
+  /// Durable Asset Vision Attributes: { values, importedAt?, sourceFile? }
+  profileJson         String?
+  /// Structural components register: [{ id, name, category?, qty?, unit?, sortOrder }]
+  componentsJson      String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   inspections Inspection[]
+  documents   AssetDocument[]
+  assignments AuditAssignment[]
 
   @@index([roadName, assetNumber])
   @@index([assetVisionId])
   @@index([type])
+}
+
+model AssetDocument {
+  id               String    @id @default(cuid())
+  assetId          String
+  title            String
+  originalFilename String
+  storagePath      String
+  mimeType         String
+  sizeBytes        Int
+  /// JSON array of tag values from admin catalogue
+  tagsJson         String    @default("[]")
+  documentDate     DateTime?
+  notes            String?
+  uploadedById     String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  asset      Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  uploadedBy User  @relation("DocumentUploader", fields: [uploadedById], references: [id])
+
+  @@index([assetId])
+}
+
+model AuditAssignment {
+  id            String                @id @default(cuid())
+  assetId       String
+  /// Inspection type code (LEVEL_1 / LEVEL_2 / …)
+  level         String
+  dueDate       DateTime
+  assignedToId  String?
+  createdById   String
+  notes         String?
+  status        AuditAssignmentStatus @default(PLANNED)
+  inspectionId  String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  asset      Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assignedTo User? @relation("AuditAssignee", fields: [assignedToId], references: [id])
+  createdBy  User  @relation("AuditCreator", fields: [createdById], references: [id])
+
+  @@index([assignedToId, status, dueDate])
+  @@index([assetId, dueDate])
+  @@index([status, dueDate])
 }
 
 model Inspection {
@@ -167,6 +224,8 @@ model Defect {
   inspectionId         String
   category             String?
   subcategory          String?
+  /// Stable id from asset componentsJson when tagged
+  componentId          String?
   description          String
   comments             String?
   /// Customisable via admin settings (defaults: LOW/MEDIUM/HIGH/CRITICAL)
@@ -182,6 +241,7 @@ model Defect {
 
   @@unique([inspectionId, defectCode])
   @@index([inspectionId])
+  @@index([componentId])
 }
 
 model Notification {

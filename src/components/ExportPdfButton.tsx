@@ -1,30 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { SeverityOption } from "@/lib/severities";
 
 export function ExportPdfButton({
   inspectionId,
   defectIds,
   label = "Export PDF",
   className,
+  conditionStates,
+  defaultSelected,
+  allowConditionFilter = false,
 }: {
   inspectionId: string;
   /** When set, exports a scope PDF with only these defect ids */
   defectIds?: string[];
   label?: string;
   className?: string;
+  conditionStates?: SeverityOption[];
+  defaultSelected?: string[];
+  allowConditionFilter?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>(defaultSelected ?? []);
+  const states = conditionStates ?? [];
+
+  const showFilter = allowConditionFilter && states.length > 0 && !defectIds;
 
   async function download() {
     setBusy(true);
     setError(null);
     try {
-      const qs =
-        defectIds && defectIds.length > 0
-          ? `?defects=${defectIds.map(encodeURIComponent).join(",")}`
-          : "";
+      const params = new URLSearchParams();
+      if (defectIds && defectIds.length > 0) {
+        params.set("defects", defectIds.join(","));
+      } else if (showFilter && selected.length > 0) {
+        params.set("severities", selected.join(","));
+      }
+      const qs = params.toString() ? `?${params}` : "";
       const res = await fetch(`/api/inspections/${inspectionId}/pdf${qs}`);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -49,11 +63,68 @@ export function ExportPdfButton({
     }
   }
 
+  const allCodes = useMemo(() => states.map((s) => s.value), [states]);
+
   return (
-    <span className="inline-flex flex-col items-end gap-1">
+    <span className="inline-flex flex-col items-end gap-2">
+      {showFilter ? (
+        <div className="max-w-xs rounded-xl border border-[color:var(--ventia-border)] p-2 text-left">
+          <p className="mb-1 text-[10px] font-semibold text-[color:var(--ventia-muted)]">
+            Condition states in PDF
+          </p>
+          <ul className="space-y-1">
+            {states.map((s) => (
+              <li key={s.value}>
+                <label className="flex items-start gap-1.5 text-[11px]">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(s.value)}
+                    onChange={() =>
+                      setSelected((prev) =>
+                        prev.includes(s.value)
+                          ? prev.filter((c) => c !== s.value)
+                          : [...prev, s.value],
+                      )
+                    }
+                    className="mt-0.5 accent-[color:var(--ventia-green)]"
+                  />
+                  <span>
+                    {s.label}
+                    {s.description ? (
+                      <span className="block text-[color:var(--ventia-muted)]">
+                        {s.description}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-1 flex gap-2">
+            <button
+              type="button"
+              className="text-[10px] text-[color:var(--ventia-blue)]"
+              onClick={() => setSelected(allCodes)}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              className="text-[10px] text-[color:var(--ventia-blue)]"
+              onClick={() => setSelected([])}
+            >
+              None
+            </button>
+          </div>
+        </div>
+      ) : null}
       <button
         type="button"
-        disabled={busy || (defectIds != null && defectIds.length === 0)}
+        disabled={
+          busy ||
+          (defectIds != null && defectIds.length === 0) ||
+          (showFilter && selected.length === 0)
+        }
         onClick={() => void download()}
         className={
           className ??

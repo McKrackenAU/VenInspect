@@ -5,8 +5,10 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { canViewInspection } from "@/lib/inspection-access";
 import { formatLevel, formatStatus } from "@/lib/inspection";
-import { severityLabel } from "@/lib/severities";
+import { severityLabel, getSeverityOptions } from "@/lib/severities";
+import { getExportConfig } from "@/lib/export-config";
 import { ExportPdfButton } from "@/components/ExportPdfButton";
+import { ClientExportButton } from "@/components/ClientExportButton";
 import { VentiaPrintLogo } from "@/components/BrandMark";
 import {
   getTemplateForLevel,
@@ -44,6 +46,8 @@ export default async function InspectionReportPage({
   const template = getTemplateForLevel(inspection.level);
   const formPayload = parseFormPayload(inspection.formPayload);
   const values = formPayload.values;
+  const conditionStates = getSeverityOptions();
+  const exportCfg = getExportConfig();
 
   return (
     <div className="space-y-4">
@@ -54,8 +58,19 @@ export default async function InspectionReportPage({
         >
           ← Back to inspection
         </Link>
-        <div className="flex flex-wrap gap-2">
-          <ExportPdfButton inspectionId={inspection.id} label="Export PDF" />
+        <div className="flex flex-wrap items-start gap-2">
+          <ExportPdfButton
+            inspectionId={inspection.id}
+            label="Export PDF"
+            conditionStates={conditionStates}
+            defaultSelected={exportCfg.defaultConditionStates}
+            allowConditionFilter={exportCfg.filterPdfByConditionStates}
+          />
+          <ClientExportButton
+            inspectionId={inspection.id}
+            conditionStates={conditionStates}
+            defaultSelected={exportCfg.defaultConditionStates}
+          />
           <Link
             href={`/inspections/${inspection.id}/scope`}
             className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm font-semibold text-[color:var(--ventia-green)]"

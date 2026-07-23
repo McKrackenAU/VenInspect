@@ -7,6 +7,8 @@ import {
   getTemplateForLevel,
   parseFormPayload,
 } from "@/lib/inspection-templates";
+import { getExportConfig } from "@/lib/export-config";
+import { defectMatchesConditionStates } from "@/lib/severities";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +39,7 @@ export async function GET(
   }
 
   const scopeParam = req.nextUrl.searchParams.get("defects");
+  const severityParam = req.nextUrl.searchParams.get("severities");
   const scopeIds = scopeParam
     ? new Set(
         scopeParam
@@ -45,10 +48,28 @@ export async function GET(
           .filter(Boolean),
       )
     : null;
+  const severityFilter = severityParam
+    ? severityParam
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : null;
 
-  const defects = scopeIds
+  let defects = scopeIds
     ? inspection.defects.filter((d) => scopeIds.has(d.id))
     : inspection.defects;
+
+  const exportCfg = getExportConfig();
+  if (
+    !scopeIds &&
+    severityFilter &&
+    severityFilter.length > 0 &&
+    exportCfg.filterPdfByConditionStates
+  ) {
+    defects = defects.filter((d) =>
+      defectMatchesConditionStates(d.severity, severityFilter),
+    );
+  }
 
   const pdf = await buildInspectionPdf({
     inspectionId: inspection.id,

@@ -155,8 +155,8 @@ export const NOISE_WALL_CATEGORIES = [
   { category: "Surrounds", subcategories: ["Access", "Vegetation", "Drainage at toe"] },
 ] as const;
 
+import { assetTypeLabel } from "@/lib/asset-types";
+
 export function formatAssetType(type: string) {
-  if (type === "NOISE_WALL") return "Noise wall";
-  if (type === "DRAINAGE") return "Drainage";
-  return "Bridge";
+  return assetTypeLabel(type);
 }

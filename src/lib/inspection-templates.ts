@@ -225,6 +225,7 @@ export function seedLevel2Template(): InspectionTemplate {
           id: "inv_bridge",
           title: "Bridge measurements",
           collapsedByDefault: true,
+          assetTypes: ["BRIDGE"],
           fields: [
             l2Text("inv_length", "Length (m)", "number"),
             l2Text("inv_overall_width", "O/all width (m)", "number"),
@@ -238,6 +239,7 @@ export function seedLevel2Template(): InspectionTemplate {
           id: "inv_culvert",
           title: "Culvert measurements",
           collapsedByDefault: true,
+          assetTypes: ["DRAINAGE"],
           fields: [
             l2Text("inv_cell_length", "Cell length/dia (m)", "number"),
             l2Text("inv_cell_width", "Cell width along invert (m)", "number"),
@@ -295,12 +297,12 @@ export function seedLevel2Template(): InspectionTemplate {
           title: "Components",
           collapsedByDefault: true,
           fields: [
-            l2Text("cr_comp_1", "Component 1 (name / qty / CS1–4 / notes)", "textarea"),
-            l2Text("cr_comp_2", "Component 2 (name / qty / CS1–4 / notes)", "textarea"),
-            l2Text("cr_comp_3", "Component 3 (name / qty / CS1–4 / notes)", "textarea"),
-            l2Text("cr_comp_4", "Component 4 (name / qty / CS1–4 / notes)", "textarea"),
-            l2Text("cr_comp_5", "Component 5 (name / qty / CS1–4 / notes)", "textarea"),
-            l2Text("cr_comp_more", "Additional components", "textarea"),
+            {
+              id: "cr_components",
+              label: "Components (name / qty / CS1–4 / notes)",
+              type: "component_table",
+              hint: "Seeded from the asset component register",
+            },
             l2Text("cr_notes", "Condition rating notes", "textarea"),
           ],
         },
