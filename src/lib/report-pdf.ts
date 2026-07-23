@@ -14,7 +14,12 @@ import type {
   FormPayload,
   InspectionTemplate,
 } from "@/lib/inspection-template-types";
-import { fieldFilled } from "@/lib/inspection-template-types";
+import {
+  fieldFilled,
+  mediaKey,
+  parseComponentNotes,
+  parseMeasurementList,
+} from "@/lib/inspection-template-types";
 
 const GREEN = "#004825";
 const GREEN_MID = "#00994d";
@@ -67,7 +72,13 @@ export type ReportPdfInput = {
   generalComments: string | null;
   titleLabel: string;
   inspectorName: string;
+  /** Optional credential line under inspector name (reg / L1–L2) */
+  inspectorDetail?: string | null;
   approverName: string | null;
+  approverDetail?: string | null;
+  reviewerName?: string | null;
+  reviewerDetail?: string | null;
+  reviewedAt?: Date | null;
   asset: ReportPdfAsset;
   categories: ReportPdfCategory[];
   defects: ReportPdfDefect[];
@@ -76,6 +87,8 @@ export type ReportPdfInput = {
   /** When set, only these defects (and no element checklist) — scope export */
   scopeOnly?: boolean;
   generatedByName?: string;
+  /** Include form/section photos (default true) */
+  includeFormPhotos?: boolean;
 };
 
 function brandLogoPath() {
@@ -113,6 +126,18 @@ export async function buildInspectionPdf(
   const photoByCode = new Map(
     defectPhotos.map((p) => [p.id, p] as const),
   );
+
+  const includeFormPhotos = input.includeFormPhotos !== false;
+  const formMediaBuffers = new Map<string, Buffer>();
+  if (includeFormPhotos && input.formPayload?.media) {
+    for (const items of Object.values(input.formPayload.media)) {
+      for (const item of items) {
+        if (!item.path || formMediaBuffers.has(item.path)) continue;
+        const buf = await loadJpeg(item.path);
+        if (buf) formMediaBuffers.set(item.path, buf);
+      }
+    }
+  }
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
@@ -261,10 +286,38 @@ export async function buildInspectionPdf(
       ["Asset type", formatAssetType(input.asset.type)],
       ["Inspected", format(input.inspectedAt, "dd/MM/yyyy HH:mm")],
       ["Inspector", input.inspectorName],
+      ...(input.inspectorDetail
+        ? ([["Inspector credentials", input.inspectorDetail]] as [string, string][])
+        : []),
       ["Status", statusWord],
       ["Inspection level", levelLabel],
       ...(input.approverName
-        ? ([["Approved by", input.approverName], ["Approved", input.approvedAt ? format(input.approvedAt, "dd/MM/yyyy HH:mm") : "—"]] as [string, string][])
+        ? ([
+            ["Approved by (Level 2)", input.approverName],
+            ...(input.approverDetail
+              ? ([["Approver credentials", input.approverDetail]] as [string, string][])
+              : []),
+            [
+              "Approved",
+              input.approvedAt
+                ? format(input.approvedAt, "dd/MM/yyyy HH:mm")
+                : "—",
+            ],
+          ] as [string, string][])
+        : []),
+      ...(input.reviewerName
+        ? ([
+            ["Reviewed by", input.reviewerName],
+            ...(input.reviewerDetail
+              ? ([["Reviewer credentials", input.reviewerDetail]] as [string, string][])
+              : []),
+            [
+              "Reviewed",
+              input.reviewedAt
+                ? format(input.reviewedAt, "dd/MM/yyyy HH:mm")
+                : "—",
+            ],
+          ] as [string, string][])
         : []),
       ...(input.asset.latitude != null && input.asset.longitude != null
         ? ([
@@ -358,6 +411,19 @@ export async function buildInspectionPdf(
               } catch {
                 /* keep */
               }
+            } else if (field.type === "measurement_list") {
+              const rows = parseMeasurementList(values[field.id]);
+              result =
+                rows
+                  .filter((r) => r.value.trim())
+                  .map((r) => `${r.label || r.id}: ${r.value} m`)
+                  .join("; ") || "—";
+            } else if (field.type === "component_notes") {
+              const rows = parseComponentNotes(values[field.id]);
+              result =
+                rows
+                  .map((r) => `${r.label}: ${r.notes.trim() || "—"}`)
+                  .join("\n") || "—";
             }
             const textH = Math.max(
               16,
@@ -394,6 +460,67 @@ export async function buildInspectionPdf(
               .stroke();
             doc.y = y + textH;
           });
+
+          // Form / section photographs for this section
+          if (includeFormPhotos && input.formPayload?.media) {
+            const mediaEntries: { label: string; path: string }[] = [];
+            const sectionItems = input.formPayload.media[sec.id] ?? [];
+            if (
+              sec.allowPhotos &&
+              sec.includePhotosInReport !== false
+            ) {
+              for (const item of sectionItems) {
+                mediaEntries.push({
+                  label: item.caption || sec.title,
+                  path: item.path,
+                });
+              }
+            }
+            for (const field of sec.fields) {
+              if (!field.allowPhotos || field.includePhotosInReport === false) {
+                continue;
+              }
+              const key = mediaKey(sec.id, field.id);
+              for (const item of input.formPayload.media[key] ?? []) {
+                mediaEntries.push({
+                  label: item.caption || field.label,
+                  path: item.path,
+                });
+              }
+            }
+            if (mediaEntries.length > 0) {
+              doc.moveDown(0.2);
+              doc
+                .fillColor(MUTED)
+                .font("Helvetica-Oblique")
+                .fontSize(8)
+                .text("Section photographs", MARGIN, doc.y);
+              doc.moveDown(0.2);
+              for (const entry of mediaEntries) {
+                const buf = formMediaBuffers.get(entry.path);
+                if (!buf) continue;
+                ensureSpace(130);
+                const imgY = doc.y;
+                try {
+                  doc.image(buf, MARGIN, imgY, {
+                    fit: [CONTENT_W, 110],
+                    align: "center",
+                    valign: "center",
+                  });
+                  doc
+                    .fillColor(MUTED)
+                    .fontSize(7)
+                    .text(entry.label, MARGIN, imgY + 112, {
+                      width: CONTENT_W,
+                    });
+                  doc.y = imgY + 124;
+                } catch {
+                  /* skip */
+                }
+              }
+            }
+          }
+
           doc.moveDown(0.35);
         }
       }
@@ -673,12 +800,18 @@ export async function buildInspectionPdf(
         .font("Helvetica")
         .fontSize(9)
         .text(input.inspectorName, MARGIN, sigY + 32);
+      if (input.inspectorDetail) {
+        doc
+          .fillColor(MUTED)
+          .fontSize(7)
+          .text(input.inspectorDetail, MARGIN, sigY + 44, { width: 200 });
+      }
 
       if (input.approverName) {
         doc
           .fillColor(MUTED)
           .fontSize(8)
-          .text("Approved by", MARGIN + 240, sigY);
+          .text("Approved by (Level 2)", MARGIN + 240, sigY);
         doc
           .moveTo(MARGIN + 240, sigY + 28)
           .lineTo(MARGIN + 440, sigY + 28)
@@ -688,8 +821,39 @@ export async function buildInspectionPdf(
           .fillColor(INK)
           .fontSize(9)
           .text(input.approverName, MARGIN + 240, sigY + 32);
+        if (input.approverDetail) {
+          doc
+            .fillColor(MUTED)
+            .fontSize(7)
+            .text(input.approverDetail, MARGIN + 240, sigY + 44, { width: 200 });
+        }
       }
-      doc.y = sigY + 52;
+      doc.y = sigY + (input.inspectorDetail || input.approverDetail ? 58 : 52);
+
+      if (input.reviewerName) {
+        ensureSpace(40);
+        const revY = doc.y + 8;
+        doc
+          .fillColor(MUTED)
+          .fontSize(8)
+          .text("Second review", MARGIN, revY);
+        doc
+          .moveTo(MARGIN, revY + 28)
+          .lineTo(MARGIN + 200, revY + 28)
+          .strokeColor(RULE)
+          .stroke();
+        doc
+          .fillColor(INK)
+          .fontSize(9)
+          .text(`Reviewed by ${input.reviewerName}`, MARGIN, revY + 32);
+        if (input.reviewerDetail) {
+          doc
+            .fillColor(MUTED)
+            .fontSize(7)
+            .text(input.reviewerDetail, MARGIN, revY + 44, { width: 280 });
+        }
+        doc.y = revY + (input.reviewerDetail ? 56 : 48);
+      }
     }
 
     // Headers / footers / page numbers after content (avoids page-break recursion)

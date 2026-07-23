@@ -53,6 +53,7 @@ export function ExportConfigForm({
             ["includePhotos", "Include Photos/ folders"],
             ["includePhotoIndex", "Include Photo_Index.xlsx"],
             ["includeComparisonPhotos", "Include comparison (prior) photos"],
+            ["includeFormPhotos", "Include form / section photos in PDF & ZIP"],
             [
               "filterPdfByConditionStates",
               "Allow condition-state filter on PDF export",

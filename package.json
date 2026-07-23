@@ -1,6 +1,6 @@
 {
   "name": "veninspect",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "private": true,
   "scripts": {
     "dev": "next dev -p 8181",
@@ -10,6 +10,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:ensure-admin": "tsx prisma/ensure-admin.ts",
+    "db:export-sqlite": "tsx scripts/export-sqlite-json.ts",
     "db:reset": "prisma migrate reset --force",
     "postinstall": "prisma generate"
   },

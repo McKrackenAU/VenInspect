@@ -9,6 +9,7 @@ import {
 } from "@/lib/inspection-templates";
 import { getExportConfig } from "@/lib/export-config";
 import { defectMatchesConditionStates } from "@/lib/severities";
+import { formatPersonCredential } from "@/lib/report-people";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,7 @@ export async function GET(
       asset: true,
       createdBy: true,
       approvedBy: true,
+      reviewedBy: true,
       categories: { orderBy: [{ category: "asc" }, { subcategory: "asc" }] },
       defects: { orderBy: { defectCode: "asc" } },
     },
@@ -81,7 +83,23 @@ export async function GET(
     generalComments: inspection.generalComments,
     titleLabel: inspection.titleLabel,
     inspectorName: inspection.createdBy.name,
-    approverName: inspection.approvedBy?.name ?? null,
+    inspectorDetail: formatPersonCredential(inspection.createdBy),
+    approverName:
+      inspection.status === "APPROVED" || inspection.approvedBy
+        ? (inspection.approvedBy?.name ?? null)
+        : null,
+    approverDetail: inspection.approvedBy
+      ? formatPersonCredential(inspection.approvedBy)
+      : null,
+    reviewerName:
+      inspection.reviewStatus === "COMPLETED" && inspection.reviewedBy
+        ? inspection.reviewedBy.name
+        : null,
+    reviewerDetail:
+      inspection.reviewStatus === "COMPLETED" && inspection.reviewedBy
+        ? formatPersonCredential(inspection.reviewedBy)
+        : null,
+    reviewedAt: inspection.reviewedAt,
     asset: inspection.asset,
     categories: scopeIds ? [] : inspection.categories,
     defects,
@@ -89,6 +107,7 @@ export async function GET(
     formPayload: scopeIds ? null : parseFormPayload(inspection.formPayload),
     scopeOnly: Boolean(scopeIds),
     generatedByName: user.name,
+    includeFormPhotos: exportCfg.includeFormPhotos,
   });
 
   const filename = pdfFilename({

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireAdmin, requireUser } from "@/lib/auth";
+import { verifyPassword } from "@/lib/passwords";
+import { canApproveLevel2 } from "@/lib/report-people";
 import { canEditInspection } from "@/lib/inspection-access";
 import { nextDefectCode } from "@/lib/inspection";
 import { saveCompressedDefectPhoto } from "@/lib/photos";
@@ -12,6 +14,8 @@ import {
   buildInspectionLabel,
   ensureDataDirs,
   writeStorageSettings,
+  absolutePhotoPath,
+  inspectionPhotoRelativeDir,
 } from "@/lib/paths";
 import { saveSeverityOptions } from "@/lib/severities";
 import { getInspectionTypes, saveInspectionTypes } from "@/lib/inspection-types";
@@ -87,6 +91,27 @@ export async function createInspection(formData: FormData) {
   const requiresLevel2Approval =
     Boolean(typeDef.requiresLevel2Approval) && !actor.level2Qualified;
 
+  const priorInspection = await prisma.inspection.findFirst({
+    where: {
+      assetId,
+      formPayload: { not: null },
+      NOT: { status: "DRAFT" },
+    },
+    orderBy: [{ inspectedAt: "desc" }, { submittedAt: "desc" }],
+    select: { formPayload: true },
+  });
+  // Also allow draft priors that have clearance data if no submitted one
+  const priorPayload =
+    priorInspection?.formPayload ??
+    (
+      await prisma.inspection.findFirst({
+        where: { assetId, formPayload: { not: null } },
+        orderBy: [{ inspectedAt: "desc" }, { submittedAt: "desc" }],
+        select: { formPayload: true },
+      })
+    )?.formPayload ??
+    null;
+
   const inspection = await prisma.inspection.create({
     data: {
       assetId,
@@ -106,6 +131,7 @@ export async function createInspection(formData: FormData) {
           template: getTemplateForLevel(level),
           inspectorName: actor.name,
           inspectedAt: createdAt,
+          priorFormPayload: priorPayload,
         }),
       ),
     },
@@ -505,12 +531,103 @@ export async function deleteDraftInspection(formData: FormData) {
   redirect("/");
 }
 
+/**
+ * Admin-only permanent delete of any inspection (draft or submitted).
+ * Requires the admin's login password in `password`.
+ */
+export async function adminDeleteInspectionAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const inspectionId = String(formData.get("inspectionId") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  const confirmText = String(formData.get("confirmText") ?? "").trim();
+  if (!inspectionId) throw new Error("Inspection required");
+  if (!password) throw new Error("Password required");
+
+  const dbUser = await prisma.user.findUniqueOrThrow({ where: { id: admin.id } });
+  if (!dbUser.passwordHash || !verifyPassword(password, dbUser.passwordHash)) {
+    throw new Error("Incorrect password");
+  }
+
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: inspectionId },
+    include: {
+      asset: true,
+      defects: true,
+      children: { select: { id: true } },
+    },
+  });
+  if (!inspection) throw new Error("Inspection not found");
+
+  if (confirmText !== inspection.titleLabel && confirmText !== "DELETE") {
+    throw new Error(
+      `Type DELETE or the exact report title to confirm (“${inspection.titleLabel}”)`,
+    );
+  }
+
+  // Unlink children so FK does not block delete
+  if (inspection.children.length > 0) {
+    await prisma.inspection.updateMany({
+      where: { parentInspectionId: inspectionId },
+      data: { parentInspectionId: null, relationKind: "STANDALONE" },
+    });
+  }
+
+  const assetId = inspection.assetId;
+  await prisma.inspection.delete({ where: { id: inspectionId } });
+
+  // Best-effort remove photo folder for this inspection
+  try {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const rel = inspectionPhotoRelativeDir({
+      roadName: inspection.asset.roadName || "Unknown Road",
+      assetNumber: inspection.asset.assetNumber,
+      folderKey: inspection.folderKey,
+    });
+    const abs = absolutePhotoPath(rel);
+    await fs.rm(abs, { recursive: true, force: true });
+    // Also try removing any leftover defect paths outside folder (noop if gone)
+    for (const d of inspection.defects) {
+      for (const p of [d.photoPath, d.comparisonPhotoPath]) {
+        if (!p) continue;
+        try {
+          await fs.unlink(absolutePhotoPath(p));
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    void path;
+  } catch {
+    /* photos may already be gone */
+  }
+
+  revalidatePath("/");
+  revalidatePath("/assets");
+  revalidatePath(`/assets/${assetId}`);
+  revalidatePath(`/manage/assets/${assetId}`);
+  revalidatePath("/approvals");
+  revalidatePath("/manage");
+
+  const next = String(formData.get("next") ?? "").trim();
+  if (next.startsWith("/")) redirect(next);
+  redirect(`/manage/assets/${assetId}`);
+}
+
 export async function approveInspection(formData: FormData) {
   const inspectionId = String(formData.get("inspectionId") ?? "");
   const approver = await requireUser();
 
-  if (!approver.level2Qualified && approver.role !== "ADMIN") {
-    throw new Error("Approver must be Level 2 qualified");
+  if (!canApproveLevel2(approver)) {
+    throw new Error("Only Level 2 qualified inspectors (or admins) can approve");
+  }
+
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: inspectionId },
+  });
+  if (!inspection) throw new Error("Inspection not found");
+  if (inspection.status !== "PENDING_APPROVAL") {
+    throw new Error("Inspection is not waiting for approval");
   }
 
   await prisma.inspection.update({
@@ -529,23 +646,176 @@ export async function approveInspection(formData: FormData) {
 
   revalidatePath("/approvals");
   revalidatePath(`/inspections/${inspectionId}`);
+  revalidatePath(`/inspections/${inspectionId}/report`);
   revalidatePath("/");
 }
 
 export async function rejectInspection(formData: FormData) {
   const inspectionId = String(formData.get("inspectionId") ?? "");
-  const approver = await requireUser();
+  const actor = await requireUser();
+
+  if (!canApproveLevel2(actor)) {
+    throw new Error("Only Level 2 qualified inspectors (or admins) can send back");
+  }
+
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: inspectionId },
+  });
+  if (!inspection) throw new Error("Inspection not found");
+  if (inspection.status !== "PENDING_APPROVAL") {
+    throw new Error("Inspection is not waiting for approval");
+  }
 
   await prisma.inspection.update({
     where: { id: inspectionId },
     data: {
       status: "REJECTED",
-      approvedById: approver.id,
+      // Do not stamp rejector as approver on the report
+      approvedById: null,
+      approvedAt: null,
     },
   });
 
   revalidatePath("/approvals");
   revalidatePath(`/inspections/${inspectionId}`);
+  revalidatePath(`/inspections/${inspectionId}/report`);
+}
+
+export async function requestSecondReviewAction(formData: FormData) {
+  const actor = await requireUser();
+  const inspectionId = String(formData.get("inspectionId") ?? "").trim();
+  const reviewerId = String(formData.get("reviewerId") ?? "").trim();
+  const reviewNote = String(formData.get("reviewNote") ?? "").trim() || null;
+  if (!inspectionId || !reviewerId) throw new Error("Inspection and reviewer required");
+
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: inspectionId },
+    include: { createdBy: true },
+  });
+  if (!inspection) throw new Error("Inspection not found");
+  if (inspection.createdById !== actor.id && actor.role !== "ADMIN") {
+    throw new Error("Only the submitting inspector can request a second review");
+  }
+  if (
+    inspection.status !== "SUBMITTED" &&
+    inspection.status !== "APPROVED" &&
+    inspection.status !== "PENDING_APPROVAL"
+  ) {
+    throw new Error("Submit the inspection before requesting a second review");
+  }
+  if (reviewerId === inspection.createdById) {
+    throw new Error("Choose a different person — not yourself");
+  }
+
+  const reviewer = await prisma.user.findUnique({ where: { id: reviewerId } });
+  if (!reviewer) throw new Error("Reviewer not found");
+
+  await prisma.inspection.update({
+    where: { id: inspectionId },
+    data: {
+      reviewStatus: "REQUESTED",
+      reviewRequestedFromId: reviewerId,
+      reviewedById: null,
+      reviewedAt: null,
+      reviewNote,
+    },
+  });
+
+  await prisma.notification.create({
+    data: {
+      userId: reviewerId,
+      inspectionId,
+      title: "Second review requested",
+      message: `${inspection.titleLabel} — ${inspection.createdBy.name} asked you for a second look.${reviewNote ? ` Note: ${reviewNote}` : ""}`,
+    },
+  });
+
+  revalidatePath(`/inspections/${inspectionId}`);
+  revalidatePath(`/inspections/${inspectionId}/report`);
+  revalidatePath("/approvals");
+}
+
+export async function completeSecondReviewAction(formData: FormData) {
+  const actor = await requireUser();
+  const inspectionId = String(formData.get("inspectionId") ?? "").trim();
+  if (!inspectionId) throw new Error("Inspection required");
+
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: inspectionId },
+  });
+  if (!inspection) throw new Error("Inspection not found");
+  if (inspection.reviewStatus !== "REQUESTED") {
+    throw new Error("No second review is pending");
+  }
+  // Looking at it while logged in as the original inspector must not stamp a name
+  if (actor.id === inspection.createdById) {
+    throw new Error(
+      "You cannot mark this as reviewed while logged in as the original inspector",
+    );
+  }
+  if (
+    inspection.reviewRequestedFromId &&
+    inspection.reviewRequestedFromId !== actor.id &&
+    actor.role !== "ADMIN"
+  ) {
+    throw new Error("This review was requested from someone else");
+  }
+
+  await prisma.inspection.update({
+    where: { id: inspectionId },
+    data: {
+      reviewStatus: "COMPLETED",
+      reviewedById: actor.id,
+      reviewedAt: new Date(),
+    },
+  });
+
+  await prisma.notification.updateMany({
+    where: {
+      inspectionId,
+      userId: actor.id,
+      read: false,
+      title: "Second review requested",
+    },
+    data: { read: true },
+  });
+
+  revalidatePath(`/inspections/${inspectionId}`);
+  revalidatePath(`/inspections/${inspectionId}/report`);
+  revalidatePath("/approvals");
+}
+
+/** Cancel / “don’t worry about it” — no reviewed-by line on the report. */
+export async function skipSecondReviewAction(formData: FormData) {
+  const actor = await requireUser();
+  const inspectionId = String(formData.get("inspectionId") ?? "").trim();
+  if (!inspectionId) throw new Error("Inspection required");
+
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: inspectionId },
+  });
+  if (!inspection) throw new Error("Inspection not found");
+  if (inspection.reviewStatus !== "REQUESTED") {
+    throw new Error("No second review is pending to skip");
+  }
+  if (inspection.createdById !== actor.id && actor.role !== "ADMIN") {
+    throw new Error("Only the submitting inspector can skip the second review");
+  }
+
+  await prisma.inspection.update({
+    where: { id: inspectionId },
+    data: {
+      reviewStatus: "SKIPPED",
+      reviewedById: null,
+      reviewedAt: null,
+      reviewRequestedFromId: null,
+      reviewNote: null,
+    },
+  });
+
+  revalidatePath(`/inspections/${inspectionId}`);
+  revalidatePath(`/inspections/${inspectionId}/report`);
+  revalidatePath("/approvals");
 }
 
 export async function createUser(formData: FormData) {
@@ -558,6 +828,8 @@ export async function createUser(formData: FormData) {
   const role = String(formData.get("role") ?? "INSPECTOR") as "ADMIN" | "INSPECTOR";
   const level1Qualified = formData.get("level1Qualified") === "on";
   const level2Qualified = formData.get("level2Qualified") === "on";
+  const registrationNumber =
+    String(formData.get("registrationNumber") ?? "").trim() || null;
 
   if (!name || !email) throw new Error("Name and email required");
   if (!password || password.length < 4) {
@@ -572,6 +844,7 @@ export async function createUser(formData: FormData) {
       role,
       level1Qualified,
       level2Qualified,
+      registrationNumber,
       passwordHash: hashPassword(password),
     },
   });
@@ -587,6 +860,8 @@ export async function updateUserQualifications(formData: FormData) {
   const level1Qualified = formData.get("level1Qualified") === "on";
   const level2Qualified = formData.get("level2Qualified") === "on";
   const password = String(formData.get("password") ?? "");
+  const registrationNumber =
+    String(formData.get("registrationNumber") ?? "").trim() || null;
 
   await prisma.user.update({
     where: { id },
@@ -594,6 +869,7 @@ export async function updateUserQualifications(formData: FormData) {
       role,
       level1Qualified,
       level2Qualified,
+      registrationNumber,
       ...(password.length >= 4 ? { passwordHash: hashPassword(password) } : {}),
     },
   });
@@ -786,7 +1062,7 @@ export async function updateAssetDetails(formData: FormData) {
   revalidatePath("/assets");
   revalidatePath(`/assets/${id}`);
   revalidatePath("/map");
-  redirect(`/manage/assets/${id}?saved=1`);
+  redirect(`/manage/assets/${id}?tab=details&saved=1`);
 }
 
 export async function savePhotoStoragePath(formData: FormData) {
@@ -1019,6 +1295,49 @@ export async function saveAssetComponentsAction(formData: FormData) {
   });
   revalidatePath(`/manage/assets/${assetId}`);
   revalidatePath(`/assets/${assetId}`);
+}
+
+/** Field inspector: append a component to the asset register while editing a draft. */
+export async function addAssetComponentFromInspectionAction(formData: FormData) {
+  const user = await requireUser();
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const category = String(formData.get("category") ?? "").trim() || undefined;
+  const qty = String(formData.get("qty") ?? "").trim() || undefined;
+  const unit = String(formData.get("unit") ?? "").trim() || undefined;
+  if (!inspectionId) throw new Error("Inspection required");
+  if (!name) throw new Error("Component name required");
+
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: inspectionId },
+    include: { asset: true },
+  });
+  if (!inspection) throw new Error("Inspection not found");
+  if (!canEditInspection(user, inspection)) {
+    throw new Error("Cannot edit this inspection");
+  }
+
+  const existing = parseAssetComponents(inspection.asset.componentsJson);
+  const id = newComponentId();
+  const next = [
+    ...existing,
+    {
+      id,
+      name,
+      category,
+      qty,
+      unit,
+      sortOrder: existing.length,
+    },
+  ];
+  await prisma.asset.update({
+    where: { id: inspection.assetId },
+    data: { componentsJson: serializeAssetComponents(next) },
+  });
+  revalidatePath(`/inspections/${inspectionId}`);
+  revalidatePath(`/manage/assets/${inspection.assetId}`);
+  revalidatePath(`/assets/${inspection.assetId}`);
+  return { id, name, category: category ?? "", qty: qty ?? "", unit: unit ?? "" };
 }
 
 export async function importAssetAuditExportAction(formData: FormData) {

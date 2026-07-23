@@ -19,6 +19,7 @@ const CORE_KEYS = [
   "__latitude",
   "__longitude",
   "__notes",
+  "__seedClearancesFromPrior",
 ] as const;
 
 export function AssetAttributesEditor({
@@ -75,8 +76,10 @@ export function AssetAttributesEditor({
           Attributes & auto-populate
         </h2>
         <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-          Tick <strong>Auto-fill reports</strong> next to each field to copy it into new
-          inspections. Unticked fields stay on the asset only.
+          Tick Auto-fill reports next to each field to copy it into new inspections.
+          Structure ID, road name, location and coordinates always seed from the registry.
+          Use &quot;Auto-fill clearances from previous report&quot; to carry forward vertical
+          clearance measurements.
         </p>
       </div>
 

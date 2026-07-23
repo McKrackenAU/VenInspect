@@ -47,7 +47,7 @@ Entra ID / work accounts so corporate MFA applies. Stubs in `.env.example`. Do n
 
 | What | Where | Why |
 |------|--------|-----|
-| Assets, inspections, defects, users | **SQLite** (`{DATA_DIR}/veninspect.db`) | Tiny metadata — many reports stay cheap |
+| Assets, inspections, defects, users | **SQLite** today (`{DATA_DIR}/veninspect.db`); **PostgreSQL** on the LXC for cutover | See [docs/POSTGRES-MIGRATION.md](docs/POSTGRES-MIGRATION.md) |
 | Defect photos | **Filesystem** (`{PHOTO_DIR}/…`, default `{DATA_DIR}/photos`) | Never in the DB |
 | Photo format | **WebP**, ≤1600px, quality ~75 | Phone originals shrink before write |
 
@@ -149,7 +149,7 @@ Use the **User / Admin** switch in the header to move between field and manageme
 
 ## Stack
 
-Next.js · TypeScript · Prisma · SQLite · Sharp (WebP) · Tailwind · systemd on LXC
+Next.js · TypeScript · Prisma · SQLite (→ PostgreSQL) · Sharp (WebP) · Tailwind · systemd on LXC
 
 ## Scripts
 

@@ -54,6 +54,10 @@ export async function PATCH(
     enabledOptionalPages: Array.isArray(body.enabledOptionalPages)
       ? body.enabledOptionalPages.map(String)
       : current.enabledOptionalPages,
+    media:
+      body.media && typeof body.media === "object"
+        ? body.media
+        : current.media ?? {},
   };
 
   await prisma.inspection.update({

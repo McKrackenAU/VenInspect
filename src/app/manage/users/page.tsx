@@ -45,6 +45,11 @@ export default async function ManageUsersPage() {
             className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
           />
           <input
+            name="registrationNumber"
+            placeholder="Inspector registration no. (optional)"
+            className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+          />
+          <input
             name="password"
             type="password"
             required
@@ -95,6 +100,12 @@ export default async function ManageUsersPage() {
                   </>
                 ) : null}
                 {u.email}
+                {u.registrationNumber ? (
+                  <>
+                    {" · "}
+                    <span className="font-mono">Reg. {u.registrationNumber}</span>
+                  </>
+                ) : null}
               </p>
               <p className="mt-1">
                 <Link
@@ -135,6 +146,12 @@ export default async function ManageUsersPage() {
                   />
                   L2
                 </label>
+                <input
+                  name="registrationNumber"
+                  defaultValue={u.registrationNumber ?? ""}
+                  placeholder="Registration no."
+                  className="min-w-[8rem] rounded-md border border-[color:var(--ventia-border)] px-2 py-1.5 text-sm font-mono"
+                />
                 <input
                   name="password"
                   type="password"

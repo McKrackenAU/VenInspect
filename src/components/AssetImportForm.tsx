@@ -2,6 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { importAssetsFromFile } from "@/lib/actions";
+import {
+  StyledFileInput,
+  TemplateDownloadButtons,
+} from "@/components/StyledFileInput";
 
 export function AssetImportForm() {
   const [pending, startTransition] = useTransition();
@@ -32,18 +36,25 @@ export function AssetImportForm() {
           });
         }}
       >
-        <label className="block space-y-1.5 text-sm">
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-[color:var(--ventia-ink)]">
+            Download a blank template first
+          </p>
+          <TemplateDownloadButtons kind="assets" />
+        </div>
+
+        <div className="space-y-1.5 text-sm">
           <span className="font-medium text-[color:var(--ventia-ink)]">
             Excel (.xlsx) or CSV
           </span>
-          <input
+          <StyledFileInput
             name="file"
-            type="file"
-            accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             required
-            className="block w-full text-sm"
+            accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            label="Choose import file"
+            hint="Match the template column headers"
           />
-        </label>
+        </div>
 
         <fieldset className="space-y-2 text-sm">
           <legend className="font-medium">When Code already exists</legend>
@@ -58,11 +69,10 @@ export function AssetImportForm() {
         </fieldset>
 
         <p className="text-xs text-[color:var(--ventia-muted)]">
-          Asset Vision exports: uses <strong>Code</strong> as serial number,{" "}
-          <strong>Asset ID</strong> as Asset Vision ID, and <strong>Name</strong>.
-          Optional columns: Latitude, Longitude, Parent Chainage, Classification,
-          Notes. Types inferred from name (Bridge / Culvert / Noise wall) or a Type
-          column.
+          Asset Vision exports: uses Code as serial number, Asset ID as Asset Vision ID,
+          and Name. Optional columns: Latitude, Longitude, Parent Chainage,
+          Classification, Notes. Types inferred from name (Bridge / Culvert / Noise wall)
+          or a Type column.
         </p>
 
         <button

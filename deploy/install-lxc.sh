@@ -73,12 +73,24 @@ if [[ -n "${PHOTO_DIR:-}" ]]; then
   chown_safe -R "$APP_USER:$APP_USER" "$PHOTO_DIR"
 fi
 
-# Preserve existing SESSION_SECRET / Maps key on reinstall
+# Preserve existing SESSION_SECRET / Maps key / Postgres credentials on reinstall
 EXISTING_SECRET=""
 EXISTING_MAPS_KEY=""
+EXISTING_PG_HOST=""
+EXISTING_PG_PORT=""
+EXISTING_PG_DB=""
+EXISTING_PG_USER=""
+EXISTING_PG_PASSWORD=""
+EXISTING_PG_URL=""
 if [[ -f /etc/veninspect.env ]]; then
   EXISTING_SECRET="$(grep -E '^SESSION_SECRET=' /etc/veninspect.env | cut -d= -f2- || true)"
   EXISTING_MAPS_KEY="$(grep -E '^(GOOGLE_MAPS_API_KEY|NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)=' /etc/veninspect.env | head -1 | cut -d= -f2- || true)"
+  EXISTING_PG_HOST="$(grep -E '^POSTGRES_HOST=' /etc/veninspect.env | cut -d= -f2- || true)"
+  EXISTING_PG_PORT="$(grep -E '^POSTGRES_PORT=' /etc/veninspect.env | cut -d= -f2- || true)"
+  EXISTING_PG_DB="$(grep -E '^POSTGRES_DB=' /etc/veninspect.env | cut -d= -f2- || true)"
+  EXISTING_PG_USER="$(grep -E '^POSTGRES_USER=' /etc/veninspect.env | cut -d= -f2- || true)"
+  EXISTING_PG_PASSWORD="$(grep -E '^POSTGRES_PASSWORD=' /etc/veninspect.env | cut -d= -f2- || true)"
+  EXISTING_PG_URL="$(grep -E '^DATABASE_URL_POSTGRES=' /etc/veninspect.env | cut -d= -f2- || true)"
 fi
 SESSION_SECRET="${SESSION_SECRET:-${EXISTING_SECRET:-$(openssl rand -hex 32)}}"
 MAPS_KEY="${GOOGLE_MAPS_API_KEY:-${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-${EXISTING_MAPS_KEY:-}}}"
@@ -95,10 +107,30 @@ MAPS_KEY="${GOOGLE_MAPS_API_KEY:-${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-${EXISTING_M
   if [[ -n "$MAPS_KEY" ]]; then
     echo "GOOGLE_MAPS_API_KEY=$MAPS_KEY"
   fi
+  # Postgres ready for cutover (install-postgres.sh); app uses SQLite until DATABASE_URL is set
+  if [[ -n "$EXISTING_PG_PASSWORD" || -n "$EXISTING_PG_URL" ]]; then
+    echo "POSTGRES_HOST=${EXISTING_PG_HOST:-127.0.0.1}"
+    echo "POSTGRES_PORT=${EXISTING_PG_PORT:-5432}"
+    echo "POSTGRES_DB=${EXISTING_PG_DB:-veninspect}"
+    echo "POSTGRES_USER=${EXISTING_PG_USER:-veninspect}"
+    echo "POSTGRES_PASSWORD=$EXISTING_PG_PASSWORD"
+    if [[ -n "$EXISTING_PG_URL" ]]; then
+      echo "DATABASE_URL_POSTGRES=$EXISTING_PG_URL"
+    fi
+    echo "# Cutover: set DATABASE_URL to DATABASE_URL_POSTGRES after migrate — docs/POSTGRES-MIGRATION.md"
+  fi
 } >/etc/veninspect.env
 
 chmod 640 /etc/veninspect.env
 chown_safe root:"$APP_USER" /etc/veninspect.env
+
+# Local PostgreSQL (ready for cutover; app still uses SQLite until DATABASE_URL is switched)
+INSTALL_POSTGRES="${INSTALL_POSTGRES:-1}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "$INSTALL_POSTGRES" == "1" ]]; then
+  bash "$SCRIPT_DIR/install-postgres.sh"
+  # Re-merge postgres keys into env (install-postgres upserts; re-read for display)
+fi
 
 cd "$APP_DIR"
 
@@ -135,6 +167,7 @@ echo
 echo "VenInspect is installed as the main server on this LXC."
 echo "  App:      $APP_DIR"
 echo "  Data:     $DATA_DIR  (SQLite + compressed photos — mount a Proxmox disk here)"
+echo "  Postgres: local instance ready for cutover (see docs/POSTGRES-MIGRATION.md)"
 echo "  Listen:   http://0.0.0.0:8181"
 echo "  Login:    root / calvin"
 echo "  Updates:  Admin → System (Gitea/GitHub) via veninspect-update.path"

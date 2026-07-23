@@ -5,6 +5,7 @@ import {
   uploadAssetDocumentAction,
 } from "@/lib/actions";
 import type { DocumentTagOption } from "@/lib/document-tags";
+import { StyledFileInput } from "@/components/StyledFileInput";
 
 export type AssetDocumentListItem = {
   id: string;
@@ -74,9 +75,14 @@ export function AssetDocumentsPanel({
             <span className="font-medium">Title</span>
             <input name="title" required className="field-input w-full" />
           </label>
-          <label className="block space-y-1 text-sm">
+          <label className="block space-y-1 text-sm sm:col-span-2">
             <span className="font-medium">File</span>
-            <input name="file" type="file" required className="block w-full text-sm" />
+            <StyledFileInput
+              name="file"
+              required
+              label="Choose file"
+              hint="PDF, images, drawings…"
+            />
           </label>
           <label className="block space-y-1 text-sm">
             <span className="font-medium">Document date</span>

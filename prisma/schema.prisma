@@ -37,6 +37,14 @@ enum AuditAssignmentStatus {
   CANCELLED
 }
 
+/// Optional peer / second-opinion review after submit
+enum ReviewStatus {
+  NONE
+  REQUESTED
+  COMPLETED
+  SKIPPED
+}
+
 model User {
   id              String   @id @default(cuid())
   email           String   @unique
@@ -48,11 +56,15 @@ model User {
   microsoftOid    String?  @unique
   level1Qualified Boolean  @default(false)
   level2Qualified Boolean  @default(false)
+  /// Professional / inspector registration number (shown on reports)
+  registrationNumber String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   inspectionsCreated  Inspection[]      @relation("InspectionCreator")
   inspectionsApproved Inspection[]      @relation("InspectionApprover")
+  reviewsRequestedOf  Inspection[]      @relation("InspectionReviewTarget")
+  inspectionsReviewed Inspection[]      @relation("InspectionReviewer")
   notifications       Notification[]
   documentsUploaded   AssetDocument[]   @relation("DocumentUploader")
   auditsAssigned      AuditAssignment[] @relation("AuditAssignee")
@@ -166,6 +178,14 @@ model Inspection {
   approvedById           String?
   requiresLevel2Approval Boolean                @default(false)
 
+  /// Peer second-opinion: NONE | REQUESTED | COMPLETED | SKIPPED
+  reviewStatus           ReviewStatus           @default(NONE)
+  reviewRequestedFromId  String?
+  reviewedById           String?
+  reviewedAt             DateTime?
+  /// Optional note when requesting a second look
+  reviewNote             String?
+
   /// Photo folder segment: DDMMYYYY or DDMMYYYY-HHmmss
   folderKey              String
   /// Display: "Kororoit Creek Road - SN1234 - 19072026" (+ time if needed)
@@ -173,19 +193,22 @@ model Inspection {
   relationKind           InspectionRelationKind @default(STANDALONE)
   parentInspectionId     String?
 
-  asset         Asset                 @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  createdBy     User                  @relation("InspectionCreator", fields: [createdById], references: [id])
-  approvedBy    User?                 @relation("InspectionApprover", fields: [approvedById], references: [id])
-  parent        Inspection?           @relation("InspectionTree", fields: [parentInspectionId], references: [id])
-  children      Inspection[]          @relation("InspectionTree")
-  categories    InspectionCategory[]
-  defects       Defect[]
-  notifications Notification[]
-  permitChecks  InspectionPermitCheck[]
+  asset               Asset                 @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  createdBy           User                  @relation("InspectionCreator", fields: [createdById], references: [id])
+  approvedBy          User?                 @relation("InspectionApprover", fields: [approvedById], references: [id])
+  reviewRequestedFrom User?                 @relation("InspectionReviewTarget", fields: [reviewRequestedFromId], references: [id])
+  reviewedBy          User?                 @relation("InspectionReviewer", fields: [reviewedById], references: [id])
+  parent              Inspection?           @relation("InspectionTree", fields: [parentInspectionId], references: [id])
+  children            Inspection[]          @relation("InspectionTree")
+  categories          InspectionCategory[]
+  defects             Defect[]
+  notifications       Notification[]
+  permitChecks        InspectionPermitCheck[]
 
   @@index([assetId, submittedAt])
   @@index([folderKey])
   @@index([parentInspectionId])
+  @@index([reviewStatus, reviewRequestedFromId])
 }
 
 /// Permit acknowledgements (shown on web report only — use no-print for PDF)

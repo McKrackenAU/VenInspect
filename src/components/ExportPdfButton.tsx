@@ -1,7 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { SeverityOption } from "@/lib/severities";
+import {
+  ExportConditionDialog,
+  useExportDownload,
+} from "@/components/ExportConditionDialog";
 
 export function ExportPdfButton({
   inspectionId,
@@ -21,123 +25,73 @@ export function ExportPdfButton({
   defaultSelected?: string[];
   allowConditionFilter?: boolean;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>(defaultSelected ?? []);
+  const { busy, error, setError, downloadBlob } = useExportDownload();
   const states = conditionStates ?? [];
-
   const showFilter = allowConditionFilter && states.length > 0 && !defectIds;
 
-  async function download() {
-    setBusy(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (defectIds && defectIds.length > 0) {
-        params.set("defects", defectIds.join(","));
-      } else if (showFilter && selected.length > 0) {
-        params.set("severities", selected.join(","));
-      }
-      const qs = params.toString() ? `?${params}` : "";
-      const res = await fetch(`/api/inspections/${inspectionId}/pdf${qs}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error || `Export failed (${res.status})`);
-      }
-      const blob = await res.blob();
-      const cd = res.headers.get("Content-Disposition") || "";
-      const match = /filename="([^"]+)"/.exec(cd);
-      const name = match?.[1] || "inspection-report.pdf";
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Export failed");
-    } finally {
-      setBusy(false);
+  async function runExport(severities?: string[]) {
+    const params = new URLSearchParams();
+    if (defectIds && defectIds.length > 0) {
+      params.set("defects", defectIds.join(","));
+    } else if (severities && severities.length > 0) {
+      params.set("severities", severities.join(","));
     }
+    const qs = params.toString() ? `?${params}` : "";
+    const ok = await downloadBlob(
+      `/api/inspections/${inspectionId}/pdf${qs}`,
+      "inspection-report.pdf",
+    );
+    if (ok) setOpen(false);
   }
 
-  const allCodes = useMemo(() => states.map((s) => s.value), [states]);
+  const buttonClass =
+    className ??
+    "rounded-md bg-[color:var(--ventia-green)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50";
 
   return (
-    <span className="inline-flex flex-col items-end gap-2">
-      {showFilter ? (
-        <div className="max-w-xs rounded-xl border border-[color:var(--ventia-border)] p-2 text-left">
-          <p className="mb-1 text-[10px] font-semibold text-[color:var(--ventia-muted)]">
-            Condition states in PDF
-          </p>
-          <ul className="space-y-1">
-            {states.map((s) => (
-              <li key={s.value}>
-                <label className="flex items-start gap-1.5 text-[11px]">
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(s.value)}
-                    onChange={() =>
-                      setSelected((prev) =>
-                        prev.includes(s.value)
-                          ? prev.filter((c) => c !== s.value)
-                          : [...prev, s.value],
-                      )
-                    }
-                    className="mt-0.5 accent-[color:var(--ventia-green)]"
-                  />
-                  <span>
-                    {s.label}
-                    {s.description ? (
-                      <span className="block text-[color:var(--ventia-muted)]">
-                        {s.description}
-                      </span>
-                    ) : null}
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-1 flex gap-2">
-            <button
-              type="button"
-              className="text-[10px] text-[color:var(--ventia-blue)]"
-              onClick={() => setSelected(allCodes)}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className="text-[10px] text-[color:var(--ventia-blue)]"
-              onClick={() => setSelected([])}
-            >
-              None
-            </button>
-          </div>
-        </div>
-      ) : null}
+    <>
       <button
         type="button"
-        disabled={
-          busy ||
-          (defectIds != null && defectIds.length === 0) ||
-          (showFilter && selected.length === 0)
-        }
-        onClick={() => void download()}
-        className={
-          className ??
-          "rounded-md bg-[color:var(--ventia-green)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        }
+        disabled={busy || (defectIds != null && defectIds.length === 0)}
+        onClick={() => {
+          setError(null);
+          if (showFilter) {
+            setSelected(defaultSelected ?? selected);
+            setOpen(true);
+            return;
+          }
+          void runExport();
+        }}
+        className={buttonClass}
       >
-        {busy ? "Generating…" : label}
+        {busy && !open ? "Generating…" : label}
       </button>
-      {error ? (
-        <span className="max-w-[16rem] text-right text-xs text-red-600 dark:text-red-400">
+
+      {showFilter ? (
+        <ExportConditionDialog
+          open={open}
+          title="Export PDF"
+          description="Choose which condition states appear in the PDF photographic record and defect list."
+          states={states}
+          selected={selected}
+          onSelectedChange={setSelected}
+          busy={busy}
+          error={error}
+          confirmLabel="Export PDF"
+          onConfirm={() => void runExport(selected)}
+          onClose={() => {
+            if (!busy) setOpen(false);
+          }}
+        />
+      ) : null}
+
+      {!open && error ? (
+        <span className="mt-1 block max-w-[16rem] text-right text-xs text-red-600 dark:text-red-400">
           {error}
         </span>
       ) : null}
-    </span>
+    </>
   );
 }

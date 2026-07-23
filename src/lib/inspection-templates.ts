@@ -22,10 +22,16 @@ export type {
 export {
   DEFAULT_OUTCOME_OPTIONS,
   EMPTY_FORM_PAYLOAD,
+  ID_PLATE_CONDITION_OPTIONS,
   fieldFilled,
+  mediaKey,
   parseFormPayload,
   sectionFilledCount,
   serializeFormPayload,
+  defaultMeasurementRows,
+  parseMeasurementList,
+  parseComponentNotes,
+  migrateLegacyClearanceMeasurements,
 } from "@/lib/inspection-template-types";
 
 function checklistSection(
@@ -210,6 +216,9 @@ export function seedLevel2Template(): InspectionTemplate {
           id: "inv_ids",
           title: "Identification",
           collapsedByDefault: true,
+          allowPhotos: true,
+          allowRaiseDefect: true,
+          includePhotosInReport: true,
           fields: [
             l2Text("inv_structure_id", "Structure ID no."),
             l2Text("inv_chainage", "Chainage (m)"),
@@ -219,6 +228,16 @@ export function seedLevel2Template(): InspectionTemplate {
             l2Text("inv_region", "Region"),
             l2Text("inv_lat", "Latitude", "number"),
             l2Text("inv_lng", "Longitude", "number"),
+            {
+              id: "inv_id_plate_condition",
+              label: "ID plate condition",
+              type: "select",
+              options: ["OK", "Damaged", "Missing", "Not sighted"],
+              hint: "Photograph the bridge ID plate. Raise a defect if damaged or missing.",
+              allowPhotos: true,
+              allowRaiseDefect: true,
+              includePhotosInReport: true,
+            },
           ],
         },
         {
@@ -226,6 +245,8 @@ export function seedLevel2Template(): InspectionTemplate {
           title: "Bridge measurements",
           collapsedByDefault: true,
           assetTypes: ["BRIDGE"],
+          allowPhotos: true,
+          includePhotosInReport: true,
           fields: [
             l2Text("inv_length", "Length (m)", "number"),
             l2Text("inv_overall_width", "O/all width (m)", "number"),
@@ -240,6 +261,8 @@ export function seedLevel2Template(): InspectionTemplate {
           title: "Culvert measurements",
           collapsedByDefault: true,
           assetTypes: ["DRAINAGE"],
+          allowPhotos: true,
+          includePhotosInReport: true,
           fields: [
             l2Text("inv_cell_length", "Cell length/dia (m)", "number"),
             l2Text("inv_cell_width", "Cell width along invert (m)", "number"),
@@ -252,13 +275,23 @@ export function seedLevel2Template(): InspectionTemplate {
           id: "inv_limits",
           title: "Limitations & access",
           collapsedByDefault: true,
+          allowPhotos: true,
+          allowRaiseDefect: true,
+          includePhotosInReport: true,
           fields: [
             l2Text("inv_asbestos", "Asbestos present / likely?", "textarea"),
             l2Text("inv_load_limit", "Existing posted load limit"),
             l2Text("inv_clearance_height", "Existing posted clearance height"),
             l2Text("inv_speed_limit", "Existing posted speed limit"),
             l2Text("inv_min_vert_clearance", "Min vertical clearance overpass (m)", "number"),
-            l2Text("inv_access_notes", "Inspection access / tools / hazards", "textarea"),
+            {
+              id: "inv_access_notes",
+              label: "Inspection access / tools / hazards",
+              type: "textarea",
+              allowPhotos: true,
+              allowRaiseDefect: true,
+              includePhotosInReport: true,
+            },
           ],
         },
       ],
@@ -274,11 +307,12 @@ export function seedLevel2Template(): InspectionTemplate {
           collapsedByDefault: true,
           fields: [
             l2Text("vc_location_notes", "Measurement locations / sketch notes", "textarea"),
-            l2Text("vc_m1", "Measurement 1 (m)", "number"),
-            l2Text("vc_m2", "Measurement 2 (m)", "number"),
-            l2Text("vc_m3", "Measurement 3 (m)", "number"),
-            l2Text("vc_m4", "Measurement 4 (m)", "number"),
-            l2Text("vc_m5", "Measurement 5 (m)", "number"),
+            {
+              id: "vc_measurements",
+              label: "Clearance measurements (m)",
+              type: "measurement_list",
+              hint: "Add or remove measurements as needed",
+            },
             l2Text("vc_sag", "Sag allowance", "number"),
             l2Text("vc_rounded", "Rounded clearance", "number"),
             l2Text("vc_dataset", "DTP Structure Height Clearance dataset notes", "textarea"),
@@ -301,7 +335,7 @@ export function seedLevel2Template(): InspectionTemplate {
               id: "cr_components",
               label: "Components (name / qty / CS1–4 / notes)",
               type: "component_table",
-              hint: "Seeded from the asset component register",
+              hint: "Seeded from the asset component register — add new components in the field if needed",
             },
             l2Text("cr_notes", "Condition rating notes", "textarea"),
           ],
@@ -317,9 +351,12 @@ export function seedLevel2Template(): InspectionTemplate {
           title: "Approaches",
           collapsedByDefault: true,
           fields: [
-            l2Text("comp_approach_a", "Approach A", "textarea"),
-            l2Text("comp_approach_b", "Approach B", "textarea"),
-            l2Text("comp_barriers", "Barriers", "textarea"),
+            {
+              id: "comp_notes_approaches",
+              label: "Parts",
+              type: "component_notes",
+              hint: "Predefined from asset components (category Approaches); add/remove as needed",
+            },
           ],
         },
         {
@@ -327,9 +364,12 @@ export function seedLevel2Template(): InspectionTemplate {
           title: "Superstructure",
           collapsedByDefault: true,
           fields: [
-            l2Text("comp_deck", "Deck", "textarea"),
-            l2Text("comp_beams", "Beams / girders", "textarea"),
-            l2Text("comp_joints", "Expansion joints", "textarea"),
+            {
+              id: "comp_notes_super",
+              label: "Parts",
+              type: "component_notes",
+              hint: "Predefined from asset components (category Superstructure)",
+            },
           ],
         },
         {
@@ -337,10 +377,12 @@ export function seedLevel2Template(): InspectionTemplate {
           title: "Substructure",
           collapsedByDefault: true,
           fields: [
-            l2Text("comp_abut_a", "Abutment A", "textarea"),
-            l2Text("comp_abut_b", "Abutment B", "textarea"),
-            l2Text("comp_piers", "Piers", "textarea"),
-            l2Text("comp_bearings", "Bearings", "textarea"),
+            {
+              id: "comp_notes_sub",
+              label: "Parts",
+              type: "component_notes",
+              hint: "Predefined from asset components (category Substructure)",
+            },
           ],
         },
         {
@@ -348,12 +390,12 @@ export function seedLevel2Template(): InspectionTemplate {
           title: "Waterway / drainage",
           collapsedByDefault: true,
           fields: [
-            l2Text("comp_channel", "Channel", "textarea"),
-            l2Text("comp_scour", "Scour", "textarea"),
-            l2Text("comp_embankments", "Embankments", "textarea"),
-            l2Text("comp_inlet", "Inlet", "textarea"),
-            l2Text("comp_outlet", "Outlet", "textarea"),
-            l2Text("comp_barrel", "Barrel", "textarea"),
+            {
+              id: "comp_notes_waterway",
+              label: "Parts",
+              type: "component_notes",
+              hint: "Predefined from asset components (category Waterway / Drainage)",
+            },
           ],
         },
       ],
@@ -407,6 +449,21 @@ function normalizeTemplate(raw: unknown, fallbackCode: string): InspectionTempla
     .toUpperCase()
     .replace(/\s+/g, "_");
   if (!typeCode) return null;
+
+  const VALID_TYPES = new Set([
+    "outcome",
+    "text",
+    "textarea",
+    "number",
+    "select",
+    "yesno",
+    "date",
+    "checkbox",
+    "component_table",
+    "component_notes",
+    "measurement_list",
+  ]);
+
   return {
     typeCode,
     label: String(t.label ?? typeCode).trim() || typeCode,
@@ -420,18 +477,39 @@ function normalizeTemplate(raw: unknown, fallbackCode: string): InspectionTempla
             id: String(s.id ?? `sec_${pi}_${si}`),
             title: String(s.title ?? `Section ${si + 1}`),
             collapsedByDefault: s.collapsedByDefault !== false,
+            assetTypes: Array.isArray(s.assetTypes)
+              ? s.assetTypes.map(String).filter(Boolean)
+              : undefined,
+            allowPhotos: Boolean(s.allowPhotos) || undefined,
+            allowRaiseDefect: Boolean(s.allowRaiseDefect) || undefined,
+            includePhotosInReport:
+              s.includePhotosInReport === undefined
+                ? undefined
+                : Boolean(s.includePhotosInReport),
             fields: Array.isArray(s.fields)
-              ? s.fields.map((f, fi) => ({
-                  id: String(f.id ?? `f_${pi}_${si}_${fi}`),
-                  label: String(f.label ?? `Field ${fi + 1}`),
-                  type: (f.type as TemplateField["type"]) || "text",
-                  options: Array.isArray(f.options)
-                    ? f.options.map(String)
-                    : (f.type as string) === "outcome"
-                      ? [...DEFAULT_OUTCOME_OPTIONS]
-                      : undefined,
-                  hint: f.hint ? String(f.hint) : undefined,
-                }))
+              ? s.fields.map((f, fi) => {
+                  const type = VALID_TYPES.has(String(f.type))
+                    ? (f.type as TemplateField["type"])
+                    : "text";
+                  return {
+                    id: String(f.id ?? `f_${pi}_${si}_${fi}`),
+                    label: String(f.label ?? `Field ${fi + 1}`),
+                    type,
+                    options: Array.isArray(f.options)
+                      ? f.options.map(String)
+                      : type === "outcome"
+                        ? [...DEFAULT_OUTCOME_OPTIONS]
+                        : undefined,
+                    hint: f.hint ? String(f.hint) : undefined,
+                    required: f.required ? true : undefined,
+                    allowPhotos: Boolean(f.allowPhotos) || undefined,
+                    allowRaiseDefect: Boolean(f.allowRaiseDefect) || undefined,
+                    includePhotosInReport:
+                      f.includePhotosInReport === undefined
+                        ? undefined
+                        : Boolean(f.includePhotosInReport),
+                  };
+                })
               : [],
           }))
         : [],
@@ -449,9 +527,99 @@ export function getInspectionTemplates(): Record<string, InspectionTemplate> {
   for (const [key, val] of Object.entries(fromSettings)) {
     const code = key.toUpperCase().replace(/\s+/g, "_");
     const normalized = normalizeTemplate(val, code);
-    if (normalized) merged[normalized.typeCode] = normalized;
+    if (normalized) {
+      const seed = defaults[normalized.typeCode];
+      merged[normalized.typeCode] = seed
+        ? mergeSeedCapabilities(normalized, seed)
+        : normalized;
+    }
   }
   return merged;
+}
+
+/**
+ * Preserve admin layout edits but inherit allowPhotos / allowRaiseDefect /
+ * includePhotosInReport / assetTypes from seed when the overlay omitted them
+ * (older TemplateEditor saves dropped these).
+ */
+function mergeSeedCapabilities(
+  overlay: InspectionTemplate,
+  seed: InspectionTemplate,
+): InspectionTemplate {
+  const seedSections = new Map<string, TemplateSection>();
+  const seedFields = new Map<string, TemplateField>();
+  for (const page of seed.pages) {
+    for (const sec of page.sections) {
+      seedSections.set(sec.id, sec);
+      for (const f of sec.fields) seedFields.set(f.id, f);
+    }
+  }
+
+  return {
+    ...overlay,
+    pages: overlay.pages.map((page) => ({
+      ...page,
+      sections: page.sections.map((sec) => {
+        const seedSec = seedSections.get(sec.id);
+        return {
+          ...sec,
+          assetTypes: sec.assetTypes ?? seedSec?.assetTypes,
+          allowPhotos: sec.allowPhotos ?? seedSec?.allowPhotos,
+          allowRaiseDefect: sec.allowRaiseDefect ?? seedSec?.allowRaiseDefect,
+          includePhotosInReport:
+            sec.includePhotosInReport ?? seedSec?.includePhotosInReport,
+          fields: (() => {
+            const REPLACED_SECTIONS = new Set([
+              "comp_approaches",
+              "comp_super",
+              "comp_sub",
+              "comp_waterway",
+              "vc_bridge",
+            ]);
+            if (seedSec && REPLACED_SECTIONS.has(sec.id)) {
+              // Prefer seed field shape (measurement_list / component_notes) while
+              // keeping any extra custom fields the admin added that aren't in seed.
+              const seedIds = new Set(seedSec.fields.map((f) => f.id));
+              const extras = sec.fields.filter((f) => !seedIds.has(f.id));
+              const mergedSeed = seedSec.fields.map((sf) => {
+                const overlayField = sec.fields.find((f) => f.id === sf.id);
+                if (!overlayField) return sf;
+                return {
+                  ...sf,
+                  label: overlayField.label || sf.label,
+                  hint: overlayField.hint ?? sf.hint,
+                  allowPhotos: overlayField.allowPhotos ?? sf.allowPhotos,
+                  allowRaiseDefect:
+                    overlayField.allowRaiseDefect ?? sf.allowRaiseDefect,
+                  includePhotosInReport:
+                    overlayField.includePhotosInReport ??
+                    sf.includePhotosInReport,
+                };
+              });
+              return [...mergedSeed, ...extras];
+            }
+            const have = new Set(sec.fields.map((f) => f.id));
+            const fields: TemplateField[] = sec.fields.map((f) => {
+              const seedField = seedFields.get(f.id);
+              return {
+                ...f,
+                allowPhotos: f.allowPhotos ?? seedField?.allowPhotos,
+                allowRaiseDefect: f.allowRaiseDefect ?? seedField?.allowRaiseDefect,
+                includePhotosInReport:
+                  f.includePhotosInReport ?? seedField?.includePhotosInReport,
+              };
+            });
+            if (seedSec) {
+              for (const sf of seedSec.fields) {
+                if (!have.has(sf.id)) fields.push(sf);
+              }
+            }
+            return fields;
+          })(),
+        };
+      }),
+    })),
+  };
 }
 
 export function getTemplateForLevel(level: string): InspectionTemplate {

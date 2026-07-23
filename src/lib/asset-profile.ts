@@ -82,6 +82,7 @@ export const PROFILE_FIELD_LABELS: Record<string, string> = {
   __latitude: "Latitude (registry)",
   __longitude: "Longitude (registry)",
   __notes: "Notes (registry)",
+  __seedClearancesFromPrior: "Auto-fill clearances from previous report",
 };
 
 export function profileFieldLabel(id: string): string {

@@ -1,7 +1,9 @@
 [Unit]
 Description=VenInspect (bridge & drainage inspections)
-After=network-online.target
+After=network-online.target postgresql.service
 Wants=network-online.target
+# postgresql.service is optional until cutover; Wants (not Requires) so SQLite-only still starts
+Wants=postgresql.service
 
 [Service]
 Type=simple

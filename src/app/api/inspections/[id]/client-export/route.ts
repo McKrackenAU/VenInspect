@@ -10,6 +10,7 @@ import { parseFormPayload } from "@/lib/inspection-templates";
 import { buildInspectionPdf } from "@/lib/report-pdf";
 import { getExportConfig } from "@/lib/export-config";
 import { defectMatchesConditionStates } from "@/lib/severities";
+import { formatPersonCredential } from "@/lib/report-people";
 import * as XLSX from "xlsx";
 
 export const runtime = "nodejs";
@@ -105,6 +106,7 @@ export async function GET(
       asset: true,
       createdBy: true,
       approvedBy: true,
+      reviewedBy: true,
       defects: { orderBy: { defectCode: "asc" } },
       categories: { orderBy: [{ category: "asc" }, { subcategory: "asc" }] },
       permitChecks: true,
@@ -145,13 +147,27 @@ export async function GET(
       generalComments: inspection.generalComments,
       titleLabel: inspection.titleLabel,
       inspectorName: inspection.createdBy.name,
+      inspectorDetail: formatPersonCredential(inspection.createdBy),
       approverName: inspection.approvedBy?.name ?? null,
+      approverDetail: inspection.approvedBy
+        ? formatPersonCredential(inspection.approvedBy)
+        : null,
+      reviewerName:
+        inspection.reviewStatus === "COMPLETED" && inspection.reviewedBy
+          ? inspection.reviewedBy.name
+          : null,
+      reviewerDetail:
+        inspection.reviewStatus === "COMPLETED" && inspection.reviewedBy
+          ? formatPersonCredential(inspection.reviewedBy)
+          : null,
+      reviewedAt: inspection.reviewedAt,
       asset: inspection.asset,
       categories: inspection.categories,
       defects,
       formPayload,
       template,
       generatedByName: user.name,
+      includeFormPhotos: exportCfg.includeFormPhotos,
     });
     zipFiles.push({ name: "Report.pdf", data: pdf });
   }
@@ -189,6 +205,34 @@ export async function GET(
           });
         } catch {
           /* missing file */
+        }
+      }
+    }
+  }
+
+  if (exportCfg.includeFormPhotos && formPayload.media) {
+    for (const [key, items] of Object.entries(formPayload.media)) {
+      for (const item of items) {
+        try {
+          const abs = absolutePhotoPath(item.path);
+          const data = await fs.readFile(abs);
+          const base = path.basename(item.path);
+          const folder = sanitizePathSegment(key.replace(/::/g, "__"), "form");
+          const name = `FormPhotos/${folder}/${base}`;
+          zipFiles.push({ name, data });
+          indexRows.push({
+            Folder: `FormPhotos/${folder}`,
+            Component: key,
+            "Defect code": item.defectId ?? "",
+            "Condition state": "",
+            Description: item.caption || "Form photo",
+            Comments: "",
+            "Photo file": base,
+            "Asset number": inspection.asset.assetNumber,
+            Inspection: inspection.titleLabel,
+          });
+        } catch {
+          /* missing */
         }
       }
     }

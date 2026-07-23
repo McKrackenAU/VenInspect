@@ -36,7 +36,8 @@ When finished, open `http://<ct-ip>:8181/login` — default **root** / **calvin*
 If you prefer creating the CT yourself first, continue below.
 
 - App code at `/opt/veninspect`
-- Database (SQLite) under `DATA_DIR` (default `/var/lib/veninspect`)
+- Database today: **SQLite** under `DATA_DIR` (default `/var/lib/veninspect`)
+- PostgreSQL is installed **locally in the CT** and left ready for cutover (`docs/POSTGRES-MIGRATION.md`)
 - Photos under `PHOTO_DIR` (default `{DATA_DIR}/photos`, or a separate large disk)
 - Service listening on **port 8181**: `http://<ct-ip>:8181`
 
@@ -66,8 +67,8 @@ Prefer **Gitea** when the CT is on the same LAN. Use **GitHub** if the CT cannot
 | Template | **Debian 12** |
 | Type | **Unprivileged** LXC |
 | CPU | 2 vCPU |
-| RAM | 2–4 GB |
-| Root disk | 8–16 GB (app + Node only) |
+| RAM | **4 GB** recommended (2 GB minimum; Postgres + Node share the CT) |
+| Root disk | 8–16 GB (app + Node + Postgres data under `/var/lib/postgresql`) |
 | Data / photos | 50–200+ GB (separate mount — see below) |
 
 Keep the **rootfs small**. Put the database and photos on mounted storage so the CT stays easy to rebuild.

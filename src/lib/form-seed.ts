@@ -7,6 +7,11 @@ import {
 } from "@/lib/asset-profile";
 import {
   EMPTY_FORM_PAYLOAD,
+  defaultMeasurementRows,
+  migrateLegacyClearanceMeasurements,
+  parseFormPayload,
+  parseMeasurementList,
+  type ComponentNotesRow,
   type FormPayload,
   type InspectionTemplate,
 } from "@/lib/inspection-template-types";
@@ -15,6 +20,80 @@ import { getDefaultAssetProfileFieldMap } from "@/lib/asset-audit-import";
 function shouldAuto(flags: Record<string, boolean> | undefined, key: string) {
   // Explicit false = skip; missing flag = do not auto (admin must opt in)
   return Boolean(flags?.[key]);
+}
+
+const COMPONENT_NOTES_DEFAULTS: Record<string, { labels: string[]; categories: string[] }> = {
+  comp_notes_approaches: {
+    labels: ["Approach A", "Approach B", "Barriers"],
+    categories: ["approaches", "approach"],
+  },
+  comp_notes_super: {
+    labels: ["Deck", "Beams / girders", "Expansion joints"],
+    categories: ["superstructure", "super"],
+  },
+  comp_notes_sub: {
+    labels: ["Abutment A", "Abutment B", "Piers", "Bearings"],
+    categories: ["substructure", "sub"],
+  },
+  comp_notes_waterway: {
+    labels: ["Channel", "Scour", "Embankments", "Inlet", "Outlet", "Barrel"],
+    categories: ["waterway", "drainage", "waterway / drainage"],
+  },
+};
+
+function categoryMatches(componentCategory: string | undefined, needles: string[]) {
+  const c = (componentCategory ?? "").trim().toLowerCase();
+  if (!c) return false;
+  return needles.some((n) => c === n || c.includes(n));
+}
+
+function seedComponentNotes(
+  fieldId: string,
+  components: AssetComponent[],
+): ComponentNotesRow[] {
+  const def = COMPONENT_NOTES_DEFAULTS[fieldId];
+  if (!def) return [];
+  const matched = components.filter((c) =>
+    categoryMatches(c.category, def.categories),
+  );
+  if (matched.length > 0) {
+    return matched.map((c) => ({
+      id: c.id,
+      label: c.name,
+      notes: "",
+      componentId: c.id,
+    }));
+  }
+  return def.labels.map((label, i) => ({
+    id: `${fieldId}_${i + 1}`,
+    label,
+    notes: "",
+  }));
+}
+
+function copyClearancesFromPrior(priorRaw: string | null | undefined): Record<string, string> {
+  if (!priorRaw?.trim()) return {};
+  const prior = migrateLegacyClearanceMeasurements(parseFormPayload(priorRaw).values);
+  const out: Record<string, string> = {};
+  const measurements = parseMeasurementList(prior.vc_measurements);
+  if (measurements.some((m) => m.value.trim())) {
+    out.vc_measurements = JSON.stringify(measurements);
+  }
+  for (const key of ["vc_sag", "vc_rounded", "vc_location_notes", "vc_dataset", "vc_signs"] as const) {
+    if (prior[key]?.trim()) out[key] = prior[key];
+  }
+  // Legacy fixed fields if no list yet
+  if (!out.vc_measurements) {
+    const legacy = [1, 2, 3, 4, 5].map((n) => ({
+      id: `m${n}`,
+      label: `Measurement ${n}`,
+      value: prior[`vc_m${n}`] ?? "",
+    }));
+    if (legacy.some((r) => r.value.trim())) {
+      out.vc_measurements = JSON.stringify(legacy);
+    }
+  }
+  return out;
 }
 
 /** Map asset columns + profile into template field ids for a new draft. */
@@ -35,6 +114,8 @@ export function seedFormPayloadFromAsset(opts: {
   template: InspectionTemplate;
   inspectorName: string;
   inspectedAt: Date;
+  /** Most recent prior inspection formPayload for clearance carry-forward */
+  priorFormPayload?: string | null;
 }): FormPayload {
   const profile = parseAssetProfile(opts.asset.profileJson);
   const flags = profile.autoPopulate ?? {};
@@ -53,28 +134,18 @@ export function seedFormPayloadFromAsset(opts: {
     values[key] = val;
   }
 
-  // Registry columns when flagged
-  if (shouldAuto(flags, "__assetNumber") || shouldAuto(flags, "inv_structure_id")) {
-    setIfEmpty("inv_structure_id", opts.asset.assetNumber);
-  }
-  if (shouldAuto(flags, "__roadName") || shouldAuto(flags, "inv_road_name")) {
-    setIfEmpty("inv_road_name", opts.asset.roadName);
-  }
-  if (shouldAuto(flags, "__location") || shouldAuto(flags, "inv_crossing")) {
-    setIfEmpty("inv_crossing", opts.asset.location ?? opts.asset.name);
-  }
-  if (shouldAuto(flags, "__latitude") || shouldAuto(flags, "inv_lat")) {
-    setIfEmpty(
-      "inv_lat",
-      opts.asset.latitude != null ? String(opts.asset.latitude) : null,
-    );
-  }
-  if (shouldAuto(flags, "__longitude") || shouldAuto(flags, "inv_lng")) {
-    setIfEmpty(
-      "inv_lng",
-      opts.asset.longitude != null ? String(opts.asset.longitude) : null,
-    );
-  }
+  // Core identity ALWAYS from registry (Structure ID / road / location / coords)
+  setIfEmpty("inv_structure_id", opts.asset.assetNumber);
+  setIfEmpty("inv_road_name", opts.asset.roadName);
+  setIfEmpty("inv_crossing", opts.asset.location ?? opts.asset.name);
+  setIfEmpty(
+    "inv_lat",
+    opts.asset.latitude != null ? String(opts.asset.latitude) : null,
+  );
+  setIfEmpty(
+    "inv_lng",
+    opts.asset.longitude != null ? String(opts.asset.longitude) : null,
+  );
 
   // Alias map: only when source flagged
   const fieldMap = getDefaultAssetProfileFieldMap();
@@ -117,6 +188,20 @@ export function seedFormPayloadFromAsset(opts: {
     );
   }
 
+  // Component notes sections
+  for (const fieldId of Object.keys(COMPONENT_NOTES_DEFAULTS)) {
+    values[fieldId] = JSON.stringify(seedComponentNotes(fieldId, components));
+  }
+
+  // Default clearance measurement slots
+  values.vc_measurements = JSON.stringify(defaultMeasurementRows(5));
+
+  // Optional: auto-fill clearances from previous report
+  if (shouldAuto(flags, "__seedClearancesFromPrior") && opts.priorFormPayload) {
+    const copied = copyClearancesFromPrior(opts.priorFormPayload);
+    Object.assign(values, copied);
+  }
+
   const enabledOptionalPages = opts.template.pages.map((p) => p.id);
 
   return {
@@ -124,6 +209,7 @@ export function seedFormPayloadFromAsset(opts: {
     values,
     enabledOptionalPages,
     openSections: [],
+    media: {},
   };
 }
 

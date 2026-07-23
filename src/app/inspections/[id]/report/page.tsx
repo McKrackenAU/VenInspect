@@ -10,6 +10,8 @@ import { getExportConfig } from "@/lib/export-config";
 import { ExportPdfButton } from "@/components/ExportPdfButton";
 import { ClientExportButton } from "@/components/ClientExportButton";
 import { VentiaPrintLogo } from "@/components/BrandMark";
+import { SecondReviewPanel } from "@/components/SecondReviewPanel";
+import { formatPersonCredential } from "@/lib/report-people";
 import {
   getTemplateForLevel,
   parseFormPayload,
@@ -35,6 +37,8 @@ export default async function InspectionReportPage({
       asset: true,
       createdBy: true,
       approvedBy: true,
+      reviewedBy: true,
+      reviewRequestedFrom: true,
       categories: { orderBy: [{ category: "asc" }, { subcategory: "asc" }] },
       defects: { orderBy: { defectCode: "asc" } },
       permitChecks: { orderBy: { label: "asc" } },
@@ -49,6 +53,21 @@ export default async function InspectionReportPage({
   const conditionStates = getSeverityOptions();
   const exportCfg = getExportConfig();
 
+  const reviewCandidates = await prisma.user.findMany({
+    where: { id: { not: inspection.createdById } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, level2Qualified: true },
+  });
+
+  const inspectorLabel = formatPersonCredential(inspection.createdBy);
+  const approverLabel = inspection.approvedBy
+    ? formatPersonCredential(inspection.approvedBy)
+    : null;
+  const reviewerLabel =
+    inspection.reviewStatus === "COMPLETED" && inspection.reviewedBy
+      ? formatPersonCredential(inspection.reviewedBy)
+      : null;
+
   return (
     <div className="space-y-4">
       <div className="no-print flex flex-wrap items-center justify-between gap-2">
@@ -58,7 +77,7 @@ export default async function InspectionReportPage({
         >
           ← Back to inspection
         </Link>
-        <div className="flex flex-wrap items-start gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ExportPdfButton
             inspectionId={inspection.id}
             label="Export PDF"
@@ -141,15 +160,70 @@ export default async function InspectionReportPage({
           </div>
           <div>
             <dt className="text-[color:var(--ventia-muted)]">Inspector</dt>
-            <dd className="font-medium">{inspection.createdBy.name}</dd>
+            <dd className="font-medium">{inspectorLabel}</dd>
           </div>
-          {inspection.approvedBy ? (
+          {inspection.approvedBy &&
+          (inspection.status === "APPROVED" || inspection.approvedAt) ? (
             <div>
-              <dt className="text-[color:var(--ventia-muted)]">Approved by</dt>
-              <dd className="font-medium">{inspection.approvedBy.name}</dd>
+              <dt className="text-[color:var(--ventia-muted)]">
+                Approved by (Level 2)
+              </dt>
+              <dd className="font-medium">
+                {approverLabel}
+                {inspection.approvedAt ? (
+                  <span className="mt-0.5 block text-xs font-normal text-[color:var(--ventia-muted)]">
+                    {format(inspection.approvedAt, "dd MMM yyyy HH:mm")}
+                  </span>
+                ) : null}
+              </dd>
+            </div>
+          ) : null}
+          {reviewerLabel ? (
+            <div>
+              <dt className="text-[color:var(--ventia-muted)]">Reviewed by</dt>
+              <dd className="font-medium">
+                {reviewerLabel}
+                {inspection.reviewedAt ? (
+                  <span className="mt-0.5 block text-xs font-normal text-[color:var(--ventia-muted)]">
+                    {format(inspection.reviewedAt, "dd MMM yyyy HH:mm")}
+                  </span>
+                ) : null}
+              </dd>
             </div>
           ) : null}
         </dl>
+
+        {(inspection.status === "SUBMITTED" ||
+          inspection.status === "APPROVED" ||
+          inspection.status === "PENDING_APPROVAL" ||
+          inspection.reviewStatus !== "NONE") && (
+          <div className="mt-6">
+            <SecondReviewPanel
+              inspectionId={inspection.id}
+              reviewStatus={inspection.reviewStatus}
+              reviewNote={inspection.reviewNote}
+              requestedFromName={inspection.reviewRequestedFrom?.name ?? null}
+              reviewedByLabel={reviewerLabel}
+              reviewedAtLabel={
+                inspection.reviewedAt
+                  ? format(inspection.reviewedAt, "dd MMM yyyy HH:mm")
+                  : null
+              }
+              candidates={reviewCandidates}
+              isCreator={
+                user.id === inspection.createdById || user.role === "ADMIN"
+              }
+              isRequestedReviewer={
+                inspection.reviewRequestedFromId === user.id
+              }
+              canComplete={
+                user.id !== inspection.createdById &&
+                (inspection.reviewRequestedFromId === user.id ||
+                  user.role === "ADMIN")
+              }
+            />
+          </div>
+        )}
 
         {inspection.generalComments ? (
           <section className="mt-6">

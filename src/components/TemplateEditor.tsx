@@ -24,6 +24,9 @@ const FIELD_TYPES: FieldType[] = [
   "yesno",
   "date",
   "checkbox",
+  "component_table",
+  "component_notes",
+  "measurement_list",
 ];
 
 function newId(prefix: string) {
@@ -309,6 +312,69 @@ export function TemplateEditor({
                 </button>
               </div>
 
+              <div className="flex flex-wrap gap-4 text-xs text-[color:var(--ventia-muted)]">
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="accent-[color:var(--ventia-green)]"
+                    checked={Boolean(sec.allowPhotos)}
+                    onChange={(e) =>
+                      updateSection(activePage.id, sec.id, {
+                        allowPhotos: e.target.checked || undefined,
+                        includePhotosInReport: e.target.checked
+                          ? sec.includePhotosInReport !== false
+                          : undefined,
+                      })
+                    }
+                  />
+                  Allow photos
+                </label>
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="accent-[color:var(--ventia-green)]"
+                    checked={Boolean(sec.allowRaiseDefect)}
+                    onChange={(e) =>
+                      updateSection(activePage.id, sec.id, {
+                        allowRaiseDefect: e.target.checked || undefined,
+                      })
+                    }
+                  />
+                  Allow raise defect
+                </label>
+                <label className="inline-flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="accent-[color:var(--ventia-green)]"
+                    checked={sec.includePhotosInReport !== false && Boolean(sec.allowPhotos)}
+                    disabled={!sec.allowPhotos}
+                    onChange={(e) =>
+                      updateSection(activePage.id, sec.id, {
+                        includePhotosInReport: e.target.checked,
+                      })
+                    }
+                  />
+                  Include photos in report
+                </label>
+                <label className="inline-flex items-center gap-1.5">
+                  Asset types
+                  <input
+                    className="field-input w-40 py-1 text-xs"
+                    placeholder="BRIDGE,DRAINAGE"
+                    value={(sec.assetTypes ?? []).join(",")}
+                    onChange={(e) => {
+                      const assetTypes = e.target.value
+                        .split(",")
+                        .map((s) => s.trim().toUpperCase())
+                        .filter(Boolean);
+                      updateSection(activePage.id, sec.id, {
+                        assetTypes: assetTypes.length ? assetTypes : undefined,
+                      });
+                    }}
+                  />
+                </label>
+              </div>
+
               <ul className="space-y-2">
                 {sec.fields.map((f) => (
                   <li
@@ -376,6 +442,53 @@ export function TemplateEditor({
                         placeholder="One option per line"
                       />
                     )}
+                    <div className="flex flex-wrap gap-3 text-xs text-[color:var(--ventia-muted)] sm:col-span-3">
+                      <label className="inline-flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          className="accent-[color:var(--ventia-green)]"
+                          checked={Boolean(f.allowPhotos)}
+                          onChange={(e) =>
+                            updateField(activePage.id, sec.id, f.id, {
+                              allowPhotos: e.target.checked || undefined,
+                              includePhotosInReport: e.target.checked
+                                ? f.includePhotosInReport !== false
+                                : undefined,
+                            })
+                          }
+                        />
+                        Photos
+                      </label>
+                      <label className="inline-flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          className="accent-[color:var(--ventia-green)]"
+                          checked={Boolean(f.allowRaiseDefect)}
+                          onChange={(e) =>
+                            updateField(activePage.id, sec.id, f.id, {
+                              allowRaiseDefect: e.target.checked || undefined,
+                            })
+                          }
+                        />
+                        Raise defect
+                      </label>
+                      <label className="inline-flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          className="accent-[color:var(--ventia-green)]"
+                          checked={
+                            f.includePhotosInReport !== false && Boolean(f.allowPhotos)
+                          }
+                          disabled={!f.allowPhotos}
+                          onChange={(e) =>
+                            updateField(activePage.id, sec.id, f.id, {
+                              includePhotosInReport: e.target.checked,
+                            })
+                          }
+                        />
+                        In report
+                      </label>
+                    </div>
                   </li>
                 ))}
               </ul>

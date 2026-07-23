@@ -1,23 +1,34 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { format } from "date-fns";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import {
   importAssetAuditExportAction,
   updateAssetDetails,
+  combineInspectionsAsParent,
 } from "@/lib/actions";
-import { formatAssetType } from "@/lib/inspection";
+import {
+  computeLevelSchedule,
+  formatAssetType,
+  formatLevel,
+  formatStatus,
+} from "@/lib/inspection";
 import { ASSET_PERMIT_FLAGS } from "@/lib/permits";
 import { getAssetTypes } from "@/lib/asset-types";
 import { getDocumentTags } from "@/lib/document-tags";
 import { parseAssetComponents, parseAssetProfile } from "@/lib/asset-profile";
 import { AssetComponentsEditor } from "@/components/AssetComponentsEditor";
 import { AssetAttributesEditor } from "@/components/AssetAttributesEditor";
+import { ClearanceHistoryPanel } from "@/components/ClearanceHistoryPanel";
 import {
   AssetDocumentsPanel,
   type AssetDocumentListItem,
 } from "@/components/AssetDocumentsPanel";
+import { ManageAssetTabs } from "@/components/ManageAssetTabs";
+import { AdminDeleteInspectionButton } from "@/components/AdminDeleteInspectionButton";
+import { StatusPill } from "@/components/StatusPill";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +37,7 @@ export default async function ManageAssetEditPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; tab?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
@@ -37,6 +48,10 @@ export default async function ManageAssetEditPage({
       documents: {
         include: { uploadedBy: true },
         orderBy: { createdAt: "desc" },
+      },
+      inspections: {
+        include: { createdBy: true, defects: true, children: true, parent: true },
+        orderBy: { submittedAt: "desc" },
       },
     },
   });
@@ -57,27 +72,177 @@ export default async function ManageAssetEditPage({
     uploadedByName: document.uploadedBy.name,
   }));
 
-  return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
+  const l1 = computeLevelSchedule(asset, asset.inspections, "LEVEL_1");
+  const l2 = computeLevelSchedule(asset, asset.inspections, "LEVEL_2");
+  const standalones = asset.inspections.filter((i) => i.relationKind !== "CHILD");
+  const manageNext = `/manage/assets/${asset.id}`;
+
+  const mainTab = (
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-[color:var(--ventia-green)]">
+            {asset.name}
+          </h2>
+          <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
+            {formatAssetType(asset.type)} · {asset.roadName}
+            {asset.location ? ` · ${asset.location}` : ""}
+          </p>
+        </div>
         <Link
-          href="/manage/assets"
-          className="text-sm text-[color:var(--ventia-blue)] hover:underline"
+          href={`/inspect?assetId=${asset.id}`}
+          className="rounded-md bg-[color:var(--ventia-green)] px-3 py-2 text-sm font-medium text-white"
         >
-          ← Asset registry
+          New inspection
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-[color:var(--ventia-green)]">
-          Edit {asset.assetNumber}
-        </h1>
-        <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-          Admin-only details, coordinates, and site permit flags. Field users still open{" "}
-          <Link href={`/assets/${asset.id}`} className="underline">
-            the user asset page
-          </Link>{" "}
-          for history and photos.
-        </p>
       </div>
 
+      <section className="grid gap-3 sm:grid-cols-2">
+        <ScheduleCard
+          title="Level 1"
+          interval={asset.level1IntervalYears}
+          schedule={l1}
+          baselineAt={asset.lastLevel1At}
+        />
+        <ScheduleCard
+          title="Level 2"
+          interval={asset.level2IntervalYears}
+          schedule={l2}
+          baselineAt={asset.lastLevel2At}
+        />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-medium">Previous reports</h2>
+        <p className="text-xs text-[color:var(--ventia-muted)]">
+          Admins can delete any report. Deletion requires your password and typing{" "}
+          <span className="font-mono">DELETE</span> (or the exact report title).
+        </p>
+        {asset.inspections.length === 0 ? (
+          <p className="text-sm text-[color:var(--ventia-muted)]">No inspections yet.</p>
+        ) : (
+          <ul className="divide-y divide-[color:var(--ventia-border)] overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)]">
+            {asset.inspections.map((insp) => (
+              <li
+                key={insp.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <Link
+                    href={`/inspections/${insp.id}`}
+                    className="font-medium text-[color:var(--ventia-green)] hover:underline"
+                  >
+                    {insp.titleLabel}
+                    {insp.status === "DRAFT" ? " (draft)" : ""}
+                  </Link>
+                  <p className="text-xs text-[color:var(--ventia-muted)]">
+                    {formatLevel(insp.level)} · {formatStatus(insp.status)} ·{" "}
+                    {format(insp.submittedAt, "dd MMM yyyy HH:mm")} · by{" "}
+                    {insp.createdBy.name} · {insp.defects.length} defect
+                    {insp.defects.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {insp.status !== "DRAFT" ? (
+                    <>
+                      <Link
+                        href={`/inspections/${insp.id}/report`}
+                        className="text-[color:var(--ventia-blue)] hover:underline"
+                      >
+                        Full report
+                      </Link>
+                      <Link
+                        href={`/inspections/${insp.id}/scope`}
+                        className="text-[color:var(--ventia-blue)] hover:underline"
+                      >
+                        Scope export
+                      </Link>
+                    </>
+                  ) : (
+                    <Link
+                      href={`/inspections/${insp.id}`}
+                      className="text-[color:var(--ventia-blue)] hover:underline"
+                    >
+                      Open draft
+                    </Link>
+                  )}
+                  <AdminDeleteInspectionButton
+                    inspectionId={insp.id}
+                    titleLabel={insp.titleLabel}
+                    status={formatStatus(insp.status)}
+                    next={manageNext}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {standalones.filter((i) => i.status !== "DRAFT").length >= 2 ? (
+        <section className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5">
+          <h2 className="font-medium">Combine two reports</h2>
+          <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
+            Creates a parent inspection and links both as children.
+          </p>
+          <form action={combineInspectionsAsParent} className="mt-3 grid gap-3 sm:grid-cols-2">
+            <input type="hidden" name="assetId" value={asset.id} />
+            <select
+              name="inspectionA"
+              required
+              className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+              defaultValue=""
+            >
+              <option value="" disabled>
+                First report…
+              </option>
+              {standalones
+                .filter((i) => i.status !== "DRAFT")
+                .map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.titleLabel}
+                  </option>
+                ))}
+            </select>
+            <select
+              name="inspectionB"
+              required
+              className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+              defaultValue=""
+            >
+              <option value="" disabled>
+                Second report…
+              </option>
+              {standalones
+                .filter((i) => i.status !== "DRAFT")
+                .map((i) => (
+                  <option key={`b-${i.id}`} value={i.id}>
+                    {i.titleLabel}
+                  </option>
+                ))}
+            </select>
+            <button
+              type="submit"
+              className="sm:col-span-2 rounded-md bg-[color:var(--ventia-blue)] px-4 py-2 text-sm font-semibold text-white"
+            >
+              Create parent + link children
+            </button>
+          </form>
+        </section>
+      ) : null}
+
+      <p className="text-xs text-[color:var(--ventia-muted)]">
+        Field users see the same history on{" "}
+        <Link href={`/assets/${asset.id}`} className="underline">
+          the user asset page
+        </Link>
+        .
+      </p>
+    </div>
+  );
+
+  const detailsTab = (
+    <div className="space-y-6">
       {saved ? (
         <p className="rounded-lg border border-[color:var(--ventia-border)] bg-[color:var(--ventia-green-tint)] px-3 py-2 text-sm">
           Saved.
@@ -286,8 +451,13 @@ export default async function ManageAssetEditPage({
             __latitude: asset.latitude != null ? String(asset.latitude) : "",
             __longitude: asset.longitude != null ? String(asset.longitude) : "",
             __notes: asset.notes ?? "",
+            __seedClearancesFromPrior: "",
           }}
         />
+      </section>
+
+      <section className="card space-y-4 p-5">
+        <ClearanceHistoryPanel assetId={asset.id} />
       </section>
 
       <section className="card space-y-4 p-5">
@@ -309,10 +479,46 @@ export default async function ManageAssetEditPage({
             Import Audit Export
           </h2>
           <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-            Import profile attributes from an Asset Vision audit export.
+            Import profile attributes from an Asset Vision audit export. Download a
+            template if you are preparing data manually.
           </p>
         </div>
-        <input name="file" type="file" required accept=".xlsx,.xls,.csv" />
+        <div className="flex flex-wrap gap-2">
+          <a
+            href="/api/manage/import-templates/audit?format=csv"
+            className="rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs font-semibold"
+          >
+            Download CSV template
+          </a>
+          <a
+            href="/api/manage/import-templates/audit?format=xlsx"
+            className="rounded-lg border border-[color:var(--ventia-green)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ventia-green)]"
+          >
+            Download Excel template
+          </a>
+        </div>
+        <label className="block space-y-1 text-sm">
+          <span className="font-medium">File</span>
+          <input
+            name="file"
+            type="file"
+            required
+            accept=".xlsx,.xls,.csv"
+            className="sr-only"
+            id="audit-import-file"
+          />
+          <label
+            htmlFor="audit-import-file"
+            className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[color:var(--ventia-border)] px-4 py-5 text-center transition hover:border-[color:var(--ventia-green)]"
+          >
+            <span className="text-sm font-semibold text-[color:var(--ventia-green)]">
+              Choose audit file
+            </span>
+            <span className="text-xs text-[color:var(--ventia-muted)]">
+              .xlsx / .xls / .csv
+            </span>
+          </label>
+        </label>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -336,6 +542,32 @@ export default async function ManageAssetEditPage({
       />
     </div>
   );
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div>
+        <Link
+          href="/manage/assets"
+          className="text-sm text-[color:var(--ventia-blue)] hover:underline"
+        >
+          ← Asset registry
+        </Link>
+        <h1 className="mt-2 text-2xl font-semibold text-[color:var(--ventia-green)]">
+          {asset.roadName} / {asset.assetNumber}
+        </h1>
+        <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
+          Main: reports &amp; schedule. Details: registry fields, attributes, components,
+          documents.
+        </p>
+      </div>
+
+      <Suspense
+        fallback={<p className="text-sm text-[color:var(--ventia-muted)]">Loading…</p>}
+      >
+        <ManageAssetTabs main={mainTab} details={detailsTab} />
+      </Suspense>
+    </div>
+  );
 }
 
 function parseTags(raw: string): string[] {
@@ -345,4 +577,44 @@ function parseTags(raw: string): string[] {
   } catch {
     return [];
   }
+}
+
+function ScheduleCard({
+  title,
+  interval,
+  schedule,
+  baselineAt,
+}: {
+  title: string;
+  interval: number;
+  schedule: ReturnType<typeof computeLevelSchedule>;
+  baselineAt: Date | null;
+}) {
+  const usingBaselineOnly =
+    Boolean(baselineAt) &&
+    schedule.lastInspectedAt &&
+    baselineAt!.getTime() === schedule.lastInspectedAt.getTime();
+
+  return (
+    <div className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-medium">{title}</h3>
+        <StatusPill status={schedule.status} />
+      </div>
+      <p className="mt-2 text-sm text-[color:var(--ventia-muted)]">Every {interval} years</p>
+      <p className="mt-1 text-sm">
+        Last:{" "}
+        {schedule.lastInspectedAt
+          ? format(schedule.lastInspectedAt, "dd MMM yyyy")
+          : "None"}
+        {usingBaselineOnly ? (
+          <span className="text-[color:var(--ventia-muted)]"> (manual baseline)</span>
+        ) : null}
+      </p>
+      <p className="text-sm">
+        Next due:{" "}
+        {schedule.nextDueAt ? format(schedule.nextDueAt, "dd MMM yyyy") : "—"}
+      </p>
+    </div>
+  );
 }

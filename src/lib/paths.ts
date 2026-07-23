@@ -27,6 +27,7 @@ export type StorageSettings = {
     includePhotos?: boolean;
     includePhotoIndex?: boolean;
     includeComparisonPhotos?: boolean;
+    includeFormPhotos?: boolean;
     defaultConditionStates?: string[];
     filterPdfByConditionStates?: boolean;
   };

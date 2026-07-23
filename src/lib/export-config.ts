@@ -11,6 +11,8 @@ export type ExportConfig = {
   includePhotoIndex: boolean;
   /** Include comparison (prior) photos in defect folders */
   includeComparisonPhotos: boolean;
+  /** Include form/section photos in PDF and Client Export */
+  includeFormPhotos: boolean;
   /** Default condition states pre-checked for user exports (CS1–CS4) */
   defaultConditionStates: string[];
   /** When true, PDF export also respects condition-state filter from query */
@@ -22,6 +24,7 @@ export const DEFAULT_EXPORT_CONFIG: ExportConfig = {
   includePhotos: true,
   includePhotoIndex: true,
   includeComparisonPhotos: true,
+  includeFormPhotos: true,
   defaultConditionStates: ["CS2", "CS3", "CS4"],
   filterPdfByConditionStates: true,
 };
@@ -38,6 +41,7 @@ export function getExportConfig(): ExportConfig {
     includePhotos: raw.includePhotos !== false,
     includePhotoIndex: raw.includePhotoIndex !== false,
     includeComparisonPhotos: raw.includeComparisonPhotos !== false,
+    includeFormPhotos: raw.includeFormPhotos !== false,
     defaultConditionStates: states.length ? states : defaults.slice(1),
     filterPdfByConditionStates: raw.filterPdfByConditionStates !== false,
   };
@@ -49,6 +53,7 @@ export function saveExportConfig(config: ExportConfig) {
     includePhotos: Boolean(config.includePhotos),
     includePhotoIndex: Boolean(config.includePhotoIndex),
     includeComparisonPhotos: Boolean(config.includeComparisonPhotos),
+    includeFormPhotos: Boolean(config.includeFormPhotos),
     defaultConditionStates: (config.defaultConditionStates ?? [])
       .map((s) => String(s).trim().toUpperCase())
       .filter(Boolean),
