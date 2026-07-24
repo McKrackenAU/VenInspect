@@ -16,6 +16,11 @@ import { DefectAddForm } from "@/components/DefectAddForm";
 import { CarryForwardDefects } from "@/components/CarryForwardDefects";
 import { DeleteDraftButton } from "@/components/DeleteDraftButton";
 import { InspectionDraftWorkspace } from "@/components/InspectionDraftWorkspace";
+import {
+  DefectGalleryPanel,
+  DefectReorderBar,
+} from "@/components/DefectGalleryPanel";
+import { DefectMappingOverlay } from "@/components/DefectMappingOverlay";
 import { formatLevel, formatStatus } from "@/lib/inspection";
 import {
   getTemplateForLevel,
@@ -45,11 +50,15 @@ export default async function InspectionPage({
       approvedBy: true,
       parent: true,
       children: true,
-      defects: { orderBy: { defectCode: "asc" } },
+      defects: {
+        orderBy: [{ sortOrder: "asc" }, { defectCode: "asc" }],
+        include: { photos: { orderBy: { sortOrder: "asc" } } },
+      },
       permitChecks: { orderBy: { label: "asc" } },
     },
   });
   if (!inspection) notFound();
+  if (inspection.deletedAt) notFound();
   if (!canViewInspection(user, inspection)) redirect("/assets");
 
   const editable = canEditInspection(user, inspection);
@@ -58,6 +67,10 @@ export default async function InspectionPage({
   const severities = getSeverityOptions();
   const template = getTemplateForLevel(inspection.level);
   const formPayload = parseFormPayload(inspection.formPayload);
+  const taskTypes = await prisma.defectTaskType.findMany({
+    where: { active: true },
+    orderBy: { sortOrder: "asc" },
+  });
 
   const siblings = await prisma.inspection.findMany({
     where: {
@@ -96,12 +109,19 @@ export default async function InspectionPage({
       <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
         Defects
       </h2>
+      {editable && inspection.defects.length > 1 ? (
+        <DefectReorderBar
+          inspectionId={inspection.id}
+          defectIds={inspection.defects.map((d) => d.id)}
+        />
+      ) : null}
       {inspection.defects.length === 0 ? (
         <p className="text-sm text-[color:var(--ventia-muted)]">
-          No defects yet. Photo is required — stored compressed.
+          No defects yet. Photo is required — stored compressed. Up to 100 photos
+          per defect with comments.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-3">
           {inspection.defects.map((d) => (
             <li key={d.id} className="card px-4 py-3">
               <div className="flex flex-wrap gap-4">
@@ -144,6 +164,7 @@ export default async function InspectionPage({
                     </span>
                     <span className="text-xs uppercase tracking-wide text-[color:var(--ventia-muted)]">
                       {severityLabel(d.severity)}
+                      {d.photos.length > 1 ? ` · ${d.photos.length} photos` : ""}
                     </span>
                   </div>
                   <p className="mt-1 text-sm">{d.description}</p>
@@ -154,6 +175,18 @@ export default async function InspectionPage({
                   ) : null}
                 </div>
               </div>
+              <DefectGalleryPanel
+                inspectionId={inspection.id}
+                defect={{
+                  id: d.id,
+                  defectCode: d.defectCode,
+                  description: d.description,
+                  photos: d.photos,
+                  taskTypeId: d.taskTypeId,
+                }}
+                taskTypes={taskTypes}
+                editable={editable}
+              />
             </li>
           ))}
         </ul>
@@ -197,38 +230,59 @@ export default async function InspectionPage({
     </section>
   );
 
+  const mappingOverlay = await prisma.defectMappingOverlay.findFirst({
+    where: { inspectionId: inspection.id },
+    orderBy: { createdAt: "desc" },
+  });
+
   const photosSlot = (
-    <section className="space-y-2">
-      <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
-        Photographic record
-      </h2>
-      <p className="text-sm text-[color:var(--ventia-muted)]">
-        Defect photos are attached on the Defects page. Use register notes below for
-        additional photo references.
-      </p>
-      {inspection.defects.filter((d) => d.photoPath).length === 0 ? (
+    <section className="space-y-4">
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
+          Photographic record
+        </h2>
         <p className="text-sm text-[color:var(--ventia-muted)]">
-          No defect photos yet.
+          Defect photos are on the Defects page. Client export uses DoT-style names and
+          your photo order.
         </p>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {inspection.defects
-            .filter((d) => d.photoPath)
-            .map((d) => (
-              <li key={d.id} className="card p-3">
-                <p className="font-mono text-xs font-semibold text-[color:var(--ventia-green)]">
-                  {d.defectCode}
-                </p>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photoUrl(d.photoPath!)}
-                  alt={d.defectCode}
-                  className="mt-2 max-h-40 w-full rounded object-contain"
-                />
-              </li>
-            ))}
-        </ul>
-      )}
+        {inspection.defects.filter((d) => d.photoPath).length === 0 ? (
+          <p className="text-sm text-[color:var(--ventia-muted)]">
+            No defect photos yet.
+          </p>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {inspection.defects
+              .filter((d) => d.photoPath)
+              .map((d) => (
+                <li key={d.id} className="card p-3">
+                  <p className="font-mono text-xs font-semibold text-[color:var(--ventia-green)]">
+                    {d.defectCode}
+                  </p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photoUrl(d.photoPath!)}
+                    alt={d.defectCode}
+                    className="mt-2 max-h-40 w-full rounded object-contain"
+                  />
+                </li>
+              ))}
+          </ul>
+        )}
+      </div>
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-[color:var(--ventia-green)]">
+          Defect mapping overlay
+        </h3>
+        <DefectMappingOverlay
+          inspectionId={inspection.id}
+          overlay={mappingOverlay}
+          defects={inspection.defects.map((d) => ({
+            id: d.id,
+            defectCode: d.defectCode,
+          }))}
+          editable={editable}
+        />
+      </div>
     </section>
   );
 

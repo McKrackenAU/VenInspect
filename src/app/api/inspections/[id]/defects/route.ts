@@ -105,6 +105,7 @@ export async function POST(
       data: {
         inspectionId,
         defectCode,
+        sortOrder: inspection.defects.length,
         description,
         comments,
         category,
@@ -112,17 +113,22 @@ export async function POST(
         componentId,
         severity,
         photoPath: relativePath,
+        photos: {
+          create: {
+            path: relativePath,
+            kind: "overview",
+            sortOrder: 0,
+          },
+        },
       },
+      include: { photos: true },
     });
 
     revalidatePath(`/inspections/${inspectionId}`);
     revalidatePath(`/inspections/${inspectionId}/report`);
     revalidatePath(`/assets/${inspection.assetId}`);
 
-    return NextResponse.json({
-      ok: true,
-      defect: { id: defect.id, defectCode: defect.defectCode },
-    });
+    return NextResponse.json({ ok: true, defect });
   } catch (e) {
     const message =
       e instanceof Error ? e.message : "Could not save defect";

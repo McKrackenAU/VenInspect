@@ -62,7 +62,10 @@ export async function PATCH(
 
   await prisma.inspection.update({
     where: { id },
-    data: { formPayload: serializeFormPayload(next) },
+    data: {
+      formPayload: serializeFormPayload(next),
+      lastEditedAt: new Date(),
+    },
   });
 
   revalidatePath(`/inspections/${id}`);

@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db";
-import { createUser, updateUserQualifications } from "@/lib/actions";
+import { createUser } from "@/lib/actions";
 import { requireAdmin } from "@/lib/auth";
 import Link from "next/link";
+import { UserQualificationsForm } from "@/components/UserQualificationsForm";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +28,15 @@ export default async function ManageUsersPage() {
         <h2 className="text-lg font-medium">Add user</h2>
         <form action={createUser} className="mt-4 grid gap-3 sm:grid-cols-2">
           <input
-            name="name"
+            name="firstName"
             required
-            placeholder="Full name"
+            placeholder="First name"
+            className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+          />
+          <input
+            name="lastName"
+            required
+            placeholder="Last name"
             className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
           />
           <input
@@ -64,7 +71,7 @@ export default async function ManageUsersPage() {
             <option value="INSPECTOR">Inspector</option>
             <option value="ADMIN">Admin</option>
           </select>
-          <div className="flex flex-wrap items-center gap-4 text-sm">
+          <div className="flex flex-wrap items-center gap-4 text-sm sm:col-span-2">
             <label className="flex items-center gap-2">
               <input type="checkbox" name="level1Qualified" className="accent-[color:var(--ventia-green)]" />
               Level 1 qualified
@@ -107,6 +114,11 @@ export default async function ManageUsersPage() {
                   </>
                 ) : null}
               </p>
+              <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
+                Role: {u.role}
+                {u.level1Qualified ? " · L1" : ""}
+                {u.level2Qualified ? " · L2" : ""}
+              </p>
               <p className="mt-1">
                 <Link
                   href={`/manage/users/${u.id}`}
@@ -115,56 +127,10 @@ export default async function ManageUsersPage() {
                   View inspection history →
                 </Link>
               </p>
-              <form
-                action={updateUserQualifications}
-                className="mt-3 flex flex-wrap items-center gap-3"
-              >
-                <input type="hidden" name="id" value={u.id} />
-                <select
-                  name="role"
-                  defaultValue={u.role}
-                  className="rounded-md border border-[color:var(--ventia-border)] px-2 py-1.5 text-sm"
-                >
-                  <option value="INSPECTOR">Inspector</option>
-                  <option value="ADMIN">Admin</option>
-                </select>
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="checkbox"
-                    name="level1Qualified"
-                    defaultChecked={u.level1Qualified}
-                    className="accent-[color:var(--ventia-green)]"
-                  />
-                  L1
-                </label>
-                <label className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="checkbox"
-                    name="level2Qualified"
-                    defaultChecked={u.level2Qualified}
-                    className="accent-[color:var(--ventia-green)]"
-                  />
-                  L2
-                </label>
-                <input
-                  name="registrationNumber"
-                  defaultValue={u.registrationNumber ?? ""}
-                  placeholder="Registration no."
-                  className="min-w-[8rem] rounded-md border border-[color:var(--ventia-border)] px-2 py-1.5 text-sm font-mono"
-                />
-                <input
-                  name="password"
-                  type="password"
-                  placeholder="New password (optional)"
-                  className="min-w-[10rem] flex-1 rounded-md border border-[color:var(--ventia-border)] px-2 py-1.5 text-sm"
-                />
-                <button
-                  type="submit"
-                  className="rounded-md bg-[color:var(--ventia-green-tint)] px-3 py-1.5 text-xs font-medium text-[color:var(--ventia-green)]"
-                >
-                  Save
-                </button>
-              </form>
+              <UserQualificationsForm
+                key={`${u.id}-${u.updatedAt.toISOString()}-${u.role}-${u.level1Qualified}-${u.level2Qualified}-${u.registrationNumber ?? ""}`}
+                user={u}
+              />
             </li>
           ))}
         </ul>

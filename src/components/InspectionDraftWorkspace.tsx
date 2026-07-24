@@ -32,8 +32,31 @@ type CrRow = {
   cs2?: string;
   cs3?: string;
   cs4?: string;
+  pct1?: string;
+  pct2?: string;
+  pct3?: string;
+  pct4?: string;
   notes?: string;
 };
+
+function withCsPercents(row: CrRow): CrRow {
+  const qty = Number.parseFloat(String(row.qty ?? ""));
+  const cs1 = Number.parseFloat(String(row.cs1 ?? "")) || 0;
+  const cs2 = Number.parseFloat(String(row.cs2 ?? "")) || 0;
+  const cs3 = Number.parseFloat(String(row.cs3 ?? "")) || 0;
+  const cs4 = Number.parseFloat(String(row.cs4 ?? "")) || 0;
+  if (!Number.isFinite(qty) || qty <= 0) {
+    return { ...row, pct1: "", pct2: "", pct3: "", pct4: "" };
+  }
+  const pct = (n: number) => String(Math.round((n / qty) * 1000) / 10);
+  return {
+    ...row,
+    pct1: pct(cs1),
+    pct2: pct(cs2),
+    pct3: pct(cs3),
+    pct4: pct(cs4),
+  };
+}
 
 function MeasurementListInput({
   value,
@@ -317,7 +340,7 @@ function ComponentTableInput({
                   value={row.qty ?? ""}
                   onChange={(e) => {
                     const next = [...rows];
-                    next[i] = { ...row, qty: e.target.value };
+                    next[i] = withCsPercents({ ...row, qty: e.target.value });
                     commit(next);
                   }}
                 />
@@ -335,22 +358,85 @@ function ComponentTableInput({
                   }}
                 />
               </label>
-              <div className="grid grid-cols-4 gap-1 text-xs">
-                {(["cs1", "cs2", "cs3", "cs4"] as const).map((k) => (
-                  <label key={k} className="block">
-                    {k.toUpperCase()}
-                    <input
-                      className={common}
-                      disabled={disabled}
-                      value={row[k] ?? ""}
-                      onChange={(e) => {
-                        const next = [...rows];
-                        next[i] = { ...row, [k]: e.target.value };
-                        commit(next);
-                      }}
-                    />
-                  </label>
-                ))}
+              <div className="space-y-1">
+                <div className="grid grid-cols-4 gap-1 text-xs">
+                  {(["cs1", "cs2", "cs3", "cs4"] as const).map((k) => (
+                    <label key={k} className="block">
+                      {k.toUpperCase()} qty
+                      <input
+                        className={common}
+                        disabled={disabled}
+                        value={row[k] ?? ""}
+                        onChange={(e) => {
+                          const next = [...rows];
+                          next[i] = withCsPercents({
+                            ...row,
+                            [k]: e.target.value,
+                          });
+                          commit(next);
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="grid grid-cols-4 gap-1 text-[10px] text-[color:var(--ventia-muted)]">
+                  {(["pct1", "pct2", "pct3", "pct4"] as const).map((k, idx) => (
+                    <span key={k}>
+                      CS{idx + 1}%: {row[k] || "—"}
+                    </span>
+                  ))}
+                </div>
+                {(() => {
+                  const qty = Number.parseFloat(String(row.qty ?? ""));
+                  const sum =
+                    (Number.parseFloat(String(row.cs1 ?? "")) || 0) +
+                    (Number.parseFloat(String(row.cs2 ?? "")) || 0) +
+                    (Number.parseFloat(String(row.cs3 ?? "")) || 0) +
+                    (Number.parseFloat(String(row.cs4 ?? "")) || 0);
+                  if (!Number.isFinite(qty) || qty <= 0) return null;
+                  if (Math.abs(sum - qty) < 0.01) return null;
+                  return (
+                    <p className="text-[10px] text-amber-700">
+                      CS qty sum ({sum}) should match component qty ({qty})
+                    </p>
+                  );
+                })()}
+                {!disabled && row.id ? (
+                  <button
+                    type="button"
+                    className="text-[10px] font-semibold text-[color:var(--ventia-blue)]"
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          const res = await fetch(
+                            `/api/inspections/${inspectionId}/suggest-cs?componentId=${encodeURIComponent(row.id!)}`,
+                          );
+                          const body = (await res.json()) as {
+                            cs1?: number;
+                            cs2?: number;
+                            cs3?: number;
+                            cs4?: number;
+                            error?: string;
+                          };
+                          if (!res.ok) throw new Error(body.error || "Suggest failed");
+                          const next = [...rows];
+                          next[i] = withCsPercents({
+                            ...row,
+                            cs1: String(body.cs1 ?? 0),
+                            cs2: String(body.cs2 ?? 0),
+                            cs3: String(body.cs3 ?? 0),
+                            cs4: String(body.cs4 ?? 0),
+                          });
+                          commit(next);
+                        } catch {
+                          /* ignore */
+                        }
+                      })();
+                    }}
+                  >
+                    Apply CS from defects
+                  </button>
+                ) : null}
               </div>
             </div>
             <textarea

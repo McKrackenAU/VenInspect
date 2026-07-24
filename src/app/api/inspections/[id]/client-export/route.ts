@@ -175,33 +175,49 @@ export async function GET(
   const indexRows: Record<string, string | number>[] = [];
   const root = `${sanitizePathSegment(inspection.asset.assetNumber)}_${sanitizePathSegment(inspection.folderKey)}_ClientExport`;
 
+  type PackPhoto = {
+    key: string;
+    zipName: string;
+    absPath: string;
+    index: Record<string, string | number>;
+  };
+  const packPhotos: PackPhoto[] = [];
+
   if (exportCfg.includePhotos) {
     for (const d of defects) {
       const folder = folderName(d.subcategory || d.category, d.defectCode);
-      const photos: { label: string; path: string | null }[] = [
-        { label: "current", path: d.photoPath },
+      const photos: { label: string; path: string | null; key: string }[] = [
+        { label: "current", path: d.photoPath, key: `defect:${d.id}:current` },
       ];
       if (exportCfg.includeComparisonPhotos) {
-        photos.push({ label: "comparison", path: d.comparisonPhotoPath });
+        photos.push({
+          label: "comparison",
+          path: d.comparisonPhotoPath,
+          key: `defect:${d.id}:comparison`,
+        });
       }
       for (const p of photos) {
         if (!p.path) continue;
         try {
           const abs = absolutePhotoPath(p.path);
-          const data = await fs.readFile(abs);
+          await fs.access(abs);
           const base = path.basename(p.path);
           const name = `Photos/${folder}/${p.label}_${base}`;
-          zipFiles.push({ name, data });
-          indexRows.push({
-            Folder: folder,
-            Component: d.subcategory || d.category || "Uncategorised",
-            "Defect code": d.defectCode,
-            "Condition state": d.severity,
-            Description: d.description,
-            Comments: d.comments ?? "",
-            "Photo file": `${p.label}_${base}`,
-            "Asset number": inspection.asset.assetNumber,
-            Inspection: inspection.titleLabel,
+          packPhotos.push({
+            key: p.key,
+            zipName: name,
+            absPath: abs,
+            index: {
+              Folder: folder,
+              Component: d.subcategory || d.category || "Uncategorised",
+              "Defect code": d.defectCode,
+              "Condition state": d.severity,
+              Description: d.description,
+              Comments: d.comments ?? "",
+              "Photo file": `${p.label}_${base}`,
+              "Asset number": inspection.asset.assetNumber,
+              Inspection: inspection.titleLabel,
+            },
           });
         } catch {
           /* missing file */
@@ -215,26 +231,73 @@ export async function GET(
       for (const item of items) {
         try {
           const abs = absolutePhotoPath(item.path);
-          const data = await fs.readFile(abs);
+          await fs.access(abs);
           const base = path.basename(item.path);
           const folder = sanitizePathSegment(key.replace(/::/g, "__"), "form");
           const name = `FormPhotos/${folder}/${base}`;
-          zipFiles.push({ name, data });
-          indexRows.push({
-            Folder: `FormPhotos/${folder}`,
-            Component: key,
-            "Defect code": item.defectId ?? "",
-            "Condition state": "",
-            Description: item.caption || "Form photo",
-            Comments: "",
-            "Photo file": base,
-            "Asset number": inspection.asset.assetNumber,
-            Inspection: inspection.titleLabel,
+          packPhotos.push({
+            key: `form:${item.id}`,
+            zipName: name,
+            absPath: abs,
+            index: {
+              Folder: `FormPhotos/${folder}`,
+              Component: key,
+              "Defect code": item.defectId ?? "",
+              "Condition state": "",
+              Description: item.caption || "Form photo",
+              Comments: "",
+              "Photo file": base,
+              "Asset number": inspection.asset.assetNumber,
+              Inspection: inspection.titleLabel,
+            },
           });
         } catch {
           /* missing */
         }
       }
+    }
+  }
+
+  const orderParam = req.nextUrl.searchParams.get("photoOrder");
+  const preferredOrder = orderParam
+    ? orderParam.split("|").filter(Boolean)
+    : formPayload.exportPhotoOrder ?? [];
+  const byKey = new Map(packPhotos.map((p) => [p.key, p]));
+  const ordered: PackPhoto[] = [];
+  for (const k of preferredOrder) {
+    const p = byKey.get(k);
+    if (p) {
+      ordered.push(p);
+      byKey.delete(k);
+    }
+  }
+  for (const p of packPhotos) {
+    if (byKey.has(p.key)) ordered.push(p);
+  }
+
+  for (const p of ordered) {
+    try {
+      const data = await fs.readFile(p.absPath);
+      const seq = indexRows.length + 1;
+      const { formatDotPhotoName } = await import("@/lib/dot-photo-register");
+      const dotName = formatDotPhotoName({
+        assetNumber: inspection.asset.assetNumber,
+        takenAt: inspection.inspectedAt,
+        sequence: seq,
+      });
+      const ext = path.extname(p.zipName) || ".webp";
+      const renamed = p.zipName.includes("Photos/")
+        ? p.zipName.replace(/\/[^/]+$/, `/${dotName}${ext}`)
+        : p.zipName;
+      zipFiles.push({ name: renamed, data });
+      indexRows.push({
+        ...p.index,
+        "Pack sequence": seq,
+        "DoT file name": `${dotName}${ext}`,
+        "Photo file": path.basename(renamed),
+      });
+    } catch {
+      /* skip */
     }
   }
 

@@ -48,6 +48,20 @@ export type StorageSettings = {
   inspectionTemplates?: Record<string, unknown>;
   /** DisplayName → fieldId map for Audit Export Attributes import */
   assetProfileFieldMap?: Record<string, string>;
+  /** IANA timezone for greetings / report dates */
+  timezone?: string;
+  /** date-fns date pattern */
+  dateFormat?: string;
+  /** date-fns time pattern */
+  timeFormat?: string;
+  /** Cloudflare tunnel token (root-only UI) */
+  cloudflareTunnelToken?: string;
+  cloudflareTunnelHostname?: string;
+  /** Assetvision REST */
+  assetvisionBaseUrl?: string;
+  assetvisionApiKey?: string;
+  /** Treatment types for defects */
+  treatmentTypes?: { value: string; label: string }[];
 };
 
 function settingsPath() {

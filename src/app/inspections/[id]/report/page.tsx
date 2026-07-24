@@ -16,7 +16,8 @@ import {
   getTemplateForLevel,
   parseFormPayload,
 } from "@/lib/inspection-templates";
-import { fieldFilled } from "@/lib/inspection-template-types";
+import { fieldFilled, formatFormFieldDisplayValue } from "@/lib/inspection-template-types";
+import { reopenInspectionForEdit } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,20 @@ export default async function InspectionReportPage({
           ← Back to inspection
         </Link>
         <div className="flex flex-wrap items-center gap-2">
+          {(inspection.status === "SUBMITTED" ||
+            inspection.status === "APPROVED" ||
+            inspection.status === "PENDING_APPROVAL") &&
+          (user.role === "ADMIN" || user.id === inspection.createdById) ? (
+            <form action={reopenInspectionForEdit}>
+              <input type="hidden" name="inspectionId" value={inspection.id} />
+              <button
+                type="submit"
+                className="rounded-md border border-amber-600 px-3 py-2 text-sm font-semibold text-amber-800 dark:text-amber-200"
+              >
+                Edit report
+              </button>
+            </form>
+          ) : null}
           <ExportPdfButton
             inspectionId={inspection.id}
             label="Export PDF"
@@ -158,6 +173,20 @@ export default async function InspectionReportPage({
               {format(inspection.inspectedAt, "dd MMM yyyy")}
             </dd>
           </div>
+          <div>
+            <dt className="text-[color:var(--ventia-muted)]">First submitted</dt>
+            <dd className="font-medium">
+              {format(inspection.submittedAt, "dd MMM yyyy HH:mm")}
+            </dd>
+          </div>
+          {inspection.lastEditedAt ? (
+            <div>
+              <dt className="text-[color:var(--ventia-muted)]">Last edited</dt>
+              <dd className="font-medium">
+                {format(inspection.lastEditedAt, "dd MMM yyyy HH:mm")}
+              </dd>
+            </div>
+          ) : null}
           <div>
             <dt className="text-[color:var(--ventia-muted)]">Inspector</dt>
             <dd className="font-medium">{inspectorLabel}</dd>
@@ -261,7 +290,7 @@ export default async function InspectionReportPage({
                           className="border-b border-[color:var(--ventia-border)] align-top"
                         >
                           <td className="py-2 pr-2 font-medium w-[40%]">{f.label}</td>
-                          <td className="py-2">{values[f.id]}</td>
+                          <td className="py-2 whitespace-pre-wrap">{formatFormFieldDisplayValue(f, values[f.id])}</td>
                         </tr>
                       ))}
                     </tbody>

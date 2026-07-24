@@ -27,6 +27,7 @@ import {
   type AssetDocumentListItem,
 } from "@/components/AssetDocumentsPanel";
 import { ManageAssetTabs } from "@/components/ManageAssetTabs";
+import { DotWorkbookImport } from "@/components/DotWorkbookImport";
 import { AdminDeleteInspectionButton } from "@/components/AdminDeleteInspectionButton";
 import { StatusPill } from "@/components/StatusPill";
 
@@ -564,7 +565,31 @@ export default async function ManageAssetEditPage({
       <Suspense
         fallback={<p className="text-sm text-[color:var(--ventia-muted)]">Loading…</p>}
       >
-        <ManageAssetTabs main={mainTab} details={detailsTab} />
+        <ManageAssetTabs
+          main={mainTab}
+          details={detailsTab}
+          history={
+            <div className="space-y-4">
+              <p className="text-sm text-[color:var(--ventia-muted)]">
+                Long-term component condition tracking and DoT workbook context.
+              </p>
+              <Link
+                href={`/manage/assets/${asset.id}/history`}
+                className="inline-block text-sm font-semibold text-[color:var(--ventia-blue)] hover:underline"
+              >
+                Open condition history chart →
+              </Link>
+              <div className="card space-y-2 p-4">
+                <h2 className="font-medium">Import DoT / Level 2 workbook</h2>
+                <p className="text-xs text-[color:var(--ventia-muted)]">
+                  Parses References and sheet names for context (appends a note on the
+                  asset).
+                </p>
+                <DotWorkbookImport assetId={asset.id} />
+              </div>
+            </div>
+          }
+        />
       </Suspense>
     </div>
   );

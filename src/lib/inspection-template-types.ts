@@ -78,6 +78,8 @@ export type FormPayload = {
   enabledOptionalPages: string[];
   /** Keyed by section id (section photos) or `${sectionId}::${fieldId}` */
   media?: Record<string, FormMediaItem[]>;
+  /** Stable photo keys for Client Export ZIP / index order */
+  exportPhotoOrder?: string[];
 };
 
 export type MeasurementListRow = {
@@ -168,6 +170,9 @@ export function parseFormPayload(raw: string | null | undefined): FormPayload {
         ? parsed.enabledOptionalPages.map(String)
         : [],
       media: parseMedia(parsed.media),
+      exportPhotoOrder: Array.isArray(parsed.exportPhotoOrder)
+        ? parsed.exportPhotoOrder.map(String)
+        : undefined,
     };
   } catch {
     return {
@@ -186,6 +191,9 @@ export function serializeFormPayload(payload: FormPayload): string {
     openSections: payload.openSections ?? [],
     enabledOptionalPages: payload.enabledOptionalPages ?? [],
     media: payload.media ?? {},
+    ...(payload.exportPhotoOrder?.length
+      ? { exportPhotoOrder: payload.exportPhotoOrder }
+      : {}),
   });
 }
 
@@ -312,6 +320,57 @@ export function parseComponentNotes(raw: string | undefined): ComponentNotesRow[
   } catch {
     return [];
   }
+}
+
+/** Human-readable form field value for HTML report preview (not raw JSON). */
+export function formatFormFieldDisplayValue(
+  field: TemplateField,
+  raw: string | undefined,
+): string {
+  const value = raw?.trim() ?? "";
+  if (!value) return "—";
+  if (field.type === "component_table") {
+    try {
+      const rows = JSON.parse(value) as {
+        name?: string;
+        qty?: string;
+        unit?: string;
+        notes?: string;
+        cs1?: string;
+        cs2?: string;
+        cs3?: string;
+        cs4?: string;
+        pct1?: string;
+        pct2?: string;
+        pct3?: string;
+        pct4?: string;
+      }[];
+      if (!Array.isArray(rows) || rows.length === 0) return "—";
+      return rows
+        .map((r) => {
+          const cs = [r.cs1, r.cs2, r.cs3, r.cs4].map((x) => x ?? "0").join("/");
+          const pct = [r.pct1, r.pct2, r.pct3, r.pct4]
+            .filter((x) => x != null && String(x).trim())
+            .join("/");
+          return `${r.name ?? "?"} qty=${r.qty ?? ""}${r.unit ? ` ${r.unit}` : ""} CS=${cs}${pct ? ` (${pct}%)` : ""}${r.notes ? ` — ${r.notes}` : ""}`;
+        })
+        .join("\n");
+    } catch {
+      return value;
+    }
+  }
+  if (field.type === "measurement_list") {
+    const rows = parseMeasurementList(value);
+    const filled = rows.filter((r) => r.value.trim());
+    if (!filled.length) return "—";
+    return filled.map((r) => `${r.label || r.id}: ${r.value} m`).join("; ");
+  }
+  if (field.type === "component_notes") {
+    const rows = parseComponentNotes(value);
+    if (!rows.length) return "—";
+    return rows.map((r) => `${r.label}: ${r.notes.trim() || "—"}`).join("\n");
+  }
+  return value;
 }
 
 /** Migrate legacy vc_m1..vc_m5 into vc_measurements JSON if needed. */

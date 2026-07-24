@@ -213,13 +213,15 @@ export async function submitInspection(formData: FormData) {
   const status = inspection.requiresLevel2Approval
     ? "PENDING_APPROVAL"
     : "SUBMITTED";
+  const firstSubmit = inspection.status === "DRAFT";
 
   await prisma.inspection.update({
     where: { id: inspectionId },
     data: {
       status,
-      submittedAt: now,
-      inspectedAt: now,
+      // Preserve original submission and inspection dates on resubmit / re-edit
+      ...(firstSubmit ? { submittedAt: now } : {}),
+      lastEditedAt: now,
     },
   });
 
@@ -244,6 +246,40 @@ export async function submitInspection(formData: FormData) {
   revalidatePath(`/inspections/${inspectionId}/report`);
 
   redirect(`/inspections/${inspectionId}/report`);
+}
+
+/** Re-open a submitted/approved report for editing without changing submission or inspection dates. */
+export async function reopenInspectionForEdit(formData: FormData) {
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const actor = await requireUser();
+  const inspection = await prisma.inspection.findUniqueOrThrow({
+    where: { id: inspectionId },
+  });
+
+  if (actor.role !== "ADMIN" && inspection.createdById !== actor.id) {
+    throw new Error("You cannot edit this inspection");
+  }
+  if (
+    inspection.status !== "SUBMITTED" &&
+    inspection.status !== "APPROVED" &&
+    inspection.status !== "PENDING_APPROVAL"
+  ) {
+    throw new Error("Only submitted or approved reports need reopen");
+  }
+
+  await prisma.inspection.update({
+    where: { id: inspectionId },
+    data: {
+      status: "DRAFT",
+      lastEditedAt: new Date(),
+      // Keep submittedAt and inspectedAt unchanged
+    },
+  });
+
+  revalidatePath(`/inspections/${inspectionId}`);
+  revalidatePath(`/inspections/${inspectionId}/report`);
+  revalidatePath(`/assets/${inspection.assetId}`);
+  redirect(`/inspections/${inspectionId}`);
 }
 
 export async function updateGeneralComments(formData: FormData) {
@@ -519,12 +555,16 @@ export async function deleteDraftInspection(formData: FormData) {
   }
 
   const assetId = inspection.assetId;
-  await prisma.inspection.delete({ where: { id: inspectionId } });
+  await prisma.inspection.update({
+    where: { id: inspectionId },
+    data: { deletedAt: new Date(), deletedById: actor.id },
+  });
 
   revalidatePath("/");
   revalidatePath("/assets");
   revalidatePath(`/assets/${assetId}`);
   revalidatePath("/approvals");
+  revalidatePath("/manage/trash");
 
   const next = String(formData.get("next") ?? "").trim();
   if (next.startsWith("/")) redirect(next);
@@ -532,7 +572,7 @@ export async function deleteDraftInspection(formData: FormData) {
 }
 
 /**
- * Admin-only permanent delete of any inspection (draft or submitted).
+ * Admin soft-delete — moves report to Trash (30-day retention).
  * Requires the admin's login password in `password`.
  */
 export async function adminDeleteInspectionAction(formData: FormData) {
@@ -550,11 +590,7 @@ export async function adminDeleteInspectionAction(formData: FormData) {
 
   const inspection = await prisma.inspection.findUnique({
     where: { id: inspectionId },
-    include: {
-      asset: true,
-      defects: true,
-      children: { select: { id: true } },
-    },
+    include: { asset: true },
   });
   if (!inspection) throw new Error("Inspection not found");
 
@@ -564,43 +600,11 @@ export async function adminDeleteInspectionAction(formData: FormData) {
     );
   }
 
-  // Unlink children so FK does not block delete
-  if (inspection.children.length > 0) {
-    await prisma.inspection.updateMany({
-      where: { parentInspectionId: inspectionId },
-      data: { parentInspectionId: null, relationKind: "STANDALONE" },
-    });
-  }
-
   const assetId = inspection.assetId;
-  await prisma.inspection.delete({ where: { id: inspectionId } });
-
-  // Best-effort remove photo folder for this inspection
-  try {
-    const fs = await import("node:fs/promises");
-    const path = await import("node:path");
-    const rel = inspectionPhotoRelativeDir({
-      roadName: inspection.asset.roadName || "Unknown Road",
-      assetNumber: inspection.asset.assetNumber,
-      folderKey: inspection.folderKey,
-    });
-    const abs = absolutePhotoPath(rel);
-    await fs.rm(abs, { recursive: true, force: true });
-    // Also try removing any leftover defect paths outside folder (noop if gone)
-    for (const d of inspection.defects) {
-      for (const p of [d.photoPath, d.comparisonPhotoPath]) {
-        if (!p) continue;
-        try {
-          await fs.unlink(absolutePhotoPath(p));
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-    void path;
-  } catch {
-    /* photos may already be gone */
-  }
+  await prisma.inspection.update({
+    where: { id: inspectionId },
+    data: { deletedAt: new Date(), deletedById: admin.id },
+  });
 
   revalidatePath("/");
   revalidatePath("/assets");
@@ -608,6 +612,7 @@ export async function adminDeleteInspectionAction(formData: FormData) {
   revalidatePath(`/manage/assets/${assetId}`);
   revalidatePath("/approvals");
   revalidatePath("/manage");
+  revalidatePath("/manage/trash");
 
   const next = String(formData.get("next") ?? "").trim();
   if (next.startsWith("/")) redirect(next);
@@ -820,7 +825,11 @@ export async function skipSecondReviewAction(formData: FormData) {
 
 export async function createUser(formData: FormData) {
   await requireAdmin();
-  const name = String(formData.get("name") ?? "").trim();
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const lastName = String(formData.get("lastName") ?? "").trim();
+  const nameFromParts = [firstName, lastName].filter(Boolean).join(" ");
+  const name =
+    nameFromParts || String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const username =
     String(formData.get("username") ?? "").trim().toLowerCase() || null;
@@ -831,6 +840,9 @@ export async function createUser(formData: FormData) {
   const registrationNumber =
     String(formData.get("registrationNumber") ?? "").trim() || null;
 
+  if (!firstName || !lastName) {
+    throw new Error("First and last name are required");
+  }
   if (!name || !email) throw new Error("Name and email required");
   if (!password || password.length < 4) {
     throw new Error("Password required (min 4 characters)");
@@ -839,6 +851,8 @@ export async function createUser(formData: FormData) {
   await prisma.user.create({
     data: {
       name,
+      firstName,
+      lastName,
       email,
       username,
       role,
@@ -1033,6 +1047,25 @@ export async function updateAssetDetails(formData: FormData) {
   );
 
   if (!assetNumber || !name) throw new Error("Code and name required");
+
+  const before = await prisma.asset.findUnique({ where: { id } });
+  if (before) {
+    const actor = await requireAdmin();
+    await prisma.assetAttributeSnapshot.create({
+      data: {
+        assetId: id,
+        kind: "details",
+        payload: JSON.stringify({
+          assetNumber: before.assetNumber,
+          name: before.name,
+          notes: before.notes,
+          type: before.type,
+          roadName: before.roadName,
+        }),
+        actorId: actor.id,
+      },
+    });
+  }
 
   await prisma.asset.update({
     where: { id },

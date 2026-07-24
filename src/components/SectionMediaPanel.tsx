@@ -1,7 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { FormMediaItem } from "@/lib/inspection-template-types";
+import {
+  CameraCapturePanel,
+  GalleryFileButton,
+  PhoneCameraFileButton,
+} from "@/components/CameraCapture";
 
 function uploadUrl(path: string) {
   return `/api/uploads/${path
@@ -36,12 +41,9 @@ export function SectionMediaPanel({
   };
   onMediaChange: (items: FormMediaItem[]) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [stream, setStream] = useState<MediaStream | null>(null);
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [description, setDescription] = useState(
     defectDefaults?.description ?? "",
@@ -49,54 +51,10 @@ export function SectionMediaPanel({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
-  function stopCamera() {
-    stream?.getTracks().forEach((t) => t.stop());
-    setStream(null);
-    setCameraOpen(false);
-  }
-
-  async function openCamera() {
+  function setPhoto(file: File) {
+    setPendingFile(file);
+    setPreview(URL.createObjectURL(file));
     setError(null);
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
-      setStream(s);
-      setCameraOpen(true);
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = s;
-          void videoRef.current.play();
-        }
-      });
-    } catch {
-      setError("Could not open camera. Use gallery upload instead.");
-    }
-  }
-
-  function captureFrame() {
-    const video = videoRef.current;
-    if (!video) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const file = new File([blob], `capture-${Date.now()}.jpg`, {
-          type: "image/jpeg",
-        });
-        setPendingFile(file);
-        setPreview(URL.createObjectURL(blob));
-        stopCamera();
-      },
-      "image/jpeg",
-      0.92,
-    );
   }
 
   async function upload(file: File, asDefect: boolean) {
@@ -203,65 +161,39 @@ export function SectionMediaPanel({
 
       {editable ? (
         <div className="space-y-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="sr-only"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setPendingFile(file);
-              setPreview(URL.createObjectURL(file));
-              e.target.value = "";
-            }}
-          />
           <div className="flex flex-wrap gap-2">
+            <GalleryFileButton
+              disabled={pending}
+              label="Gallery"
+              onFile={(files) => {
+                const f = files[0];
+                if (f) setPhoto(f);
+              }}
+            />
+            <PhoneCameraFileButton
+              disabled={pending}
+              label="Phone camera"
+              onFile={setPhoto}
+            />
             <button
               type="button"
               disabled={pending}
-              className="rounded-lg border border-[color:var(--ventia-green)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ventia-green)]"
-              onClick={() => inputRef.current?.click()}
+              className="rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs disabled:opacity-50"
+              onClick={() => setCameraOpen(true)}
             >
-              Add photo
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              className="rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs"
-              onClick={() => void openCamera()}
-            >
-              Use camera
+              Connected / GoPro
             </button>
           </div>
 
-          {cameraOpen ? (
-            <div className="space-y-2">
-              <video
-                ref={videoRef}
-                playsInline
-                muted
-                className="aspect-video w-full rounded-lg bg-black object-cover"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="btn-primary text-xs"
-                  onClick={captureFrame}
-                >
-                  Capture
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs"
-                  onClick={stopCamera}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : null}
+          <CameraCapturePanel
+            open={cameraOpen}
+            onClose={() => setCameraOpen(false)}
+            onCapture={(file, url) => {
+              setPendingFile(file);
+              setPreview(url);
+              setError(null);
+            }}
+          />
 
           {preview && pendingFile ? (
             <div className="space-y-2 rounded-lg border border-[color:var(--ventia-border)] p-2">

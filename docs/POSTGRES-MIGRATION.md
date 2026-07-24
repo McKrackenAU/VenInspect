@@ -4,6 +4,14 @@ VenInspect historically stores structured data in **SQLite** (`{DATA_DIR}/venins
 
 **Long-term target:** PostgreSQL running **inside the same LXC** as the app.
 
+## Dual runtime (this codebase)
+
+- **Dev / default:** [`prisma/schema.prisma`](../prisma/schema.prisma) — `provider = "sqlite"`.
+- **Live Postgres profile:** [`prisma/schema.postgres.prisma`](../prisma/schema.postgres.prisma) — same models, `provider = "postgresql"`.
+- Cutover: export JSON (`npm run db:export-sqlite`), switch `DATABASE_URL`, generate client against the postgres schema, `migrate deploy`, import.
+
+Keep shipping features on SQLite first; after validation, deploy the same tag to the Postgres LXC.
+
 ## Current state (this release)
 
 | Piece | Status |

@@ -1,8 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { SeverityOption } from "@/lib/severities";
+import {
+  CameraCapturePanel,
+  GalleryFileButton,
+  PhoneCameraFileButton,
+} from "@/components/CameraCapture";
 
 export type DefectComponentOption = {
   id: string;
@@ -20,14 +25,12 @@ export function DefectAddForm({
   components?: DefectComponentOption[];
 }) {
   const router = useRouter();
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [componentId, setComponentId] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [stream, setStream] = useState<MediaStream | null>(null);
   const defaultSeverity =
     severities.find((s) => s.value === "CS2" || s.value === "MEDIUM")?.value ??
     severities[0]?.value ??
@@ -38,56 +41,10 @@ export function DefectAddForm({
     [components, componentId],
   );
 
-  async function openExternalCamera() {
+  function setPhoto(file: File) {
+    setPhotoFile(file);
+    setPreview(URL.createObjectURL(file));
     setError(null);
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
-      setStream(s);
-      setCameraOpen(true);
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = s;
-          void videoRef.current.play();
-        }
-      });
-    } catch {
-      setError(
-        "Could not open a connected camera. Use gallery upload, or connect a GoPro in webcam mode (USB).",
-      );
-    }
-  }
-
-  function stopCamera() {
-    stream?.getTracks().forEach((t) => t.stop());
-    setStream(null);
-    setCameraOpen(false);
-  }
-
-  function captureFrame() {
-    const video = videoRef.current;
-    if (!video) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-        const file = new File([blob], `gopro-${Date.now()}.jpg`, {
-          type: "image/jpeg",
-        });
-        setPhotoFile(file);
-        setPreview(URL.createObjectURL(blob));
-        stopCamera();
-      },
-      "image/jpeg",
-      0.92,
-    );
   }
 
   return (
@@ -102,6 +59,10 @@ export function DefectAddForm({
         const fd = new FormData(form);
         if (photoFile) {
           fd.set("photo", photoFile);
+        } else {
+          setError("Add a photo from Gallery, Phone camera, or connected GoPro.");
+          setPending(false);
+          return;
         }
         if (selected) {
           fd.set("componentId", selected.id);
@@ -139,8 +100,9 @@ export function DefectAddForm({
     >
       <h3 className="text-base font-bold">Add a defect</h3>
       <p className="text-sm text-[color:var(--ventia-muted)]">
-        Choose the component, take a photo, then describe it. Photos compress to ≤1
-        MB with the taken date stamped.
+        Choose the component, add a photo, then describe it. Photos compress to ≤1
+        MB with the taken date stamped. HEIC from iPhone Photos is not supported —
+        use JPEG/PNG or take with the camera buttons.
       </p>
 
       <label className="block space-y-1.5">
@@ -162,72 +124,57 @@ export function DefectAddForm({
         </select>
       </label>
 
-      <label className="flex min-h-[8rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[color:var(--ventia-green)] bg-[color:var(--ventia-green-tint)] px-4 py-6 text-center">
-        <span className="text-sm font-bold text-[color:var(--ventia-green)]">
-          {preview ? "Change photo" : "Tap to take / choose photo"}
-        </span>
-        <span className="text-xs text-[color:var(--ventia-muted)]">
-          Required · compressed ≤1 MB · date stamp
-        </span>
-        <input
-          name="photo"
-          type="file"
-          accept="image/*,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-          capture="environment"
-          required={!photoFile}
-          className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) {
-              setPhotoFile(f);
-              setPreview(URL.createObjectURL(f));
-            } else {
-              setPhotoFile(null);
-              setPreview(null);
-            }
-          }}
-        />
-        {preview && (
+      <div className="space-y-2 rounded-2xl border-2 border-dashed border-[color:var(--ventia-green)] bg-[color:var(--ventia-green-tint)] px-4 py-4">
+        <p className="text-center text-sm font-bold text-[color:var(--ventia-green)]">
+          {preview ? "Photo ready" : "Add photo"}
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <GalleryFileButton
+            disabled={pending}
+            label="Gallery"
+            onFile={(files) => {
+              const f = files[0];
+              if (f) setPhoto(f);
+            }}
+          />
+          <PhoneCameraFileButton
+            disabled={pending}
+            label="Phone camera"
+            onFile={setPhoto}
+          />
+          <button
+            type="button"
+            disabled={pending}
+            className="rounded-lg border border-[color:var(--ventia-border)] bg-white px-3 py-1.5 text-xs font-semibold disabled:opacity-50 dark:bg-transparent"
+            onClick={() => setCameraOpen(true)}
+          >
+            Connected / GoPro
+          </button>
+        </div>
+        {preview ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt="Preview" className="mt-2 max-h-40 rounded-lg object-contain" />
+          <img
+            src={preview}
+            alt="Preview"
+            className="mx-auto mt-2 max-h-40 rounded-lg object-contain"
+          />
+        ) : (
+          <p className="text-center text-xs text-[color:var(--ventia-muted)]">
+            Required · compressed ≤1 MB · date stamp
+          </p>
         )}
-      </label>
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="rounded-lg border border-[color:var(--ventia-green)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ventia-green)]"
-          onClick={() => void openExternalCamera()}
-        >
-          Use connected / GoPro camera
-        </button>
-        {cameraOpen ? (
-          <>
-            <button
-              type="button"
-              className="btn-primary text-xs"
-              onClick={captureFrame}
-            >
-              Capture still
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border px-3 py-1.5 text-xs"
-              onClick={stopCamera}
-            >
-              Close camera
-            </button>
-          </>
-        ) : null}
       </div>
-      {cameraOpen ? (
-        <video
-          ref={videoRef}
-          className="max-h-56 w-full rounded-lg bg-black object-contain"
-          playsInline
-          muted
-        />
-      ) : null}
+
+      <CameraCapturePanel
+        open={cameraOpen}
+        filePrefix="gopro"
+        onClose={() => setCameraOpen(false)}
+        onCapture={(file, url) => {
+          setPhotoFile(file);
+          setPreview(url);
+          setError(null);
+        }}
+      />
 
       <label className="block space-y-1.5">
         <span className="text-sm font-semibold">What is wrong?</span>

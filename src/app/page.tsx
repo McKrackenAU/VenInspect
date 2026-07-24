@@ -6,11 +6,14 @@ import { computeLevelSchedule, formatLevel } from "@/lib/inspection";
 import { StatusPill } from "@/components/StatusPill";
 import { InstallHint } from "@/components/InstallHint";
 import { DeleteDraftButton } from "@/components/DeleteDraftButton";
+import { greetingForNow } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  const fullUser = await prisma.user.findUnique({ where: { id: user.id } });
+  const hello = greetingForNow(fullUser?.firstName, user.name);
   const [
     assetCount,
     pendingCount,
@@ -21,7 +24,9 @@ export default async function DashboardPage() {
   ] =
     await Promise.all([
       prisma.asset.count(),
-      prisma.inspection.count({ where: { status: "PENDING_APPROVAL" } }),
+      prisma.inspection.count({
+        where: { status: "PENDING_APPROVAL", deletedAt: null },
+      }),
       prisma.asset.findMany({
         select: {
           id: true,
@@ -39,6 +44,7 @@ export default async function DashboardPage() {
       prisma.inspection.findMany({
         where: {
           status: { in: ["APPROVED", "SUBMITTED", "PENDING_APPROVAL"] },
+          deletedAt: null,
         },
         select: {
           assetId: true,
@@ -51,7 +57,7 @@ export default async function DashboardPage() {
         take: 500,
       }),
       prisma.inspection.findMany({
-        where: { createdById: user.id, status: "DRAFT" },
+        where: { createdById: user.id, status: "DRAFT", deletedAt: null },
         include: { asset: true },
         orderBy: { updatedAt: "desc" },
         take: 8,
@@ -91,10 +97,10 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <section className="space-y-2">
         <h1 className="text-2xl font-bold tracking-tight text-[color:var(--ventia-green)] sm:text-3xl">
-          What do you need to do?
+          {hello}
         </h1>
         <p className="text-base text-[color:var(--ventia-muted)]">
-          Tap a big button. Drafts are saved until you submit.
+          What do you need to do? Drafts are saved until you submit.
         </p>
       </section>
 
