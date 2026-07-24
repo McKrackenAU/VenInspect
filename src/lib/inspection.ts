@@ -1,6 +1,7 @@
 import { addYears, isBefore, differenceInCalendarDays, format } from "date-fns";
 import type { Asset, Inspection } from "@/generated/prisma/client";
 import {
+  getInspectionTypes,
   inspectionTypeIntervalYears,
   inspectionTypeLabel,
 } from "@/lib/inspection-types";
