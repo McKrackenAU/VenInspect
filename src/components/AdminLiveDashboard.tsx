@@ -91,7 +91,7 @@ export function AdminLiveDashboard({
   const maxAuditor = Math.max(1, ...s.byAuditor.map((a) => a.count));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-[color:var(--ventia-green)]">
@@ -158,7 +158,7 @@ export function AdminLiveDashboard({
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-4 lg:grid-cols-3 2xl:grid-cols-4">
         <div className="card space-y-3 p-4 lg:col-span-1">
           <h2 className="text-sm font-semibold text-[color:var(--ventia-green)]">
             By inspection type
@@ -192,7 +192,7 @@ export function AdminLiveDashboard({
           )}
         </div>
 
-        <div className="card space-y-3 p-4 lg:col-span-2">
+        <div className="card space-y-3 p-4 lg:col-span-2 2xl:col-span-3">
           <h2 className="text-sm font-semibold text-[color:var(--ventia-green)]">
             Throughput by auditor
           </h2>
@@ -226,7 +226,7 @@ export function AdminLiveDashboard({
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
+      <section className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-2">
         <FeedCard title="Recently submitted">
           {data.recentlySubmitted.length === 0 ? (
             <Empty />
@@ -290,7 +290,7 @@ export function AdminLiveDashboard({
         </FeedCard>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
+      <section className="grid gap-4 lg:grid-cols-2">
         <FeedCard title="Due soon">
           {data.dueSoon.length === 0 ? (
             <Empty text="Nothing due in the next ~90 days." />
@@ -464,7 +464,9 @@ function FeedCard({
           </span>
         ) : null}
       </div>
-      <div className="max-h-[28rem] overflow-y-auto px-4">{children}</div>
+      <div className="max-h-[min(36rem,55dvh)] overflow-y-auto px-4 lg:max-h-[min(40rem,60dvh)]">
+        {children}
+      </div>
     </section>
   );
 }

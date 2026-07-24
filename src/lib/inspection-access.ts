@@ -26,8 +26,9 @@ export function canEditInspection(
   user: AuthUser,
   inspection: { status: string; createdById: string },
 ): boolean {
+  // Submitted / approved reports are read-only until explicitly reopened via "Edit report"
   if (inspection.status !== "DRAFT" && inspection.status !== "REJECTED") {
-    return user.role === "ADMIN";
+    return false;
   }
   return user.role === "ADMIN" || inspection.createdById === user.id;
 }

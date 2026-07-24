@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { logoutAction } from "@/lib/auth-actions";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrandMark } from "@/components/BrandMark";
+import { AdminSideMenu } from "@/components/AdminSideMenu";
+import { adminLinkActive, adminPrimaryLinks } from "@/lib/admin-nav";
 
 const userLinks = [
   { href: "/", label: "Home" },
@@ -12,17 +14,6 @@ const userLinks = [
   { href: "/assets", label: "Find asset" },
   { href: "/inspect", label: "Start inspection" },
   { href: "/approvals", label: "Approvals" },
-];
-
-const manageLinks = [
-  { href: "/manage", label: "Home" },
-  { href: "/manage/assets", label: "Assets" },
-  { href: "/manage/assets/import", label: "Import" },
-  { href: "/manage/storage", label: "Photos" },
-  { href: "/manage/severities", label: "Severities" },
-  { href: "/manage/inspection-types", label: "Insp. types" },
-  { href: "/manage/users", label: "People" },
-  { href: "/manage/system", label: "System" },
 ];
 
 type Props = {
@@ -37,11 +28,11 @@ export function AppNav({ userName, isAdmin }: Props) {
   }
 
   const isManage = pathname.startsWith("/manage");
-  const links = isManage ? manageLinks : userLinks;
+  const links = isManage ? adminPrimaryLinks : userLinks;
 
   return (
     <header className="no-print sticky top-0 z-20 border-b border-[color:var(--ventia-border)] bg-[color:var(--nav-bg)] backdrop-blur">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 xl:max-w-7xl 2xl:max-w-[96rem]">
         <Link href={isManage ? "/manage" : "/"} className="flex items-center gap-2">
           <BrandMark size={36} priority />
           <div className="leading-tight">
@@ -49,13 +40,12 @@ export function AppNav({ userName, isAdmin }: Props) {
               VenInspect
             </span>
             <span className="block text-[0.65rem] text-[color:var(--ventia-muted)]">
-              {isManage ? "Management portal" : "User portal"}
+              {isManage ? "Admin · Dashboard first" : "User portal"}
             </span>
           </div>
         </Link>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Admin-only portal switch — hidden entirely for inspectors */}
           {isAdmin ? (
             <div
               className="inline-flex rounded-lg border border-[color:var(--ventia-border)] p-0.5 text-xs font-semibold"
@@ -85,6 +75,8 @@ export function AppNav({ userName, isAdmin }: Props) {
             </div>
           ) : null}
 
+          {isManage ? <AdminSideMenu /> : null}
+
           {userName ? (
             <span className="hidden text-xs text-[color:var(--ventia-muted)] sm:inline">
               {userName}
@@ -105,13 +97,14 @@ export function AppNav({ userName, isAdmin }: Props) {
       </div>
 
       <nav
-        className="mx-auto hidden max-w-6xl items-center gap-1 px-4 pb-2 text-sm md:flex"
+        className="mx-auto hidden w-full max-w-6xl items-center gap-1 px-4 pb-2 text-sm md:flex xl:max-w-7xl 2xl:max-w-[96rem]"
         aria-label="Desktop"
       >
         {links.map((l) => {
-          const active =
-            l.href === "/" || l.href === "/manage"
-              ? pathname === l.href
+          const active = isManage
+            ? adminLinkActive(pathname, l.href)
+            : l.href === "/"
+              ? pathname === "/"
               : pathname.startsWith(l.href);
           return (
             <Link
@@ -119,7 +112,7 @@ export function AppNav({ userName, isAdmin }: Props) {
               href={l.href}
               className={`rounded-lg px-3 py-2 ${
                 active
-                  ? "bg-[color:var(--ventia-green-tint)] font-semibold text-[color:var(--ventia-green)]"
+                  ? "bg-[color:var(--ventia-green-tint)] font-semibold text-[color:var(--ventia-green)] underline decoration-2 underline-offset-8"
                   : "text-[color:var(--ventia-ink)] hover:bg-[color:var(--ventia-green-tint)]"
               }`}
             >
@@ -127,6 +120,11 @@ export function AppNav({ userName, isAdmin }: Props) {
             </Link>
           );
         })}
+        {isManage ? (
+          <span className="ml-auto hidden text-xs text-[color:var(--ventia-muted)] lg:inline">
+            More tools → Menu
+          </span>
+        ) : null}
       </nav>
     </header>
   );

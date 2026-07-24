@@ -28,20 +28,22 @@ export default async function ManageHomePage({
   const assetTypes = getAssetTypes();
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       <AdminLiveDashboard initial={dashboard} />
 
-      <section className="space-y-4 border-t border-[color:var(--ventia-border)] pt-8">
-        <div>
-          <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
-            Tools & settings
-          </h2>
-          <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-            Registry, catalogues, and system configuration.
-          </p>
+      <section className="space-y-3 border-t border-[color:var(--ventia-border)] pt-5">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
+              Tools & settings
+            </h2>
+            <p className="mt-0.5 text-sm text-[color:var(--ventia-muted)]">
+              Same shortcuts as the admin Menu (☰) in the header.
+            </p>
+          </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           <Stat label="Assets in registry" value={String(assetCount)} href="/manage/assets" />
           <Stat label="Users" value={String(userCount)} href="/manage/users" />
           <Stat label="Schedule board" value="→" href="/manage/schedule" />
@@ -61,7 +63,7 @@ export default async function ManageHomePage({
 
         <div className="card p-4">
           <h3 className="text-sm font-medium">Registry by type</h3>
-          <ul className="mt-2 grid gap-1 text-sm sm:grid-cols-3">
+          <ul className="mt-2 grid gap-1 text-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {assetTypes.map((t) => (
               <li key={t.value}>
                 {t.label}: {typeMap[t.value] ?? 0}

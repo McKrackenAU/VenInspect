@@ -11,6 +11,7 @@ import { ExportPdfButton } from "@/components/ExportPdfButton";
 import { ClientExportButton } from "@/components/ClientExportButton";
 import { VentiaPrintLogo } from "@/components/BrandMark";
 import { SecondReviewPanel } from "@/components/SecondReviewPanel";
+import { BackNavLink } from "@/components/BackNavLink";
 import { formatPersonCredential } from "@/lib/report-people";
 import {
   getTemplateForLevel,
@@ -72,12 +73,9 @@ export default async function InspectionReportPage({
   return (
     <div className="space-y-4">
       <div className="no-print flex flex-wrap items-center justify-between gap-2">
-        <Link
-          href={`/inspections/${inspection.id}`}
-          className="text-sm text-[color:var(--ventia-blue)] hover:underline"
-        >
-          ← Back to inspection
-        </Link>
+        <BackNavLink fallbackHref={`/assets/${inspection.assetId}`}>
+          ← Go back
+        </BackNavLink>
         <div className="flex flex-wrap items-center gap-2">
           {(inspection.status === "SUBMITTED" ||
             inspection.status === "APPROVED" ||

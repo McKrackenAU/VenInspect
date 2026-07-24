@@ -181,6 +181,10 @@ model Inspection {
   generalComments        String?
   /// Template answers + UI state (open sections / optional pages) as JSON
   formPayload            String?
+  /// When re-editing a submitted report: status to restore if user exits without saving
+  editRestoreStatus      String?
+  /// Snapshot at reopen (JSON: formPayload, generalComments) for cancel
+  editSnapshot           String?
   createdById            String
   approvedById           String?
   requiresLevel2Approval Boolean                @default(false)

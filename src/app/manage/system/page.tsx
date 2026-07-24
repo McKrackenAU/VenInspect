@@ -103,7 +103,7 @@ export default async function ManageSystemPage() {
         <p className="text-sm text-[color:var(--ventia-muted)]">
           Shortcuts for trash, defect task lists, remote access, and Assetvision.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           <Link
             href="/manage/trash"
             className="rounded-xl border border-[color:var(--ventia-border)] p-4 transition hover:border-[color:var(--ventia-green)] hover:bg-[color:var(--ventia-green-tint)]"

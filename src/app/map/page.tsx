@@ -46,7 +46,7 @@ export default async function MapPage() {
   const nearmapApiKey = getNearmapApiKey();
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div>
         <h1 className="text-2xl font-bold text-[color:var(--ventia-green)]">
           Asset map

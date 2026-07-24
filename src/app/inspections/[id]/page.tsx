@@ -8,6 +8,7 @@ import {
   canViewInspection,
 } from "@/lib/inspection-access";
 import {
+  cancelInspectionEdit,
   linkAsChildInspection,
   submitInspection,
   updateGeneralComments,
@@ -21,6 +22,7 @@ import {
   DefectReorderBar,
 } from "@/components/DefectGalleryPanel";
 import { DefectMappingOverlay } from "@/components/DefectMappingOverlay";
+import { BackNavLink } from "@/components/BackNavLink";
 import { formatLevel, formatStatus } from "@/lib/inspection";
 import {
   getTemplateForLevel,
@@ -64,6 +66,7 @@ export default async function InspectionPage({
   const editable = canEditInspection(user, inspection);
   const isDraft =
     inspection.status === "DRAFT" || inspection.status === "REJECTED";
+  const isReeditSession = Boolean(inspection.editRestoreStatus);
   const severities = getSeverityOptions();
   const template = getTemplateForLevel(inspection.level);
   const formPayload = parseFormPayload(inspection.formPayload);
@@ -290,7 +293,17 @@ export default async function InspectionPage({
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm text-[color:var(--ventia-muted)]">
+          <BackNavLink
+            fallbackHref={
+              isReeditSession
+                ? `/inspections/${inspection.id}/report`
+                : `/assets/${inspection.assetId}`
+            }
+            className="text-sm text-[color:var(--ventia-blue)] hover:underline"
+          >
+            ← Go back
+          </BackNavLink>
+          <p className="mt-2 text-sm text-[color:var(--ventia-muted)]">
             <Link
               href={`/assets/${inspection.assetId}`}
               className="hover:text-[color:var(--ventia-blue)]"
@@ -303,35 +316,52 @@ export default async function InspectionPage({
           </h1>
           <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
             {formatLevel(inspection.level)} · {formatStatus(inspection.status)}
-            {isDraft ? " · draft (only you & admins)" : ""} ·{" "}
-            {format(inspection.submittedAt, "dd MMM yyyy HH:mm")} · by{" "}
+            {isReeditSession
+              ? ` · editing (was ${formatStatus(inspection.editRestoreStatus!)})`
+              : isDraft
+                ? " · draft (only you & admins)"
+                : ""}{" "}
+            · {format(inspection.submittedAt, "dd MMM yyyy HH:mm")} · by{" "}
             {inspection.createdBy.name}
             {" · folder "}
             <code className="text-xs">{inspection.folderKey}</code>
           </p>
         </div>
-        {!isDraft ? (
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/inspections/${inspection.id}/report`}
-              className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
-            >
-              Full report
-            </Link>
-            <Link
-              href={`/inspections/${inspection.id}/scope`}
-              className="rounded-md bg-[color:var(--ventia-green)] px-3 py-2 text-sm font-medium text-white"
-            >
-              Scope export
-            </Link>
-          </div>
-        ) : editable ? (
-          <DeleteDraftButton
-            inspectionId={inspection.id}
-            next={`/assets/${inspection.assetId}`}
-            label="Delete draft"
-          />
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {isReeditSession && editable ? (
+            <form action={cancelInspectionEdit}>
+              <input type="hidden" name="inspectionId" value={inspection.id} />
+              <button
+                type="submit"
+                className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm font-semibold"
+              >
+                Exit without saving
+              </button>
+            </form>
+          ) : null}
+          {!isDraft ? (
+            <>
+              <Link
+                href={`/inspections/${inspection.id}/report`}
+                className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+              >
+                Full report
+              </Link>
+              <Link
+                href={`/inspections/${inspection.id}/scope`}
+                className="rounded-md bg-[color:var(--ventia-green)] px-3 py-2 text-sm font-medium text-white"
+              >
+                Scope export
+              </Link>
+            </>
+          ) : editable && !isReeditSession ? (
+            <DeleteDraftButton
+              inspectionId={inspection.id}
+              next={`/assets/${inspection.assetId}`}
+              label="Delete draft"
+            />
+          ) : null}
+        </div>
       </div>
 
       {inspection.permitChecks.length > 0 ? (
@@ -404,13 +434,26 @@ export default async function InspectionPage({
         >
           <input type="hidden" name="inspectionId" value={inspection.id} />
           <p className="mb-3 text-sm text-[color:var(--ventia-muted)]">
-            This stays a private draft until you submit. Jump between tabs anytime —
-            answers autosave. After submit you get the full report and can export PDF /
-            scope.
+            {isReeditSession
+              ? "Changes autosave while you edit. Submit to keep them and return the report to submitted/pending. Or use Exit without saving to discard form changes and restore the previous status."
+              : "This stays a private draft until you submit. Jump between tabs anytime — answers autosave. After submit you get the full report and can export PDF / scope."}
           </p>
-          <button type="submit" className="btn-primary w-full text-base">
-            Submit inspection → view report
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {isReeditSession ? (
+              <button
+                type="submit"
+                formAction={cancelInspectionEdit}
+                className="rounded-xl border border-[color:var(--ventia-border)] px-4 py-3 text-sm font-semibold sm:flex-1"
+              >
+                Exit without saving
+              </button>
+            ) : null}
+            <button type="submit" className="btn-primary w-full text-base sm:flex-1">
+              {isReeditSession
+                ? "Save edits → view report"
+                : "Submit inspection → view report"}
+            </button>
+          </div>
         </form>
       ) : null}
 

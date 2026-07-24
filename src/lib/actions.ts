@@ -210,10 +210,16 @@ export async function submitInspection(formData: FormData) {
   }
 
   const now = new Date();
-  const status = inspection.requiresLevel2Approval
-    ? "PENDING_APPROVAL"
-    : "SUBMITTED";
-  const firstSubmit = inspection.status === "DRAFT";
+  const restore = inspection.editRestoreStatus;
+  const status =
+    restore === "APPROVED" ||
+    restore === "SUBMITTED" ||
+    restore === "PENDING_APPROVAL"
+      ? restore
+      : inspection.requiresLevel2Approval
+        ? "PENDING_APPROVAL"
+        : "SUBMITTED";
+  const firstSubmit = inspection.status === "DRAFT" && !restore;
 
   await prisma.inspection.update({
     where: { id: inspectionId },
@@ -222,10 +228,12 @@ export async function submitInspection(formData: FormData) {
       // Preserve original submission and inspection dates on resubmit / re-edit
       ...(firstSubmit ? { submittedAt: now } : {}),
       lastEditedAt: now,
+      editRestoreStatus: null,
+      editSnapshot: null,
     },
   });
 
-  if (inspection.requiresLevel2Approval) {
+  if (status === "PENDING_APPROVAL" && !restore) {
     const level2Users = await prisma.user.findMany({
       where: { level2Qualified: true },
     });
@@ -267,9 +275,16 @@ export async function reopenInspectionForEdit(formData: FormData) {
     throw new Error("Only submitted or approved reports need reopen");
   }
 
+  const snapshot = JSON.stringify({
+    formPayload: inspection.formPayload ?? null,
+    generalComments: inspection.generalComments ?? null,
+  });
+
   await prisma.inspection.update({
     where: { id: inspectionId },
     data: {
+      editRestoreStatus: inspection.status,
+      editSnapshot: snapshot,
       status: "DRAFT",
       lastEditedAt: new Date(),
       // Keep submittedAt and inspectedAt unchanged
@@ -280,6 +295,67 @@ export async function reopenInspectionForEdit(formData: FormData) {
   revalidatePath(`/inspections/${inspectionId}/report`);
   revalidatePath(`/assets/${inspection.assetId}`);
   redirect(`/inspections/${inspectionId}`);
+}
+
+/** Discard in-progress re-edit: restore form + prior status (submitted/approved/pending). */
+export async function cancelInspectionEdit(formData: FormData) {
+  const inspectionId = String(formData.get("inspectionId") ?? "");
+  const actor = await requireUser();
+  const inspection = await prisma.inspection.findUniqueOrThrow({
+    where: { id: inspectionId },
+  });
+
+  if (actor.role !== "ADMIN" && inspection.createdById !== actor.id) {
+    throw new Error("You cannot cancel edit on this inspection");
+  }
+  if (!inspection.editRestoreStatus) {
+    throw new Error("This inspection is not in a re-edit session");
+  }
+  if (inspection.status !== "DRAFT" && inspection.status !== "REJECTED") {
+    throw new Error("Nothing to cancel");
+  }
+
+  let formPayload = inspection.formPayload;
+  let generalComments = inspection.generalComments;
+  if (inspection.editSnapshot) {
+    try {
+      const snap = JSON.parse(inspection.editSnapshot) as {
+        formPayload?: string | null;
+        generalComments?: string | null;
+      };
+      if ("formPayload" in snap) formPayload = snap.formPayload ?? null;
+      if ("generalComments" in snap) {
+        generalComments = snap.generalComments ?? null;
+      }
+    } catch {
+      /* keep current form if snapshot corrupt */
+    }
+  }
+
+  const restore = inspection.editRestoreStatus;
+  if (
+    restore !== "SUBMITTED" &&
+    restore !== "APPROVED" &&
+    restore !== "PENDING_APPROVAL"
+  ) {
+    throw new Error("Invalid restore status");
+  }
+
+  await prisma.inspection.update({
+    where: { id: inspectionId },
+    data: {
+      status: restore,
+      formPayload,
+      generalComments,
+      editRestoreStatus: null,
+      editSnapshot: null,
+    },
+  });
+
+  revalidatePath(`/inspections/${inspectionId}`);
+  revalidatePath(`/inspections/${inspectionId}/report`);
+  revalidatePath(`/assets/${inspection.assetId}`);
+  redirect(`/inspections/${inspectionId}/report`);
 }
 
 export async function updateGeneralComments(formData: FormData) {

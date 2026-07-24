@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { adminLinkActive, adminPrimaryLinks } from "@/lib/admin-nav";
 
 const userTabs = [
   { href: "/", label: "Home", icon: HomeIcon },
@@ -11,17 +12,16 @@ const userTabs = [
   { href: "/approvals", label: "Approve", icon: CheckIcon },
 ];
 
-const manageTabs = [
-  { href: "/manage", label: "Home", icon: HomeIcon },
-  { href: "/manage/assets", label: "Assets", icon: ListIcon },
-  { href: "/manage/assets/import", label: "Import", icon: UploadIcon },
-  { href: "/manage/users", label: "People", icon: PeopleIcon },
-];
+const manageIcons: Record<string, () => React.ReactNode> = {
+  "/manage": HomeIcon,
+  "/manage/assets": ListIcon,
+  "/manage/schedule": CalendarIcon,
+  "/manage/users": PeopleIcon,
+};
 
 export function MobileBottomNav() {
   const pathname = usePathname();
   const isManage = pathname.startsWith("/manage");
-  const tabs = isManage ? manageTabs : userTabs;
 
   if (pathname === "/login" || pathname.startsWith("/login/")) {
     return null;
@@ -32,6 +32,14 @@ export function MobileBottomNav() {
     return null;
   }
 
+  const tabs = isManage
+    ? adminPrimaryLinks.map((l) => ({
+        href: l.href,
+        label: l.label === "Dashboard" ? "Home" : l.label,
+        icon: manageIcons[l.href] ?? ListIcon,
+      }))
+    : userTabs;
+
   return (
     <nav
       className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-[color:var(--ventia-border)] bg-[color:var(--nav-bg)] backdrop-blur md:hidden"
@@ -40,17 +48,19 @@ export function MobileBottomNav() {
     >
       <ul className="mx-auto flex max-w-lg items-stretch justify-around px-1 pt-1">
         {tabs.map((tab) => {
-          const active =
-            tab.href === "/" || tab.href === "/manage"
-              ? pathname === tab.href
+          const active = isManage
+            ? adminLinkActive(pathname, tab.href)
+            : tab.href === "/"
+              ? pathname === "/"
               : pathname.startsWith(tab.href);
           const Icon = tab.icon;
+          const isPrimary = "primary" in tab && tab.primary;
           return (
             <li key={tab.href} className="flex-1">
               <Link
                 href={tab.href}
                 className={`flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 px-1 text-[0.65rem] font-medium ${
-                  "primary" in tab && tab.primary
+                  isPrimary
                     ? active
                       ? "text-[color:var(--ventia-green)]"
                       : "text-[color:var(--ventia-green-mid)]"
@@ -61,7 +71,7 @@ export function MobileBottomNav() {
               >
                 <span
                   className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${
-                    "primary" in tab && tab.primary
+                    isPrimary
                       ? "bg-[color:var(--ventia-green)] text-white shadow-sm"
                       : active
                         ? "bg-[color:var(--ventia-green-tint)]"
@@ -131,14 +141,6 @@ function ListIcon() {
   );
 }
 
-function UploadIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M12 16V5M7 9l5-5 5 5M5 19h14" />
-    </svg>
-  );
-}
-
 function PeopleIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -146,6 +148,15 @@ function PeopleIcon() {
       <path d="M3 19c0-3 2.5-5 6-5s6 2 6 5" />
       <circle cx="17" cy="9" r="2.5" />
       <path d="M21 19c0-2.2-1.5-3.8-3.5-4.4" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M8 3v4M16 3v4M3 11h18" />
     </svg>
   );
 }

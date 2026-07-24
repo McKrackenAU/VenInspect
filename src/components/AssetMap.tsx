@@ -457,6 +457,32 @@ export function AssetMap({
     })();
   }, [userPos, mapReady]);
 
+  useEffect(() => {
+    if (!mapReady || !mapEl.current) return;
+    const el = mapEl.current;
+    const notifySize = () => {
+      leafletMapRef.current?.invalidateSize({ animate: false });
+      if (engineRef.current === "google" && googleMapRef.current) {
+        const g = (
+          window as unknown as {
+            google?: { maps?: { event?: { trigger: (t: unknown, e: string) => void } } };
+          }
+        ).google;
+        g?.maps?.event?.trigger(googleMapRef.current, "resize");
+      }
+    };
+    const ro = new ResizeObserver(() => notifySize());
+    ro.observe(el);
+    window.addEventListener("orientationchange", notifySize);
+    // After layout settles (nav/footer)
+    const t = window.setTimeout(notifySize, 120);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("orientationchange", notifySize);
+      window.clearTimeout(t);
+    };
+  }, [mapReady]);
+
   const locateMe = useCallback(() => {
     if (!navigator.geolocation) {
       setLocError("Location is not supported in this browser.");
@@ -544,7 +570,7 @@ export function AssetMap({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -595,13 +621,13 @@ export function AssetMap({
 
       <div
         ref={mapEl}
-        className="z-0 h-[min(55vh,420px)] min-h-[280px] w-full overflow-hidden rounded-2xl border border-[color:var(--ventia-border)] bg-[#e5e3df]"
+        className="z-0 w-full flex-1 overflow-hidden rounded-2xl border border-[color:var(--ventia-border)] bg-[#e5e3df] min-h-[280px] h-[clamp(280px,calc(100dvh-14rem),900px)]"
         role="region"
         aria-label="Asset map"
       />
 
       {userPos ? (
-        <section className="space-y-2">
+        <section className="space-y-2 shrink-0">
           <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
             Nearby (within {NEARBY_KM} km)
           </h2>
