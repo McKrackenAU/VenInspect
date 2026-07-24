@@ -13,8 +13,11 @@ export default async function ManageInspectionTypesPage() {
           Inspection types
         </h1>
         <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-          These options appear on <strong>Start inspection</strong>. Change labels or add new
-          kinds (e.g. reactive / post-incident) — inspectors see updates immediately after save.
+          These options appear on <strong>Start inspection</strong>. Set how many{" "}
+          <strong>years between inspections</strong> for each type — due / overdue
+          dates use that interval. Existing types without an interval get Level 1 = 3
+          years and Level 2 = 5 years automatically; saving applies Level 1 / Level 2
+          intervals to every asset.
         </p>
       </div>
       <div className="card p-5">

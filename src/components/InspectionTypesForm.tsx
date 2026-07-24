@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveInspectionTypesAction } from "@/lib/actions";
 import type { InspectionTypeOption } from "@/lib/inspection-type-options";
+import { defaultIntervalYearsForType } from "@/lib/inspection-type-options";
 
 export function InspectionTypesForm({ initial }: { initial: InspectionTypeOption[] }) {
   const router = useRouter();
@@ -24,8 +25,12 @@ export function InspectionTypesForm({ initial }: { initial: InspectionTypeOption
           const fd = new FormData();
           fd.set("typesJson", JSON.stringify(rows));
           try {
-            await saveInspectionTypesAction(fd);
-            setMessage("Saved — Start inspection will show these types.");
+            const result = await saveInspectionTypesAction(fd);
+            setMessage(
+              result?.syncedAssets
+                ? `Saved. Updated intervals on ${result.syncedAssets} asset(s) for Level 1 / Level 2.`
+                : "Saved — Start inspection and due dates use these types.",
+            );
             router.refresh();
           } catch (e) {
             setMessage(e instanceof Error ? e.message : "Save failed");
@@ -66,17 +71,40 @@ export function InspectionTypesForm({ initial }: { initial: InspectionTypeOption
               placeholder="Short description shown to inspectors"
               className="field-input w-full text-sm"
             />
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={Boolean(row.requiresLevel2Approval)}
-                onChange={(e) =>
-                  update(i, { requiresLevel2Approval: e.target.checked })
-                }
-                className="accent-[color:var(--ventia-green)]"
-              />
-              Needs Level 2 approval if inspector is not L2-qualified
-            </label>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block space-y-1 text-sm">
+                <span className="font-medium text-[color:var(--ventia-muted)]">
+                  Interval (years)
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={row.intervalYears ?? defaultIntervalYearsForType(row.value || "LEVEL_1")}
+                  onChange={(e) =>
+                    update(i, {
+                      intervalYears: Number(e.target.value),
+                    })
+                  }
+                  className="field-input w-28 font-mono"
+                />
+                <span className="block text-[10px] text-[color:var(--ventia-muted)]">
+                  0 = not scheduled. Applies to due / overdue for this type.
+                </span>
+              </label>
+              <label className="inline-flex items-center gap-2 pb-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={Boolean(row.requiresLevel2Approval)}
+                  onChange={(e) =>
+                    update(i, { requiresLevel2Approval: e.target.checked })
+                  }
+                  className="accent-[color:var(--ventia-green)]"
+                />
+                Needs Level 2 approval if inspector is not L2-qualified
+              </label>
+            </div>
           </li>
         ))}
       </ul>
@@ -86,13 +114,19 @@ export function InspectionTypesForm({ initial }: { initial: InspectionTypeOption
         onClick={() =>
           setRows((prev) => [
             ...prev,
-            { value: "", label: "", description: "", requiresLevel2Approval: false },
+            {
+              value: "",
+              label: "",
+              description: "",
+              requiresLevel2Approval: false,
+              intervalYears: 3,
+            },
           ])
         }
       >
         + Add inspection type
       </button>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={pending} className="btn-primary">
           {pending ? "Saving…" : "Save inspection types"}
         </button>

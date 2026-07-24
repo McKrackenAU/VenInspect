@@ -18,7 +18,7 @@ import {
   inspectionPhotoRelativeDir,
 } from "@/lib/paths";
 import { saveSeverityOptions } from "@/lib/severities";
-import { getInspectionTypes, saveInspectionTypes } from "@/lib/inspection-types";
+import { getInspectionTypes, inspectionTypeIntervalYears, saveInspectionTypes } from "@/lib/inspection-types";
 import {
   getInspectionTemplates,
   getTemplateForLevel,
@@ -577,15 +577,42 @@ export async function saveInspectionTypesAction(formData: FormData) {
     label: string;
     description: string;
     requiresLevel2Approval?: boolean;
+    intervalYears?: number;
   }[] = [];
   try {
     parsed = JSON.parse(raw) as typeof parsed;
   } catch {
     throw new Error("Invalid inspection types JSON");
   }
-  saveInspectionTypes(parsed);
+  const cleaned = saveInspectionTypes(parsed);
+
+  // Retroactive: keep asset L1/L2 interval fields in sync with type catalogue
+  const l1 = cleaned.find((t) => t.value === "LEVEL_1");
+  const l2 = cleaned.find((t) => t.value === "LEVEL_2");
+  let syncedAssets = 0;
+  if (l1 || l2) {
+    const data: {
+      level1IntervalYears?: number;
+      level2IntervalYears?: number;
+    } = {};
+    if (l1 && (l1.intervalYears ?? 0) > 0) {
+      data.level1IntervalYears = l1.intervalYears;
+    }
+    if (l2 && (l2.intervalYears ?? 0) > 0) {
+      data.level2IntervalYears = l2.intervalYears;
+    }
+    if (Object.keys(data).length > 0) {
+      const result = await prisma.asset.updateMany({ data });
+      syncedAssets = result.count;
+    }
+  }
+
   revalidatePath("/manage/inspection-types");
   revalidatePath("/inspect");
+  revalidatePath("/manage");
+  revalidatePath("/assets");
+  revalidatePath("/");
+  return { ok: true as const, syncedAssets };
 }
 
 export async function saveInspectionTemplateAction(formData: FormData) {
@@ -1115,8 +1142,10 @@ export async function updateAssetDetails(formData: FormData) {
   const longitudeRaw = String(formData.get("longitude") ?? "").trim();
   const latitude = latitudeRaw ? Number(latitudeRaw) : null;
   const longitude = longitudeRaw ? Number(longitudeRaw) : null;
-  const l1 = Number(String(formData.get("level1IntervalYears") ?? "3"));
-  const l2 = Number(String(formData.get("level2IntervalYears") ?? "5"));
+  const l1Default = inspectionTypeIntervalYears("LEVEL_1") || 3;
+  const l2Default = inspectionTypeIntervalYears("LEVEL_2") || 5;
+  const l1 = Number(String(formData.get("level1IntervalYears") ?? String(l1Default)));
+  const l2 = Number(String(formData.get("level2IntervalYears") ?? String(l2Default)));
 
   function parseOptionalDate(raw: string): Date | null {
     const s = raw.trim();
@@ -1172,8 +1201,8 @@ export async function updateAssetDetails(formData: FormData) {
       notes,
       latitude: Number.isFinite(latitude) ? latitude : null,
       longitude: Number.isFinite(longitude) ? longitude : null,
-      level1IntervalYears: Number.isFinite(l1) && l1 > 0 ? l1 : 3,
-      level2IntervalYears: Number.isFinite(l2) && l2 > 0 ? l2 : 5,
+      level1IntervalYears: Number.isFinite(l1) && l1 > 0 ? l1 : l1Default,
+      level2IntervalYears: Number.isFinite(l2) && l2 > 0 ? l2 : l2Default,
       lastLevel1At,
       lastLevel2At,
       requireConfinedSpace: formData.get("requireConfinedSpace") === "on",

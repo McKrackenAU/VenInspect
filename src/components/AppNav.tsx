@@ -33,17 +33,23 @@ export function AppNav({ userName, isAdmin }: Props) {
   return (
     <header className="no-print sticky top-0 z-20 border-b border-[color:var(--ventia-border)] bg-[color:var(--nav-bg)] backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 xl:max-w-7xl 2xl:max-w-[96rem]">
-        <Link href={isManage ? "/manage" : "/"} className="flex items-center gap-2">
-          <BrandMark size={36} priority />
-          <div className="leading-tight">
-            <span className="block font-semibold tracking-tight text-[color:var(--ventia-green)]">
-              VenInspect
-            </span>
-            <span className="block text-[0.65rem] text-[color:var(--ventia-muted)]">
-              {isManage ? "Admin · Dashboard first" : "User portal"}
-            </span>
-          </div>
-        </Link>
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          {isManage ? <AdminSideMenu variant="icon" /> : null}
+          <Link
+            href={isManage ? "/manage" : "/"}
+            className="flex min-w-0 items-center gap-2"
+          >
+            <BrandMark size={36} priority />
+            <div className="leading-tight">
+              <span className="block font-semibold tracking-tight text-[color:var(--ventia-green)]">
+                VenInspect
+              </span>
+              <span className="block text-[0.65rem] text-[color:var(--ventia-muted)]">
+                {isManage ? "Admin portal" : "User portal"}
+              </span>
+            </div>
+          </Link>
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin ? (
@@ -74,8 +80,6 @@ export function AppNav({ userName, isAdmin }: Props) {
               </Link>
             </div>
           ) : null}
-
-          {isManage ? <AdminSideMenu /> : null}
 
           {userName ? (
             <span className="hidden text-xs text-[color:var(--ventia-muted)] sm:inline">
@@ -120,11 +124,6 @@ export function AppNav({ userName, isAdmin }: Props) {
             </Link>
           );
         })}
-        {isManage ? (
-          <span className="ml-auto hidden text-xs text-[color:var(--ventia-muted)] lg:inline">
-            More tools → Menu
-          </span>
-        ) : null}
       </nav>
     </header>
   );

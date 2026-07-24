@@ -1,13 +1,16 @@
 import { addYears, isBefore, differenceInCalendarDays, format } from "date-fns";
 import type { Asset, Inspection } from "@/generated/prisma/client";
-import { getInspectionTypes, inspectionTypeLabel } from "@/lib/inspection-types";
+import {
+  inspectionTypeIntervalYears,
+  inspectionTypeLabel,
+} from "@/lib/inspection-types";
 
 export type { PermitKey } from "@/lib/permits";
 export { ASSET_PERMIT_FLAGS } from "@/lib/permits";
 
 export type ScheduleStatus = "ok" | "due_soon" | "overdue" | "never";
 
-/** Built-in schedule keys (asset still has level1/level2 interval fields). */
+/** Built-in schedule keys (asset still has level1/level2 interval fields as overrides). */
 export type ScheduleLevel = "LEVEL_1" | "LEVEL_2";
 
 export type LevelSchedule = {
@@ -51,8 +54,13 @@ export function computeLevelSchedule(
   level: ScheduleLevel,
   now = new Date(),
 ): LevelSchedule {
-  const intervalYears =
+  // Prefer admin inspection-type interval; fall back to per-asset override fields.
+  const fromType = inspectionTypeIntervalYears(level);
+  const fromAsset =
     level === "LEVEL_1" ? asset.level1IntervalYears : asset.level2IntervalYears;
+  const intervalYears =
+    fromType > 0 ? fromType : fromAsset > 0 ? fromAsset : fromType;
+
   const last = latestApprovedForLevel(inspections, level);
   const fromInspection = last ? (last.approvedAt ?? last.inspectedAt) : null;
   const baseline =
@@ -66,13 +74,13 @@ export function computeLevelSchedule(
     lastInspectedAt = fromInspection ?? baseline;
   }
 
-  if (!lastInspectedAt) {
+  if (!lastInspectedAt || intervalYears <= 0) {
     return {
       level,
       intervalYears,
-      lastInspectedAt: null,
+      lastInspectedAt,
       nextDueAt: null,
-      status: "never",
+      status: lastInspectedAt ? "ok" : "never",
       daysUntilDue: null,
     };
   }

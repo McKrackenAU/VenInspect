@@ -37,6 +37,8 @@ export type StorageSettings = {
     label: string;
     description?: string;
     requiresLevel2Approval?: boolean;
+    /** Years between inspections; 0 = not scheduled */
+    intervalYears?: number;
   }[];
   /** Admin-customisable asset type catalogue */
   assetTypes?: { value: string; label: string; description?: string }[];

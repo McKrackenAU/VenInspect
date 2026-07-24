@@ -337,6 +337,9 @@ export default async function ManageAssetEditPage({
               defaultValue={asset.level1IntervalYears}
               className="field-input w-full"
             />
+            <p className="mt-1 text-[10px] text-[color:var(--ventia-muted)]">
+              Overridden by Admin → Inspection types for due dates; kept for per-asset notes.
+            </p>
           </label>
           <label className="block space-y-1 text-sm">
             <span className="font-medium text-[color:var(--ventia-muted)]">Level 2 interval (years)</span>
@@ -347,6 +350,9 @@ export default async function ManageAssetEditPage({
               defaultValue={asset.level2IntervalYears}
               className="field-input w-full"
             />
+            <p className="mt-1 text-[10px] text-[color:var(--ventia-muted)]">
+              Due dates follow Admin → Inspection types; saving types updates all assets.
+            </p>
           </label>
         </div>
 
