@@ -870,6 +870,11 @@ export async function createUser(formData: FormData) {
 export async function updateUserQualifications(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const lastName = String(formData.get("lastName") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const usernameRaw = String(formData.get("username") ?? "").trim().toLowerCase();
+  const username = usernameRaw || null;
   const role = String(formData.get("role") ?? "INSPECTOR") as "ADMIN" | "INSPECTOR";
   const level1Qualified = formData.get("level1Qualified") === "on";
   const level2Qualified = formData.get("level2Qualified") === "on";
@@ -877,9 +882,20 @@ export async function updateUserQualifications(formData: FormData) {
   const registrationNumber =
     String(formData.get("registrationNumber") ?? "").trim() || null;
 
+  if (!id) throw new Error("User id required");
+  if (!firstName || !lastName) throw new Error("First and last name are required");
+  if (!email) throw new Error("Email required");
+
+  const name = `${firstName} ${lastName}`.trim();
+
   await prisma.user.update({
     where: { id },
     data: {
+      firstName,
+      lastName,
+      name,
+      email,
+      username,
       role,
       level1Qualified,
       level2Qualified,
@@ -1114,16 +1130,26 @@ export async function savePhotoStoragePath(formData: FormData) {
 
 export async function saveGoogleMapsApiKey(formData: FormData) {
   await requireAdmin();
-  const key = String(formData.get("googleMapsApiKey") ?? "").trim();
-  if (
+  const providerRaw = String(formData.get("mapProvider") ?? "osm").trim();
+  const provider =
+    providerRaw === "google" || providerRaw === "nearmap" || providerRaw === "osm"
+      ? providerRaw
+      : "osm";
+  const googleKey = String(formData.get("googleMapsApiKey") ?? "").trim();
+  const nearmapKey = String(formData.get("nearmapApiKey") ?? "").trim();
+
+  const googleLocked = Boolean(
     process.env.GOOGLE_MAPS_API_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim()
-  ) {
-    throw new Error(
-      "GOOGLE_MAPS_API_KEY is set in the environment and takes priority. Update /etc/veninspect.env (or .env) instead.",
-    );
-  }
-  writeStorageSettings({ googleMapsApiKey: key || undefined });
+      process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim(),
+  );
+  const nearmapLocked = Boolean(process.env.NEARMAP_API_KEY?.trim());
+
+  // Prefilled fields always submit the current value; empty clears settings keys.
+  writeStorageSettings({
+    mapProvider: provider,
+    ...(!googleLocked ? { googleMapsApiKey: googleKey || undefined } : {}),
+    ...(!nearmapLocked ? { nearmapApiKey: nearmapKey || undefined } : {}),
+  });
   revalidatePath("/manage/system");
   revalidatePath("/map");
   redirect("/manage/system");

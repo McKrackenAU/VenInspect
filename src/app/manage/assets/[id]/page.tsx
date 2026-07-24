@@ -569,22 +569,47 @@ export default async function ManageAssetEditPage({
           main={mainTab}
           details={detailsTab}
           history={
-            <div className="space-y-4">
-              <p className="text-sm text-[color:var(--ventia-muted)]">
-                Long-term component condition tracking and DoT workbook context.
-              </p>
-              <Link
-                href={`/manage/assets/${asset.id}/history`}
-                className="inline-block text-sm font-semibold text-[color:var(--ventia-blue)] hover:underline"
-              >
-                Open condition history chart →
-              </Link>
-              <div className="card space-y-2 p-4">
-                <h2 className="font-medium">Import DoT / Level 2 workbook</h2>
-                <p className="text-xs text-[color:var(--ventia-muted)]">
-                  Parses References and sheet names for context (appends a note on the
-                  asset).
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
+                  Condition history
+                </h2>
+                <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
+                  Track component CS quantities across inspections, and import prior
+                  DoT workbooks for context.
                 </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Link
+                  href={`/manage/assets/${asset.id}/history`}
+                  className="rounded-xl border border-[color:var(--ventia-border)] p-5 transition hover:border-[color:var(--ventia-green)] hover:bg-[color:var(--ventia-green-tint)]"
+                >
+                  <p className="font-semibold text-[color:var(--ventia-green)]">
+                    View CS timeline chart
+                  </p>
+                  <p className="mt-2 text-xs text-[color:var(--ventia-muted)]">
+                    Search components and see condition-state quantities over time
+                    from submitted / approved reports.
+                  </p>
+                  <span className="mt-3 inline-block text-sm font-semibold text-[color:var(--ventia-blue)]">
+                    Open chart →
+                  </span>
+                </Link>
+                <div className="rounded-xl border border-[color:var(--ventia-border)] p-5">
+                  <p className="font-semibold text-[color:var(--ventia-green)]">
+                    Tips
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-[color:var(--ventia-muted)]">
+                    <li>History is built from component rating tables on reports.</li>
+                    <li>Import a prior Level 2/3 workbook to capture References lists.</li>
+                    <li>Set lat/lng on Details so the asset appears on the map.</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="card space-y-3 p-5">
+                <h3 className="font-medium">Import DoT / Level 2 workbook</h3>
                 <DotWorkbookImport assetId={asset.id} />
               </div>
             </div>

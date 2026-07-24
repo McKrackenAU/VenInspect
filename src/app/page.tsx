@@ -93,6 +93,18 @@ export default async function DashboardPage() {
     .filter((s) => s.schedule.status === "overdue" || s.schedule.status === "due_soon")
     .slice(0, 6);
 
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+
+  const todaysAssignments = myAssignments.filter(
+    (a) => a.dueDate <= endOfToday,
+  );
+  const upcomingAssignments = myAssignments.filter(
+    (a) => a.dueDate > endOfToday,
+  );
+
   return (
     <div className="space-y-6">
       <section className="space-y-2">
@@ -100,11 +112,84 @@ export default async function DashboardPage() {
           {hello}
         </h1>
         <p className="text-base text-[color:var(--ventia-muted)]">
-          What do you need to do? Drafts are saved until you submit.
+          Below are your assigned inspections for today. Tap Start to open one.
         </p>
       </section>
 
       <InstallHint />
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Assigned for today</h2>
+        {todaysAssignments.length === 0 ? (
+          <p className="card px-4 py-4 text-sm text-[color:var(--ventia-muted)]">
+            No inspections due today
+            {upcomingAssignments.length > 0
+              ? ` — ${upcomingAssignments.length} upcoming on your schedule.`
+              : "."}
+          </p>
+        ) : (
+          <ul className="card divide-y divide-[color:var(--ventia-border)] overflow-hidden">
+            {todaysAssignments.map((assignment) => {
+              const overdue = assignment.dueDate < startOfToday;
+              return (
+                <li key={assignment.id}>
+                  <Link
+                    href={`/inspect?assetId=${assignment.assetId}&level=${encodeURIComponent(assignment.level)}`}
+                    className="flex min-h-[3.5rem] items-center justify-between gap-3 px-4 py-3 active:bg-[color:var(--ventia-green-tint)]"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-semibold text-[color:var(--ventia-green)]">
+                        {assignment.asset.assetNumber} ·{" "}
+                        {formatLevel(assignment.level)}
+                      </p>
+                      <p className="text-sm text-[color:var(--ventia-muted)]">
+                        {assignment.asset.roadName} ·{" "}
+                        {assignment.asset.name}
+                        {" · "}
+                        {overdue ? "overdue " : "due "}
+                        {format(assignment.dueDate, "dd MMM yyyy")}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-lg bg-[color:var(--ventia-green)] px-3 py-1.5 text-sm font-semibold text-white">
+                      Start
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {upcomingAssignments.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="text-lg font-semibold">Upcoming</h2>
+          <ul className="card divide-y divide-[color:var(--ventia-border)] overflow-hidden">
+            {upcomingAssignments.map((assignment) => (
+              <li key={assignment.id}>
+                <Link
+                  href={`/inspect?assetId=${assignment.assetId}&level=${encodeURIComponent(assignment.level)}`}
+                  className="flex min-h-[3.5rem] items-center justify-between gap-3 px-4 py-3 active:bg-[color:var(--ventia-green-tint)]"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[color:var(--ventia-green)]">
+                      {assignment.asset.assetNumber} ·{" "}
+                      {formatLevel(assignment.level)}
+                    </p>
+                    <p className="text-sm text-[color:var(--ventia-muted)]">
+                      {assignment.asset.roadName} · due{" "}
+                      {format(assignment.dueDate, "dd MMM yyyy")}
+                    </p>
+                  </div>
+                  <span className="text-sm font-medium text-[color:var(--ventia-blue)]">
+                    Start
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {myDrafts.length > 0 ? (
         <section className="space-y-2">
@@ -127,35 +212,6 @@ export default async function DashboardPage() {
                   </span>
                 </Link>
                 <DeleteDraftButton inspectionId={d.id} next="/" label="Delete" />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {myAssignments.length > 0 ? (
-        <section className="space-y-2">
-          <h2 className="text-lg font-semibold">My schedule</h2>
-          <ul className="card divide-y divide-[color:var(--ventia-border)] overflow-hidden">
-            {myAssignments.map((assignment) => (
-              <li key={assignment.id}>
-                <Link
-                  href={`/inspect?assetId=${assignment.assetId}`}
-                  className="flex min-h-[3.5rem] items-center justify-between gap-3 px-4 py-3 active:bg-[color:var(--ventia-green-tint)]"
-                >
-                  <div className="min-w-0">
-                    <p className="font-semibold text-[color:var(--ventia-green)]">
-                      {assignment.asset.assetNumber} · {formatLevel(assignment.level)}
-                    </p>
-                    <p className="text-sm text-[color:var(--ventia-muted)]">
-                      {assignment.asset.roadName} · due{" "}
-                      {format(assignment.dueDate, "dd MMM yyyy")}
-                    </p>
-                  </div>
-                  <span className="text-sm font-medium text-[color:var(--ventia-blue)]">
-                    Start
-                  </span>
-                </Link>
               </li>
             ))}
           </ul>

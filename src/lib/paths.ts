@@ -44,6 +44,10 @@ export type StorageSettings = {
   documentTags?: { value: string; label: string }[];
   /** Optional Maps JS key when not set in environment */
   googleMapsApiKey?: string;
+  /** Map basemap: osm (default) | google | nearmap */
+  mapProvider?: "osm" | "google" | "nearmap";
+  /** Nearmap Tile API key (browser requests tiles directly — not proxied by VenInspect) */
+  nearmapApiKey?: string;
   /** Admin-editable L1/L2 (etc.) form templates keyed by inspection type code */
   inspectionTemplates?: Record<string, unknown>;
   /** DisplayName → fieldId map for Audit Export Attributes import */
@@ -94,6 +98,10 @@ export function writeStorageSettings(next: StorageSettings) {
   if (Object.prototype.hasOwnProperty.call(next, "googleMapsApiKey")) {
     if (!next.googleMapsApiKey?.trim()) delete merged.googleMapsApiKey;
     else merged.googleMapsApiKey = next.googleMapsApiKey.trim();
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "nearmapApiKey")) {
+    if (!next.nearmapApiKey?.trim()) delete merged.nearmapApiKey;
+    else merged.nearmapApiKey = next.nearmapApiKey.trim();
   }
   if (Object.prototype.hasOwnProperty.call(next, "inspectionTypes")) {
     if (!next.inspectionTypes?.length) delete merged.inspectionTypes;
@@ -179,6 +187,20 @@ export function mapsApiKeySource(): "env" | "settings" | "none" {
   }
   if (readStorageSettings().googleMapsApiKey?.trim()) return "settings";
   return "none";
+}
+
+export type MapProvider = "osm" | "google" | "nearmap";
+
+export function getMapProvider(): MapProvider {
+  const p = readStorageSettings().mapProvider;
+  if (p === "google" || p === "nearmap" || p === "osm") return p;
+  return "osm";
+}
+
+export function getNearmapApiKey(): string | null {
+  const fromEnv = process.env.NEARMAP_API_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  return readStorageSettings().nearmapApiKey?.trim() || null;
 }
 
 /** @deprecated use getPhotoDir */

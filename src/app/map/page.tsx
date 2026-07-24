@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/db";
 import { formatAssetType } from "@/lib/inspection";
 import { AssetMap } from "@/components/AssetMap";
-import { getGoogleMapsApiKey } from "@/lib/paths";
+import {
+  getGoogleMapsApiKey,
+  getMapProvider,
+  getNearmapApiKey,
+} from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 
@@ -37,17 +41,27 @@ export default async function MapPage() {
       longitude: a.longitude as number,
     }));
 
-  const apiKey = getGoogleMapsApiKey();
+  const provider = getMapProvider();
+  const googleApiKey = getGoogleMapsApiKey();
+  const nearmapApiKey = getNearmapApiKey();
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-[color:var(--ventia-green)]">Asset map</h1>
+        <h1 className="text-2xl font-bold text-[color:var(--ventia-green)]">
+          Asset map
+        </h1>
         <p className="mt-1 text-base text-[color:var(--ventia-muted)]">
-          Find structures on the map. In the field, use your location to list nearby assets.
+          Find structures on the map. In the field, use your location to list nearby
+          assets.
         </p>
       </div>
-      <AssetMap assets={mapped} apiKey={apiKey} />
+      <AssetMap
+        assets={mapped}
+        provider={provider}
+        googleApiKey={googleApiKey}
+        nearmapApiKey={nearmapApiKey}
+      />
     </div>
   );
 }

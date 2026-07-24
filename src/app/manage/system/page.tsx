@@ -5,6 +5,8 @@ import { DateTimePrefsForm } from "@/components/DateTimePrefsForm";
 import {
   describeStorage,
   getGoogleMapsApiKey,
+  getMapProvider,
+  getNearmapApiKey,
   mapsApiKeySource,
   readStorageSettings,
 } from "@/lib/paths";
@@ -13,12 +15,6 @@ import Link from "next/link";
 import { requireAdmin, getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-
-function maskKey(key: string | null): string | null {
-  if (!key) return null;
-  if (key.length <= 8) return "••••••••";
-  return `${key.slice(0, 6)}…${key.slice(-4)}`;
-}
 
 export default async function ManageSystemPage() {
   await requireAdmin();
@@ -29,6 +25,8 @@ export default async function ManageSystemPage() {
   const mapsSource = mapsApiKeySource();
   const mapsKey = getGoogleMapsApiKey();
   const settingsKey = readStorageSettings().googleMapsApiKey?.trim() || null;
+  const nearmapKey = getNearmapApiKey();
+  const mapProvider = getMapProvider();
   const dt = getDateTimePrefs();
   const isRoot = user?.username === "root";
 
@@ -90,52 +88,67 @@ export default async function ManageSystemPage() {
       </section>
 
       <section className="card space-y-3 p-5">
-        <h2 className="text-lg font-medium">Google Maps</h2>
+        <h2 className="text-lg font-medium">Maps</h2>
         <MapsApiKeyForm
           source={mapsSource}
-          configured={Boolean(mapsKey)}
-          maskedKey={maskKey(mapsKey ?? settingsKey)}
+          mapProvider={mapProvider}
+          googleApiKey={mapsKey ?? settingsKey ?? ""}
+          nearmapApiKey={nearmapKey ?? ""}
+          nearmapLocked={Boolean(process.env.NEARMAP_API_KEY?.trim())}
         />
       </section>
 
-      <section className="card space-y-2 p-5">
-        <h2 className="text-lg font-medium">More</h2>
-        <ul className="space-y-1 text-sm">
-          <li>
-            <Link
-              href="/manage/trash"
-              className="font-semibold text-[color:var(--ventia-blue)] hover:underline"
-            >
-              Trash (soft-deleted reports)
-            </Link>
-          </li>
-          <li>
-            <Link
-              href="/manage/task-types"
-              className="font-semibold text-[color:var(--ventia-blue)] hover:underline"
-            >
+      <section className="card space-y-3 p-5">
+        <h2 className="text-lg font-medium">Admin tools</h2>
+        <p className="text-sm text-[color:var(--ventia-muted)]">
+          Shortcuts for trash, defect task lists, remote access, and Assetvision.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Link
+            href="/manage/trash"
+            className="rounded-xl border border-[color:var(--ventia-border)] p-4 transition hover:border-[color:var(--ventia-green)] hover:bg-[color:var(--ventia-green-tint)]"
+          >
+            <p className="font-semibold text-[color:var(--ventia-green)]">Trash</p>
+            <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
+              Soft-deleted reports — restore or purge after 30 days
+            </p>
+          </Link>
+          <Link
+            href="/manage/task-types"
+            className="rounded-xl border border-[color:var(--ventia-border)] p-4 transition hover:border-[color:var(--ventia-green)] hover:bg-[color:var(--ventia-green-tint)]"
+          >
+            <p className="font-semibold text-[color:var(--ventia-green)]">
               Defect task types
-            </Link>
-          </li>
+            </p>
+            <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
+              RM, Investigate, Monitor, FMRP, and custom task labels
+            </p>
+          </Link>
           {isRoot ? (
-            <li>
-              <Link
-                href="/manage/system/tunnel"
-                className="font-semibold text-[color:var(--ventia-blue)] hover:underline"
-              >
-                Cloudflare Tunnel (root)
-              </Link>
-            </li>
-          ) : null}
-          <li>
             <Link
-              href="/manage/system/assetvision"
-              className="font-semibold text-[color:var(--ventia-blue)] hover:underline"
+              href="/manage/system/tunnel"
+              className="rounded-xl border border-[color:var(--ventia-border)] p-4 transition hover:border-[color:var(--ventia-green)] hover:bg-[color:var(--ventia-green-tint)]"
             >
-              Assetvision integration
+              <p className="font-semibold text-[color:var(--ventia-green)]">
+                Cloudflare Tunnel
+              </p>
+              <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
+                Root-only remote HTTPS without opening office ports
+              </p>
             </Link>
-          </li>
-        </ul>
+          ) : null}
+          <Link
+            href="/manage/system/assetvision"
+            className="rounded-xl border border-[color:var(--ventia-border)] p-4 transition hover:border-[color:var(--ventia-green)] hover:bg-[color:var(--ventia-green-tint)]"
+          >
+            <p className="font-semibold text-[color:var(--ventia-green)]">
+              Assetvision
+            </p>
+            <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
+              REST base URL / API key for asset pull and report push
+            </p>
+          </Link>
+        </div>
       </section>
 
       <SystemUpdatePanel currentLabel={version} defaultChannel={channel} />

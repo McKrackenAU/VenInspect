@@ -93,14 +93,18 @@ export default async function ManageUsersPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Directory</h2>
         <ul className="space-y-3">
-          {users.map((u) => (
+          {users.map((u) => {
+            const showUsername =
+              Boolean(u.username) &&
+              u.username!.toLowerCase() !== u.email.toLowerCase();
+            return (
             <li
               key={u.id}
               className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-4 shadow-sm"
             >
               <p className="font-medium">{u.name}</p>
               <p className="text-sm text-[color:var(--ventia-muted)]">
-                {u.username ? (
+                {showUsername ? (
                   <>
                     <span className="font-mono">{u.username}</span>
                     {" · "}
@@ -127,12 +131,10 @@ export default async function ManageUsersPage() {
                   View inspection history →
                 </Link>
               </p>
-              <UserQualificationsForm
-                key={`${u.id}-${u.updatedAt.toISOString()}-${u.role}-${u.level1Qualified}-${u.level2Qualified}-${u.registrationNumber ?? ""}`}
-                user={u}
-              />
+              <UserQualificationsForm user={u} />
             </li>
-          ))}
+            );
+          })}
         </ul>
       </section>
     </div>
