@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { adminDeleteInspectionAction } from "@/lib/actions";
 
@@ -15,7 +14,6 @@ export function AdminDeleteInspectionButton({
   status: string;
   next: string;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmText, setConfirmText] = useState("");
@@ -118,13 +116,19 @@ export function AdminDeleteInspectionButton({
                     fd.set("next", next);
                     try {
                       const result = await adminDeleteInspectionAction(fd);
-                      close();
-                      router.push(result.next);
-                      router.refresh();
+                      // Full navigation avoids RSC redirect/digest errors in the dialog
+                      window.location.assign(result.next || next || "/manage");
                     } catch (e) {
-                      setError(
-                        e instanceof Error ? e.message : "Delete failed",
-                      );
+                      const msg =
+                        e instanceof Error ? e.message : "Delete failed";
+                      // Ignore opaque production digests; show a usable hint
+                      if (msg.includes("digest property") || msg.includes("Server Components")) {
+                        setError(
+                          "Delete failed on the server. Check admin password, then try again. If it persists, open Manage → Trash after refresh.",
+                        );
+                      } else {
+                        setError(msg);
+                      }
                     }
                   });
                 }}

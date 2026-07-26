@@ -60,7 +60,7 @@ export default async function InspectionPage({
     },
   });
   if (!inspection) notFound();
-  if (inspection.deletedAt) notFound();
+  if (inspection.deletedAt && user.role !== "ADMIN") notFound();
   if (!canViewInspection(user, inspection)) redirect("/assets");
 
   const editable = canEditInspection(user, inspection);
@@ -291,6 +291,15 @@ export default async function InspectionPage({
 
   return (
     <div className="space-y-8">
+      {inspection.deletedAt ? (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-800 dark:text-rose-200">
+          This report is in Trash.{" "}
+          <Link href="/manage/trash" className="font-semibold underline">
+            Open Trash
+          </Link>{" "}
+          to restore or purge it permanently (including photos).
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <BackNavLink
