@@ -10,6 +10,7 @@ import {
   microsoftStateCookieName,
   resolveAppOrigin,
 } from "@/lib/microsoft-auth";
+import { getLoginMethodSettings } from "@/lib/auth-settings";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,6 +24,11 @@ function loginError(origin: string, code: string, next = "/") {
 
 export async function GET(request: Request) {
   const origin = resolveAppOrigin(request);
+  const methods = getLoginMethodSettings();
+  if (!methods.allowMicrosoft) {
+    return loginError(origin, "microsoft_disabled");
+  }
+
   const config = getMicrosoftAuthConfig();
   if (!config) return loginError(origin, "microsoft_off");
 
@@ -65,6 +71,9 @@ export async function GET(request: Request) {
     });
 
     if (user) {
+      if (!user.allowMicrosoftLogin) {
+        return loginError(origin, "microsoft_user_disabled", next);
+      }
       if (!user.microsoftOid || user.microsoftOid !== profile.oid) {
         user = await prisma.user.update({
           where: { id: user.id },
@@ -85,6 +94,8 @@ export async function GET(request: Request) {
           microsoftOid: profile.oid,
           role: "INSPECTOR",
           passwordHash: null,
+          allowPasswordLogin: false,
+          allowMicrosoftLogin: true,
         },
       });
     } else {

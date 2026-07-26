@@ -19,6 +19,7 @@ import {
 } from "@/lib/paths";
 import { saveSeverityOptions } from "@/lib/severities";
 import { getInspectionTypes, inspectionTypeIntervalYears, saveInspectionTypes } from "@/lib/inspection-types";
+import { saveLoginMethodSettings } from "@/lib/auth-settings";
 import {
   getInspectionTemplates,
   getTemplateForLevel,
@@ -926,6 +927,15 @@ export async function skipSecondReviewAction(formData: FormData) {
   revalidatePath("/approvals");
 }
 
+export async function saveLoginMethodSettingsAction(formData: FormData) {
+  await requireAdmin();
+  const allowPassword = formData.get("allowPassword") === "1";
+  const allowMicrosoft = formData.get("allowMicrosoft") === "1";
+  saveLoginMethodSettings({ allowPassword, allowMicrosoft });
+  revalidatePath("/login");
+  revalidatePath("/manage/system");
+}
+
 export async function createUser(formData: FormData) {
   await requireAdmin();
   const firstName = String(formData.get("firstName") ?? "").trim();
@@ -942,13 +952,18 @@ export async function createUser(formData: FormData) {
   const level2Qualified = formData.get("level2Qualified") === "on";
   const registrationNumber =
     String(formData.get("registrationNumber") ?? "").trim() || null;
+  const allowPasswordLogin = formData.get("allowPasswordLogin") === "on";
+  const allowMicrosoftLogin = formData.get("allowMicrosoftLogin") === "on";
 
   if (!firstName || !lastName) {
     throw new Error("First and last name are required");
   }
   if (!name || !email) throw new Error("Name and email required");
-  if (!password || password.length < 4) {
-    throw new Error("Password required (min 4 characters)");
+  if (!allowPasswordLogin && !allowMicrosoftLogin) {
+    throw new Error("Enable at least one login method for this user");
+  }
+  if (allowPasswordLogin && (!password || password.length < 4)) {
+    throw new Error("Password required (min 4 characters) when password login is enabled");
   }
 
   await prisma.user.create({
@@ -962,7 +977,12 @@ export async function createUser(formData: FormData) {
       level1Qualified,
       level2Qualified,
       registrationNumber,
-      passwordHash: hashPassword(password),
+      allowPasswordLogin,
+      allowMicrosoftLogin,
+      passwordHash:
+        allowPasswordLogin && password.length >= 4
+          ? hashPassword(password)
+          : null,
     },
   });
 
@@ -984,10 +1004,24 @@ export async function updateUserQualifications(formData: FormData) {
   const password = String(formData.get("password") ?? "");
   const registrationNumber =
     String(formData.get("registrationNumber") ?? "").trim() || null;
+  const allowPasswordLogin = formData.get("allowPasswordLogin") === "on";
+  const allowMicrosoftLogin = formData.get("allowMicrosoftLogin") === "on";
 
   if (!id) throw new Error("User id required");
   if (!firstName || !lastName) throw new Error("First and last name are required");
   if (!email) throw new Error("Email required");
+  if (!allowPasswordLogin && !allowMicrosoftLogin) {
+    throw new Error("Enable at least one login method for this user");
+  }
+
+  const existing = await prisma.user.findUniqueOrThrow({ where: { id } });
+  if (
+    allowPasswordLogin &&
+    password.length < 4 &&
+    !existing.passwordHash
+  ) {
+    throw new Error("Set a password (min 4 characters) when enabling password login");
+  }
 
   const name = `${firstName} ${lastName}`.trim();
 
@@ -1003,6 +1037,8 @@ export async function updateUserQualifications(formData: FormData) {
       level1Qualified,
       level2Qualified,
       registrationNumber,
+      allowPasswordLogin,
+      allowMicrosoftLogin,
       ...(password.length >= 4 ? { passwordHash: hashPassword(password) } : {}),
     },
   });

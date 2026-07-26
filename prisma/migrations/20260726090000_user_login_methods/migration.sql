@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "allowPasswordLogin" BOOLEAN NOT NULL DEFAULT 1;
+ALTER TABLE "User" ADD COLUMN "allowMicrosoftLogin" BOOLEAN NOT NULL DEFAULT 1;

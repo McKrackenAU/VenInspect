@@ -18,6 +18,8 @@ export function UserQualificationsForm({
     level1Qualified: boolean;
     level2Qualified: boolean;
     registrationNumber: string | null;
+    allowPasswordLogin?: boolean;
+    allowMicrosoftLogin?: boolean;
   };
 }) {
   const router = useRouter();
@@ -44,11 +46,16 @@ export function UserQualificationsForm({
   const [l1, setL1] = useState(user.level1Qualified);
   const [l2, setL2] = useState(user.level2Qualified);
   const [reg, setReg] = useState(user.registrationNumber ?? "");
+  const [allowPassword, setAllowPassword] = useState(
+    user.allowPasswordLogin !== false,
+  );
+  const [allowMicrosoft, setAllowMicrosoft] = useState(
+    user.allowMicrosoftLogin !== false,
+  );
   const [password, setPassword] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync from server only when this user identity changes — never wipe mid-edit
   useEffect(() => {
     const parts =
       user.firstName || user.lastName
@@ -65,6 +72,8 @@ export function UserQualificationsForm({
     setL1(user.level1Qualified);
     setL2(user.level2Qualified);
     setReg(user.registrationNumber ?? "");
+    setAllowPassword(user.allowPasswordLogin !== false);
+    setAllowMicrosoft(user.allowMicrosoftLogin !== false);
   }, [user.id]);
 
   return (
@@ -78,6 +87,10 @@ export function UserQualificationsForm({
           setError("First and last name are required");
           return;
         }
+        if (!allowPassword && !allowMicrosoft) {
+          setError("Enable at least one login method");
+          return;
+        }
         const fd = new FormData();
         fd.set("id", user.id);
         fd.set("firstName", firstName.trim());
@@ -87,6 +100,8 @@ export function UserQualificationsForm({
         fd.set("role", role);
         if (l1) fd.set("level1Qualified", "on");
         if (l2) fd.set("level2Qualified", "on");
+        if (allowPassword) fd.set("allowPasswordLogin", "on");
+        if (allowMicrosoft) fd.set("allowMicrosoftLogin", "on");
         fd.set("registrationNumber", reg);
         if (password) fd.set("password", password);
         startTransition(async () => {
@@ -94,7 +109,6 @@ export function UserQualificationsForm({
             await updateUserQualifications(fd);
             setPassword("");
             setSaved(true);
-            // Soft refresh for directory header — keep local form values (already correct)
             router.refresh();
           } catch (err) {
             setError(err instanceof Error ? err.message : "Save failed");
@@ -139,6 +153,30 @@ export function UserQualificationsForm({
             placeholder="Optional login name"
             className="field-input mt-1 w-full text-sm font-mono"
           />
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4 text-sm">
+        <span className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
+          Login methods
+        </span>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={allowPassword}
+            onChange={(e) => setAllowPassword(e.target.checked)}
+            className="accent-[color:var(--ventia-green)]"
+          />
+          Password
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={allowMicrosoft}
+            onChange={(e) => setAllowMicrosoft(e.target.checked)}
+            className="accent-[color:var(--ventia-green)]"
+          />
+          Microsoft
         </label>
       </div>
 

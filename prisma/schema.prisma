@@ -56,6 +56,10 @@ model User {
   role            Role     @default(INSPECTOR)
   passwordHash    String?
   microsoftOid    String?  @unique
+  /// May sign in with username/password (admin can disable e.g. SSO-only)
+  allowPasswordLogin  Boolean  @default(true)
+  /// May sign in with Microsoft Entra (admin can disable)
+  allowMicrosoftLogin Boolean  @default(true)
   level1Qualified Boolean  @default(false)
   level2Qualified Boolean  @default(false)
   /// Professional / inspector registration number (shown on reports)

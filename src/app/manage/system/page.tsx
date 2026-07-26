@@ -2,6 +2,7 @@ import { formatAppVersion, getAppVersion, getConfiguredUpdateChannel } from "@/l
 import { SystemUpdatePanel } from "@/components/SystemUpdatePanel";
 import { MapsApiKeyForm } from "@/components/MapsApiKeyForm";
 import { DateTimePrefsForm } from "@/components/DateTimePrefsForm";
+import { LoginMethodsForm } from "@/components/LoginMethodsForm";
 import {
   describeStorage,
   getGoogleMapsApiKey,
@@ -11,7 +12,7 @@ import {
   readStorageSettings,
 } from "@/lib/paths";
 import { getDateTimePrefs } from "@/lib/date-time";
-import { isMicrosoftAuthEnabled } from "@/lib/microsoft-auth";
+import { getLoginMethodSettings } from "@/lib/auth-settings";
 import Link from "next/link";
 import { requireAdmin, getCurrentUser } from "@/lib/auth";
 
@@ -30,7 +31,7 @@ export default async function ManageSystemPage() {
   const mapProvider = getMapProvider();
   const dt = getDateTimePrefs();
   const isRoot = user?.username === "root";
-  const microsoftOn = isMicrosoftAuthEnabled();
+  const loginMethods = getLoginMethodSettings();
   const appBase =
     process.env.APP_BASE_URL?.trim() ||
     process.env.AUTH_URL?.trim() ||
@@ -79,26 +80,21 @@ export default async function ManageSystemPage() {
             </dd>
           </div>
           <div className="sm:col-span-2">
-            <dt className="text-[color:var(--ventia-muted)]">Microsoft Entra sign-in</dt>
-            <dd className="text-sm">
-              {microsoftOn ? (
-                <span className="font-medium text-[color:var(--ventia-green)]">
-                  Enabled — button shown on login
-                </span>
-              ) : (
-                <span className="text-[color:var(--ventia-muted)]">
-                  Off — set{" "}
-                  <code className="font-mono text-xs">AUTH_MICROSOFT_ENTRA_ID_*</code>{" "}
-                  and <code className="font-mono text-xs">APP_BASE_URL</code> in{" "}
-                  <code className="font-mono text-xs">/etc/veninspect.env</code>
-                </span>
-              )}
-              <p className="mt-1 break-all font-mono text-[10px] text-[color:var(--ventia-muted)]">
-                Redirect URI: {appBase}/api/auth/microsoft/callback
-              </p>
+            <dt className="text-[color:var(--ventia-muted)]">Entra redirect URI</dt>
+            <dd className="mt-1 break-all font-mono text-[10px] text-[color:var(--ventia-muted)]">
+              {appBase}/api/auth/microsoft/callback
             </dd>
           </div>
         </dl>
+      </section>
+
+      <section className="card space-y-3 p-5">
+        <h2 className="text-lg font-medium">Login methods</h2>
+        <LoginMethodsForm
+          allowPassword={loginMethods.allowPassword}
+          allowMicrosoft={loginMethods.allowMicrosoft}
+          microsoftConfigured={loginMethods.microsoftConfigured}
+        />
       </section>
 
       <section className="card space-y-3 p-5">

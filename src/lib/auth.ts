@@ -10,6 +10,7 @@ import {
   type SessionPayload,
 } from "@/lib/session-token";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
+import { getLoginMethodSettings } from "@/lib/auth-settings";
 
 export type AuthUser = {
   id: string;
@@ -75,7 +76,6 @@ export async function createSessionCookie(user: {
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    // LAN installs are usually HTTP — only force Secure when explicitly enabled
     secure: process.env.COOKIE_SECURE === "1",
     path: "/",
     maxAge: SESSION_MAX_AGE_SEC,
@@ -91,6 +91,9 @@ export async function authenticateLogin(
   login: string,
   password: string,
 ): Promise<AuthUser | null> {
+  const methods = getLoginMethodSettings();
+  if (!methods.allowPassword) return null;
+
   const key = login.trim().toLowerCase();
   if (!key || !password) return null;
 
@@ -100,6 +103,7 @@ export async function authenticateLogin(
     },
   });
   if (!user?.passwordHash) return null;
+  if (!user.allowPasswordLogin) return null;
   if (!verifyPassword(password, user.passwordHash)) return null;
 
   return {

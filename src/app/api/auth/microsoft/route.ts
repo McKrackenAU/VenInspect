@@ -7,6 +7,7 @@ import {
   microsoftStateCookieName,
   resolveAppOrigin,
 } from "@/lib/microsoft-auth";
+import { getLoginMethodSettings } from "@/lib/auth-settings";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,6 +19,13 @@ function randomState(): string {
 }
 
 export async function GET(request: Request) {
+  const methods = getLoginMethodSettings();
+  if (!methods.allowMicrosoft) {
+    return NextResponse.redirect(
+      new URL("/login?error=microsoft_disabled", request.url),
+    );
+  }
+
   const config = getMicrosoftAuthConfig();
   if (!config) {
     return NextResponse.redirect(
