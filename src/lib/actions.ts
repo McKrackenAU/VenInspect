@@ -463,13 +463,17 @@ export async function addDefect(formData: FormData) {
 
   const buffer = Buffer.from(await photo.arrayBuffer());
   const originalName = photo instanceof File ? photo.name : null;
-  const { relativePath } = await saveCompressedDefectPhoto({
+  const { relativePath, takenAt } = await saveCompressedDefectPhoto({
     buffer,
     roadName: inspection.asset.roadName || "Unknown Road",
     assetNumber: inspection.asset.assetNumber,
     folderKey: inspection.folderKey,
     defectCode,
     originalName,
+    fileLastModifiedMs:
+      photo instanceof File && Number.isFinite(photo.lastModified)
+        ? photo.lastModified
+        : null,
   });
 
   await prisma.defect.create({
@@ -482,6 +486,14 @@ export async function addDefect(formData: FormData) {
       subcategory,
       severity,
       photoPath: relativePath,
+      photos: {
+        create: {
+          path: relativePath,
+          kind: "overview",
+          sortOrder: 0,
+          takenAt,
+        },
+      },
     },
   });
 
@@ -524,6 +536,7 @@ export async function carryForwardDefect(formData: FormData) {
   );
 
   let photoPath: string | null = null;
+  let photoTakenAt: Date | null = null;
   if (photo instanceof Blob && photo.size > 0) {
     const buffer = Buffer.from(await photo.arrayBuffer());
     const saved = await saveCompressedDefectPhoto({
@@ -533,8 +546,13 @@ export async function carryForwardDefect(formData: FormData) {
       folderKey: inspection.folderKey,
       defectCode,
       originalName: photo instanceof File ? photo.name : null,
+      fileLastModifiedMs:
+        photo instanceof File && Number.isFinite(photo.lastModified)
+          ? photo.lastModified
+          : null,
     });
     photoPath = saved.relativePath;
+    photoTakenAt = saved.takenAt;
   }
 
   await prisma.defect.create({
@@ -550,6 +568,18 @@ export async function carryForwardDefect(formData: FormData) {
       photoPath,
       comparisonPhotoPath: source.photoPath,
       carriedFromDefectId: source.id,
+      ...(photoPath && photoTakenAt
+        ? {
+            photos: {
+              create: {
+                path: photoPath,
+                kind: "overview",
+                sortOrder: 0,
+                takenAt: photoTakenAt,
+              },
+            },
+          }
+        : {}),
     },
   });
 

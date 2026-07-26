@@ -9,6 +9,10 @@ export type ExportPhotoItem = {
   detail?: string;
   severity?: string | null;
   group?: "general" | "defect";
+  takenAt?: string;
+  registerNo?: number;
+  previewName?: string;
+  dateLabel?: string;
 };
 
 /** Shared condition-state picker dialog for PDF / Client Export. */

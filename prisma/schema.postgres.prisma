@@ -223,12 +223,31 @@ model Inspection {
   notifications       Notification[]
   permitChecks        InspectionPermitCheck[]
   mappingOverlays     DefectMappingOverlay[]
+  photoRegister       PhotoRegisterEntry[]
 
   @@index([assetId, submittedAt])
   @@index([folderKey])
   @@index([parentInspectionId])
   @@index([reviewStatus, reviewRequestedFromId])
   @@index([deletedAt])
+}
+
+/// Persisted Client Export photo order + DoT register number (per inspection)
+model PhotoRegisterEntry {
+  id           String   @id @default(cuid())
+  inspectionId String
+  /// Stable key: defectphoto:{id} / form:{id} / defect:{id}:current|comparison
+  photoKey     String
+  takenAt      DateTime
+  registerNo   Int
+  sortOrder    Int
+  path         String
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  @@unique([inspectionId, photoKey])
+  @@unique([inspectionId, registerNo])
+  @@index([inspectionId, sortOrder])
 }
 
 /// Permit acknowledgements (shown on web report only — use no-print for PDF)
@@ -300,13 +319,15 @@ model Defect {
 }
 
 model DefectPhoto {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   defectId  String
   path      String
   caption   String?
-  kind      String   @default("other")
-  sortOrder Int      @default(0)
-  createdAt DateTime @default(now())
+  kind      String    @default("other")
+  sortOrder Int       @default(0)
+  /// Capture date (EXIF / file date) used for watermark + DoT YYMMDD
+  takenAt   DateTime?
+  createdAt DateTime  @default(now())
 
   defect Defect @relation(fields: [defectId], references: [id], onDelete: Cascade)
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { SeverityOption } from "@/lib/condition-state";
 import { normalizeConditionState } from "@/lib/condition-state";
+import { formatDotPhotoName } from "@/lib/dot-photo-register";
 import {
   useExportDownload,
   type ExportPhotoItem,
@@ -13,6 +14,13 @@ type PhotoItem = ExportPhotoItem & {
   severity?: string | null;
   group?: "general" | "defect";
 };
+
+function dateLabelFromIso(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+}
 
 export function ClientExportWizard({
   inspectionId,
@@ -30,6 +38,7 @@ export function ClientExportWizard({
   const [selected, setSelected] = useState<string[]>(defaultSelected);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [photoOrder, setPhotoOrder] = useState<string[]>([]);
+  const [assetNumber, setAssetNumber] = useState("");
   const [loadingPhotos, setLoadingPhotos] = useState(true);
   const { busy, error, setError, downloadBlob } = useExportDownload();
 
@@ -45,12 +54,14 @@ export function ClientExportWizard({
         const body = (await res.json().catch(() => null)) as {
           photos?: PhotoItem[];
           order?: string[];
+          assetNumber?: string;
           error?: string;
         } | null;
         if (!res.ok) throw new Error(body?.error || "Could not load photos");
         if (cancelled) return;
         const list = body?.photos ?? [];
         setPhotos(list);
+        setAssetNumber(body?.assetNumber ?? "");
         setPhotoOrder(
           body?.order?.length ? body.order : list.map((p) => p.key),
         );
@@ -94,10 +105,30 @@ export function ClientExportWizard({
     const missingDefect = missing.filter(
       (k) => byKey.get(k)?.group !== "general",
     );
-    return [...missingGeneral, ...order, ...missingDefect]
-      .map((k) => byKey.get(k))
-      .filter((p): p is PhotoItem => !!p);
-  }, [photos, photoOrder, selected]);
+    const keys = [...missingGeneral, ...order, ...missingDefect];
+    const result: PhotoItem[] = [];
+    for (const k of keys) {
+      const p = byKey.get(k);
+      if (!p) continue;
+      const idx = photoOrder.indexOf(k);
+      const registerNo = idx >= 0 ? idx + 1 : result.length + 1;
+      const taken = p.takenAt ? new Date(p.takenAt) : new Date();
+      const previewName = assetNumber
+        ? formatDotPhotoName({
+            assetNumber,
+            takenAt: taken,
+            sequence: registerNo,
+          })
+        : (p.previewName ?? "");
+      result.push({
+        ...p,
+        registerNo,
+        previewName,
+        dateLabel: p.dateLabel || dateLabelFromIso(p.takenAt),
+      });
+    }
+    return result;
+  }, [photos, photoOrder, selected, assetNumber]);
 
   function movePhoto(index: number, dir: -1 | 1) {
     const keys = orderedPhotos.map((p) => p.key);
@@ -252,7 +283,7 @@ export function ClientExportWizard({
                   ) : null}
                   <div className="flex items-center gap-2 rounded-xl border border-[color:var(--ventia-border)] px-3 py-2.5 text-sm">
                     <span className="w-6 shrink-0 text-xs font-medium text-[color:var(--ventia-muted)]">
-                      {i + 1}
+                      {p.registerNo ?? i + 1}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium text-[color:var(--ventia-ink)]">
@@ -263,6 +294,10 @@ export function ClientExportWizard({
                           {p.detail}
                         </span>
                       ) : null}
+                      <span className="mt-0.5 block font-mono text-[11px] text-[color:var(--ventia-muted)]">
+                        {p.previewName ?? "—"}
+                        {p.dateLabel ? ` · ${p.dateLabel}` : ""}
+                      </span>
                     </span>
                     <button
                       type="button"

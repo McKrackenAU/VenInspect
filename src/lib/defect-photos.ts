@@ -44,7 +44,13 @@ export async function addPhotosToDefect(opts: {
     asset: { roadName: string | null; assetNumber: string };
   };
   defectCode: string;
-  files: { buffer: Buffer; originalName: string; caption?: string; kind?: string }[];
+  files: {
+    buffer: Buffer;
+    originalName: string;
+    caption?: string;
+    kind?: string;
+    fileLastModifiedMs?: number | null;
+  }[];
 }) {
   const existing = await prisma.defectPhoto.count({ where: { defectId: opts.defectId } });
   if (existing + opts.files.length > MAX_DEFECT_PHOTOS) {
@@ -55,14 +61,14 @@ export async function addPhotosToDefect(opts: {
   const created = [];
   let order = existing;
   for (const file of opts.files) {
-    const { relativePath } = await saveCompressedDefectPhoto({
+    const { relativePath, takenAt } = await saveCompressedDefectPhoto({
       buffer: file.buffer,
       roadName: opts.inspection.asset.roadName || "Unknown Road",
       assetNumber: opts.inspection.asset.assetNumber,
       folderKey: opts.inspection.folderKey,
       defectCode: `${opts.defectCode}-P${String(order + 1).padStart(3, "0")}`,
       originalName: file.originalName,
-      fileLastModifiedMs: null,
+      fileLastModifiedMs: file.fileLastModifiedMs ?? null,
     });
     const row = await prisma.defectPhoto.create({
       data: {
@@ -71,6 +77,7 @@ export async function addPhotosToDefect(opts: {
         caption: file.caption ?? null,
         kind: file.kind ?? "other",
         sortOrder: order,
+        takenAt,
       },
     });
     created.push(row);
@@ -149,6 +156,7 @@ export async function breakoutDefectPhotos(opts: {
             caption: photo.caption,
             kind: photo.kind,
             sortOrder: 0,
+            takenAt: photo.takenAt,
           },
         },
       },

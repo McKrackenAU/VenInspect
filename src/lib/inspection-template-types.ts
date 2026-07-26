@@ -69,6 +69,8 @@ export type FormMediaItem = {
   fieldId?: string;
   /** Linked defect created from this media */
   defectId?: string;
+  /** Capture date ISO (EXIF / file date) for watermark + DoT register */
+  takenAt?: string;
 };
 
 /** Persisted on Inspection.formPayload */
@@ -135,6 +137,7 @@ function parseMedia(
         caption: item.caption != null ? String(item.caption) : undefined,
         fieldId: item.fieldId != null ? String(item.fieldId) : undefined,
         defectId: item.defectId != null ? String(item.defectId) : undefined,
+        takenAt: item.takenAt != null ? String(item.takenAt) : undefined,
       }))
       .filter((item) => item.id && item.path);
   }

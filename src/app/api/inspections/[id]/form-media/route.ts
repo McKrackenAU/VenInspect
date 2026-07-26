@@ -86,6 +86,7 @@ export async function POST(
 
   let relativePath: string;
   let defectId: string | undefined;
+  let takenAt: Date;
 
   try {
     if (raiseDefect) {
@@ -112,6 +113,7 @@ export async function POST(
             : null,
       });
       relativePath = saved.relativePath;
+      takenAt = saved.takenAt;
       const defect = await prisma.defect.create({
         data: {
           inspectionId,
@@ -121,6 +123,14 @@ export async function POST(
           subcategory: subcategory ?? "ID plate",
           severity,
           photoPath: relativePath,
+          photos: {
+            create: {
+              path: relativePath,
+              kind: "overview",
+              sortOrder: 0,
+              takenAt,
+            },
+          },
         },
       });
       defectId = defect.id;
@@ -138,6 +148,7 @@ export async function POST(
             : null,
       });
       relativePath = saved.relativePath;
+      takenAt = saved.takenAt;
     }
   } catch (e) {
     return NextResponse.json(
@@ -153,6 +164,7 @@ export async function POST(
     caption,
     fieldId: fieldId ?? undefined,
     defectId,
+    takenAt: takenAt.toISOString(),
   };
   const media: FormPayload["media"] = { ...(payload.media ?? {}) };
   media[key] = [...(media[key] ?? []), item];

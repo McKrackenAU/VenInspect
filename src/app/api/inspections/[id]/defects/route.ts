@@ -88,7 +88,7 @@ export async function POST(
     const originalName =
       photo instanceof File ? photo.name : String(formData.get("photoName") ?? "");
 
-    const { relativePath } = await saveCompressedDefectPhoto({
+    const { relativePath, takenAt } = await saveCompressedDefectPhoto({
       buffer,
       roadName: inspection.asset.roadName || "Unknown Road",
       assetNumber: inspection.asset.assetNumber,
@@ -118,6 +118,7 @@ export async function POST(
             path: relativePath,
             kind: "overview",
             sortOrder: 0,
+            takenAt,
           },
         },
       },

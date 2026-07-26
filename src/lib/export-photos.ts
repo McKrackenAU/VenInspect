@@ -15,6 +15,9 @@ export type ExportPhotoListItem = {
   subcategory?: string | null;
   description?: string;
   comments?: string | null;
+  /** Capture date when known (ISO or Date serialised by callers) */
+  takenAt?: string | null;
+  createdAt?: string | null;
 };
 
 type DefectForExport = {
@@ -33,13 +36,31 @@ type DefectForExport = {
     caption: string | null;
     kind: string;
     sortOrder: number;
+    takenAt?: Date | string | null;
+    createdAt?: Date | string | null;
   }[];
+  createdAt?: Date | string | null;
 };
 
 type FormMedia = Record<
   string,
-  { id: string; path: string; caption?: string; defectId?: string }[]
+  {
+    id: string;
+    path: string;
+    caption?: string;
+    defectId?: string;
+    takenAt?: string;
+  }[]
 >;
+
+function toIso(value: Date | string | null | undefined): string | null {
+  if (value == null) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 function resolveFormMediaLabel(
   mediaKeyStr: string,
@@ -124,6 +145,7 @@ export function buildExportPhotoPool(
           path: item.path,
           group: "general",
           description: item.caption || label,
+          takenAt: item.takenAt ?? null,
         });
       }
     }
@@ -152,6 +174,8 @@ export function buildExportPhotoPool(
           subcategory: d.subcategory,
           description: d.description,
           comments: d.comments ?? null,
+          takenAt: toIso(p.takenAt),
+          createdAt: toIso(p.createdAt),
         });
       }
     } else if (d.photoPath && !seenPaths.has(d.photoPath)) {
@@ -168,6 +192,7 @@ export function buildExportPhotoPool(
         subcategory: d.subcategory,
         description: d.description,
         comments: d.comments ?? null,
+        createdAt: toIso(d.createdAt),
       });
     }
 
@@ -189,6 +214,7 @@ export function buildExportPhotoPool(
         subcategory: d.subcategory,
         description: d.description,
         comments: d.comments ?? null,
+        createdAt: toIso(d.createdAt),
       });
     }
   }

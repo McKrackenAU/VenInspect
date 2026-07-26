@@ -10,10 +10,12 @@ import {
   getPhotoDir,
 } from "@/lib/paths";
 
-/** Keep field photos small: long edge ≤ 1600px, then clamp to ≤ 1 MB. */
-export const PHOTO_MAX_EDGE = 1600;
-export const PHOTO_WEBP_QUALITY = 75;
-export const PHOTO_MAX_OUTPUT_BYTES = 1024 * 1024;
+/** Field photos: long edge ≤ 1280px; prefer ≤ 450 KB; hard cap 700 KB. */
+export const PHOTO_MAX_EDGE = 1280;
+export const PHOTO_MIN_EDGE = 960;
+export const PHOTO_WEBP_QUALITY = 72;
+export const PHOTO_SOFT_OUTPUT_BYTES = 450 * 1024;
+export const PHOTO_MAX_OUTPUT_BYTES = 700 * 1024;
 export const PHOTO_MAX_INPUT_BYTES = 20 * 1024 * 1024;
 
 function isHeicLike(buffer: Buffer, filename?: string | null) {
@@ -29,18 +31,6 @@ export async function resolveTakenDate(
   buffer: Buffer,
   fileLastModifiedMs?: number | null,
 ): Promise<Date> {
-  try {
-    const meta = await sharp(buffer, { failOn: "none" }).metadata();
-    const exif = meta.exif;
-    if (exif) {
-      // Sharp does not always expose parsed dates; try orientation path via raw EXIF is heavy.
-      // Use sharp's built-in if present in newer versions via withMetadata — fall through.
-    }
-  } catch {
-    /* ignore */
-  }
-
-  // Parse EXIF via sharp's exif buffer with a light DateTimeOriginal scan
   try {
     const meta = await sharp(buffer, { failOn: "none" }).metadata();
     if (meta.exif) {
@@ -68,9 +58,10 @@ export async function resolveTakenDate(
 }
 
 function watermarkSvg(dateLabel: string, width: number, height: number) {
-  const pad = 10;
-  const fontSize = 16;
-  // Escape XML
+  const longEdge = Math.max(width, height);
+  const fontSize = Math.min(22, Math.max(14, Math.round(longEdge * 0.01)));
+  const strokeWidth = Math.max(2, Math.round(fontSize / 5));
+  const pad = Math.max(8, Math.round(fontSize * 0.6));
   const safe = dateLabel
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -79,7 +70,7 @@ function watermarkSvg(dateLabel: string, width: number, height: number) {
     `<svg width="${width}" height="${height}">
       <style>
         .ts { fill: #ffffff; font-size: ${fontSize}px; font-family: Arial, Helvetica, sans-serif;
-              font-weight: 600; paint-order: stroke; stroke: rgba(0,0,0,0.65); stroke-width: 3px; }
+              font-weight: 600; paint-order: stroke; stroke: rgba(0,0,0,0.65); stroke-width: ${strokeWidth}px; }
       </style>
       <text x="${pad}" y="${height - pad}" class="ts">${safe}</text>
     </svg>`,
@@ -125,42 +116,55 @@ async function compressToMaxBytes(
   prefer: "webp" | "jpeg",
 ): Promise<{ out: Buffer; ext: ".webp" | ".jpg" }> {
   let edge = PHOTO_MAX_EDGE;
-  let quality = prefer === "webp" ? PHOTO_WEBP_QUALITY : 82;
+  let quality = prefer === "webp" ? PHOTO_WEBP_QUALITY : 78;
   let last: Buffer | null = null;
   let ext: ".webp" | ".jpg" = prefer === "webp" ? ".webp" : ".jpg";
 
-  for (let attempt = 0; attempt < 12; attempt++) {
+  for (let attempt = 0; attempt < 14; attempt++) {
     try {
       last = await encodeWithWatermark(buffer, takenAt, prefer, edge, quality);
       ext = prefer === "webp" ? ".webp" : ".jpg";
     } catch (err) {
       if (prefer === "webp") {
-        // fall through to jpeg path
         prefer = "jpeg";
-        quality = 82;
+        quality = 78;
         continue;
       }
       throw err;
     }
-    if (last.byteLength <= PHOTO_MAX_OUTPUT_BYTES) {
+
+    if (last.byteLength <= PHOTO_SOFT_OUTPUT_BYTES) {
       return { out: last, ext };
     }
-    if (quality > 40) quality -= 8;
-    else if (edge > 800) {
-      edge = Math.round(edge * 0.85);
-      quality = prefer === "webp" ? 70 : 75;
-    } else if (quality > 28) quality -= 4;
-    else break;
+
+    if (quality > 48) {
+      quality -= 6;
+    } else if (edge > PHOTO_MIN_EDGE) {
+      edge = Math.max(PHOTO_MIN_EDGE, Math.round(edge * 0.9));
+      quality = prefer === "webp" ? 68 : 72;
+    } else if (quality > 36) {
+      quality -= 4;
+    } else if (last.byteLength <= PHOTO_MAX_OUTPUT_BYTES) {
+      return { out: last, ext };
+    } else {
+      break;
+    }
   }
 
   if (last && last.byteLength <= PHOTO_MAX_OUTPUT_BYTES) {
     return { out: last, ext };
   }
-  // Last resort: JPEG at low quality
-  last = await encodeWithWatermark(buffer, takenAt, "jpeg", Math.min(edge, 900), 28);
+
+  last = await encodeWithWatermark(
+    buffer,
+    takenAt,
+    "jpeg",
+    Math.min(edge, PHOTO_MIN_EDGE),
+    32,
+  );
   if (last.byteLength > PHOTO_MAX_OUTPUT_BYTES) {
     throw new Error(
-      "Could not compress photo under 1 MB. Try a smaller image or different format.",
+      "Could not compress photo under 700 KB. Try a smaller image or different format.",
     );
   }
   return { out: last, ext: ".jpg" };
@@ -174,7 +178,7 @@ export async function saveCompressedDefectPhoto(opts: {
   defectCode: string;
   originalName?: string | null;
   fileLastModifiedMs?: number | null;
-}): Promise<{ relativePath: string; bytesWritten: number }> {
+}): Promise<{ relativePath: string; bytesWritten: number; takenAt: Date }> {
   if (opts.buffer.byteLength === 0) {
     throw new Error("Photo file is empty");
   }
@@ -219,7 +223,7 @@ export async function saveCompressedDefectPhoto(opts: {
   const abs = absolutePhotoPath(relativePath);
   await fs.mkdir(path.dirname(abs), { recursive: true });
   await fs.writeFile(abs, out);
-  return { relativePath, bytesWritten: out.byteLength };
+  return { relativePath, bytesWritten: out.byteLength, takenAt };
 }
 
 /** Generic compressed photo under an inspection folder (component notes, etc.). */
@@ -232,7 +236,7 @@ export async function saveCompressedInspectionPhoto(opts: {
   relativeStem: string;
   originalName?: string | null;
   fileLastModifiedMs?: number | null;
-}): Promise<{ relativePath: string; bytesWritten: number }> {
+}): Promise<{ relativePath: string; bytesWritten: number; takenAt: Date }> {
   if (opts.buffer.byteLength === 0) throw new Error("Photo file is empty");
   if (opts.buffer.byteLength > PHOTO_MAX_INPUT_BYTES) {
     throw new Error("Photo too large (max 20 MB before compression)");
@@ -263,7 +267,7 @@ export async function saveCompressedInspectionPhoto(opts: {
   const abs = absolutePhotoPath(relativePath);
   await fs.mkdir(path.dirname(abs), { recursive: true });
   await fs.writeFile(abs, out);
-  return { relativePath, bytesWritten: out.byteLength };
+  return { relativePath, bytesWritten: out.byteLength, takenAt };
 }
 
 export function assetDocumentRelativePath(opts: {

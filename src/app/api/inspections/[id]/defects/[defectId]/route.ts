@@ -51,13 +51,22 @@ export async function POST(
     captions = [];
   }
 
-  const files: { buffer: Buffer; originalName: string; caption?: string }[] = [];
+  const files: {
+    buffer: Buffer;
+    originalName: string;
+    caption?: string;
+    fileLastModifiedMs?: number | null;
+  }[] = [];
   for (const [key, val] of formData.entries()) {
     if (!key.startsWith("photo") || !(val instanceof Blob) || val.size === 0) continue;
     files.push({
       buffer: Buffer.from(await val.arrayBuffer()),
       originalName: val instanceof File ? val.name : "photo.jpg",
       caption: captions[files.length],
+      fileLastModifiedMs:
+        val instanceof File && Number.isFinite(val.lastModified)
+          ? val.lastModified
+          : null,
     });
   }
   if (!files.length) {

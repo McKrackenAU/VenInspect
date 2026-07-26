@@ -9,10 +9,14 @@ import {
 } from "@/lib/inspection-templates";
 import { getTemplateForLevel } from "@/lib/inspection-templates";
 import { getExportConfig } from "@/lib/export-config";
+import { buildExportPhotoPool } from "@/lib/export-photos";
 import {
-  buildExportPhotoPool,
-  mergeExportPhotoOrder,
-} from "@/lib/export-photos";
+  attachFormMediaTakenAt,
+  buildRegisterRewriteItems,
+  enrichExportPhotosWithRegister,
+  loadPhotoRegister,
+  rewritePhotoRegister,
+} from "@/lib/photo-register";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +33,7 @@ export async function GET(
   const inspection = await prisma.inspection.findUnique({
     where: { id },
     include: {
+      asset: true,
       defects: {
         orderBy: [{ sortOrder: "asc" }, { defectCode: "asc" }],
         include: { photos: { orderBy: { sortOrder: "asc" } } },
@@ -46,24 +51,35 @@ export async function GET(
   const exportCfg = getExportConfig();
   const template = getTemplateForLevel(inspection.level);
 
-  // Ordering UI always includes general/form photos (report pool), even if ZIP
-  // config later omits them — user can still see and order everything.
-  const pool = buildExportPhotoPool(
-    inspection.defects,
-    payload.media ?? {},
-    {
+  const pool = attachFormMediaTakenAt(
+    buildExportPhotoPool(inspection.defects, payload.media ?? {}, {
       includeComparison: exportCfg.includeComparisonPhotos,
       includeFormPhotos: true,
       template,
-    },
+    }),
+    payload.media ?? {},
   );
 
-  const photos = pool.map(({ path: _path, ...rest }) => rest);
-  const order = mergeExportPhotoOrder(payload.exportPhotoOrder, pool);
+  const registerRows = await loadPhotoRegister(id);
+  const { photos, order } = enrichExportPhotosWithRegister({
+    pool,
+    assetNumber: inspection.asset.assetNumber,
+    inspectedAt: inspection.inspectedAt,
+    registerRows,
+    legacyOrder: payload.exportPhotoOrder,
+  });
+
+  // Strip storage path from client response
+  const clientPhotos = photos.map((p) => {
+    const { path: _omit, ...rest } = p;
+    void _omit;
+    return rest;
+  });
 
   return NextResponse.json({
-    photos,
+    photos: clientPhotos,
     order,
+    assetNumber: inspection.asset.assetNumber,
   });
 }
 
@@ -76,7 +92,16 @@ export async function PUT(
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
   const { id } = await context.params;
-  const inspection = await prisma.inspection.findUnique({ where: { id } });
+  const inspection = await prisma.inspection.findUnique({
+    where: { id },
+    include: {
+      asset: true,
+      defects: {
+        orderBy: [{ sortOrder: "asc" }, { defectCode: "asc" }],
+        include: { photos: { orderBy: { sortOrder: "asc" } } },
+      },
+    },
+  });
   if (!inspection) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -94,18 +119,62 @@ export async function PUT(
   }
 
   const current = parseFormPayload(inspection.formPayload);
+  const order = Array.isArray(body.order)
+    ? body.order.map(String)
+    : current.exportPhotoOrder ?? [];
+
+  const exportCfg = getExportConfig();
+  const template = getTemplateForLevel(inspection.level);
+  const pool = attachFormMediaTakenAt(
+    buildExportPhotoPool(inspection.defects, current.media ?? {}, {
+      includeComparison: exportCfg.includeComparisonPhotos,
+      includeFormPhotos: true,
+      template,
+    }),
+    current.media ?? {},
+  );
+
+  const registerRows = await loadPhotoRegister(id);
+  const items = buildRegisterRewriteItems({
+    orderedKeys: order,
+    pool,
+    registerRows,
+    inspectedAt: inspection.inspectedAt,
+  });
+  await rewritePhotoRegister({ inspectionId: id, items });
+
   const next = {
     ...current,
-    exportPhotoOrder: Array.isArray(body.order)
-      ? body.order.map(String)
-      : current.exportPhotoOrder,
+    exportPhotoOrder: items.map((i) => i.photoKey),
   };
 
   await prisma.inspection.update({
     where: { id },
     data: { formPayload: serializeFormPayload(next) },
   });
+
+  const enriched = enrichExportPhotosWithRegister({
+    pool,
+    assetNumber: inspection.asset.assetNumber,
+    inspectedAt: inspection.inspectedAt,
+    registerRows: items.map((item, i) => ({
+      photoKey: item.photoKey,
+      takenAt: item.takenAt,
+      registerNo: i + 1,
+      sortOrder: i + 1,
+    })),
+    legacyOrder: next.exportPhotoOrder,
+  });
+
   revalidatePath(`/inspections/${id}/report`);
   revalidatePath(`/inspections/${id}/client-export`);
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    order: enriched.order,
+    photos: enriched.photos.map((p) => {
+      const { path: _omit, ...rest } = p;
+      void _omit;
+      return rest;
+    }),
+  });
 }

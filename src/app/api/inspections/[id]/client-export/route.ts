@@ -16,6 +16,14 @@ import {
   filterExportPhotosByCondition,
   mergeExportPhotoOrder,
 } from "@/lib/export-photos";
+import {
+  attachFormMediaTakenAt,
+  buildRegisterRewriteItems,
+  formatRegisterDate,
+  loadPhotoRegister,
+  rewritePhotoRegister,
+} from "@/lib/photo-register";
+import { formatDotPhotoName } from "@/lib/dot-photo-register";
 import * as XLSX from "xlsx";
 
 export const runtime = "nodejs";
@@ -191,21 +199,51 @@ export async function GET(
   };
   const packPhotos: PackPhoto[] = [];
 
-  const pool = buildExportPhotoPool(
-    inspection.defects,
-    formPayload.media ?? {},
-    {
+  const pool = attachFormMediaTakenAt(
+    buildExportPhotoPool(inspection.defects, formPayload.media ?? {}, {
       includeComparison: exportCfg.includeComparisonPhotos,
       // Always include general/section photos in the pack pool (report photos)
       includeFormPhotos: true,
       template,
-    },
+    }),
+    formPayload.media ?? {},
   );
   const filteredPool = filterExportPhotosByCondition(pool, severityFilter).filter(
     (p) => {
       if (p.group === "general") return true;
       return exportCfg.includePhotos;
     },
+  );
+
+  const orderParam = req.nextUrl.searchParams.get("photoOrder");
+  const preferredOrder = orderParam
+    ? orderParam.split("|").filter(Boolean)
+    : mergeExportPhotoOrder(formPayload.exportPhotoOrder, filteredPool);
+
+  // Prefer the saved full-inspection register (from PUT / reorder). Only rebuild
+  // if empty so a condition-state filter does not wipe numbers for other photos.
+  let registerRows = await loadPhotoRegister(inspection.id);
+  if (!registerRows.length) {
+    const fullOrder = mergeExportPhotoOrder(
+      formPayload.exportPhotoOrder?.length
+        ? formPayload.exportPhotoOrder
+        : preferredOrder,
+      pool,
+    );
+    const items = buildRegisterRewriteItems({
+      orderedKeys: fullOrder,
+      pool,
+      registerRows: [],
+      inspectedAt: inspection.inspectedAt,
+    });
+    await rewritePhotoRegister({ inspectionId: inspection.id, items });
+    registerRows = await loadPhotoRegister(inspection.id);
+  }
+  const registerByKey = new Map(
+    registerRows.map((r) => [
+      r.photoKey,
+      { takenAt: r.takenAt, registerNo: r.registerNo },
+    ]),
   );
 
   for (const p of filteredPool) {
@@ -245,10 +283,6 @@ export async function GET(
     }
   }
 
-  const orderParam = req.nextUrl.searchParams.get("photoOrder");
-  const preferredOrder = orderParam
-    ? orderParam.split("|").filter(Boolean)
-    : mergeExportPhotoOrder(formPayload.exportPhotoOrder, filteredPool);
   const byKey = new Map(packPhotos.map((p) => [p.key, p]));
   const ordered: PackPhoto[] = [];
   for (const k of preferredOrder) {
@@ -258,7 +292,6 @@ export async function GET(
       byKey.delete(k);
     }
   }
-  // Any remaining: general first, then defect (pool order)
   for (const p of packPhotos) {
     if (byKey.has(p.key)) ordered.push(p);
   }
@@ -266,15 +299,16 @@ export async function GET(
   for (const p of ordered) {
     try {
       const data = await fs.readFile(p.absPath);
-      const seq = indexRows.length + 1;
-      const { formatDotPhotoName } = await import("@/lib/dot-photo-register");
+      const reg = registerByKey.get(p.key);
+      const seq = reg?.registerNo ?? indexRows.length + 1;
+      const takenAt = reg?.takenAt ?? inspection.inspectedAt;
       // DoT Photo Register: {assetDigits}{YYMMDD}{seq} e.g. SN6150 → 615026041613
       const dotName = formatDotPhotoName({
         assetNumber: inspection.asset.assetNumber,
-        takenAt: inspection.inspectedAt,
+        takenAt,
         sequence: seq,
       });
-      // Keep real codec extension on disk (.webp); register column stores the stem (sample .xlsx).
+      // Keep real codec extension on disk (.webp); register column stores the stem.
       const ext = path.extname(p.zipName) || ".webp";
       const inPhotoTree =
         /(^|\/)(Photos|GeneralPhotos)\//.test(p.zipName) ||
@@ -289,7 +323,7 @@ export async function GET(
         "Pack sequence": seq,
         "Photo Number": seq,
         ".jpg file name": dotName,
-        Date: `${String(inspection.inspectedAt.getDate()).padStart(2, "0")}/${String(inspection.inspectedAt.getMonth() + 1).padStart(2, "0")}/${inspection.inspectedAt.getFullYear()}`,
+        Date: formatRegisterDate(takenAt),
         "DoT file name": dotName,
         "Photo file": path.basename(renamed),
       });
