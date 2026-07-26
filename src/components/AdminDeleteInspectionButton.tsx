@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { adminDeleteInspectionAction } from "@/lib/actions";
 
@@ -14,6 +15,7 @@ export function AdminDeleteInspectionButton({
   status: string;
   next: string;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmText, setConfirmText] = useState("");
@@ -54,15 +56,15 @@ export function AdminDeleteInspectionButton({
                 id={`del-insp-${inspectionId}`}
                 className="text-lg font-semibold text-rose-700 dark:text-rose-300"
               >
-                Delete report permanently
+                Move report to Trash
               </h3>
               <p className="mt-2 text-sm text-[color:var(--ventia-muted)]">
                 This removes{" "}
                 <span className="font-medium text-[color:var(--ventia-ink)]">
                   {titleLabel}
                 </span>{" "}
-                ({status}), including defects and linked form photos. Child reports
-                (if any) are unlinked, not deleted.
+                ({status}) from the live lists. It stays in Trash for 30 days and can
+                be restored. Child reports (if any) are unlinked, not deleted.
               </p>
             </div>
 
@@ -115,7 +117,10 @@ export function AdminDeleteInspectionButton({
                     fd.set("confirmText", confirmText);
                     fd.set("next", next);
                     try {
-                      await adminDeleteInspectionAction(fd);
+                      const result = await adminDeleteInspectionAction(fd);
+                      close();
+                      router.push(result.next);
+                      router.refresh();
                     } catch (e) {
                       setError(
                         e instanceof Error ? e.message : "Delete failed",
@@ -124,7 +129,7 @@ export function AdminDeleteInspectionButton({
                   });
                 }}
               >
-                {pending ? "Deleting…" : "Delete permanently"}
+                {pending ? "Deleting…" : "Move to Trash"}
               </button>
             </div>
           </div>

@@ -707,8 +707,12 @@ export async function deleteDraftInspection(formData: FormData) {
 /**
  * Admin soft-delete — moves report to Trash (30-day retention).
  * Requires the admin's login password in `password`.
+ * Returns next URL for client navigation (avoids NEXT_REDIRECT being caught as an error).
  */
-export async function adminDeleteInspectionAction(formData: FormData) {
+export async function adminDeleteInspectionAction(formData: FormData): Promise<{
+  ok: true;
+  next: string;
+}> {
   const admin = await requireAdmin();
   const inspectionId = String(formData.get("inspectionId") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -723,9 +727,9 @@ export async function adminDeleteInspectionAction(formData: FormData) {
 
   const inspection = await prisma.inspection.findUnique({
     where: { id: inspectionId },
-    include: { asset: true },
   });
   if (!inspection) throw new Error("Inspection not found");
+  if (inspection.deletedAt) throw new Error("Report is already in Trash");
 
   if (confirmText !== inspection.titleLabel && confirmText !== "DELETE") {
     throw new Error(
@@ -747,9 +751,9 @@ export async function adminDeleteInspectionAction(formData: FormData) {
   revalidatePath("/manage");
   revalidatePath("/manage/trash");
 
-  const next = String(formData.get("next") ?? "").trim();
-  if (next.startsWith("/")) redirect(next);
-  redirect(`/manage/assets/${assetId}`);
+  const nextRaw = String(formData.get("next") ?? "").trim();
+  const next = nextRaw.startsWith("/") ? nextRaw : `/manage/assets/${assetId}`;
+  return { ok: true, next };
 }
 
 export async function approveInspection(formData: FormData) {
