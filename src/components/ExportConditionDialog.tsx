@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { SeverityOption } from "@/lib/severities";
+import type { SeverityOption } from "@/lib/condition-state";
 
 export type ExportPhotoItem = {
   key: string;

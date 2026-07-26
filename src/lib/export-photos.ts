@@ -1,4 +1,4 @@
-import { normalizeConditionState } from "@/lib/severities";
+import { normalizeConditionState } from "@/lib/condition-state";
 import type { InspectionTemplate } from "@/lib/inspection-template-types";
 
 export type ExportPhotoListItem = {

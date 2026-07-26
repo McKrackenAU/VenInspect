@@ -268,20 +268,29 @@ export async function GET(
       const data = await fs.readFile(p.absPath);
       const seq = indexRows.length + 1;
       const { formatDotPhotoName } = await import("@/lib/dot-photo-register");
+      // DoT Photo Register: {assetDigits}{YYMMDD}{seq} e.g. SN6150 → 615026041613
       const dotName = formatDotPhotoName({
         assetNumber: inspection.asset.assetNumber,
         takenAt: inspection.inspectedAt,
         sequence: seq,
       });
+      // Keep real codec extension on disk (.webp); register column stores the stem (sample .xlsx).
       const ext = path.extname(p.zipName) || ".webp";
-      const renamed = p.zipName.includes("Photos/")
+      const inPhotoTree =
+        /(^|\/)(Photos|GeneralPhotos)\//.test(p.zipName) ||
+        p.zipName.includes("Photos/") ||
+        p.zipName.includes("GeneralPhotos/");
+      const renamed = inPhotoTree
         ? p.zipName.replace(/\/[^/]+$/, `/${dotName}${ext}`)
         : p.zipName;
       zipFiles.push({ name: renamed, data });
       indexRows.push({
         ...p.index,
         "Pack sequence": seq,
-        "DoT file name": `${dotName}${ext}`,
+        "Photo Number": seq,
+        ".jpg file name": dotName,
+        Date: `${String(inspection.inspectedAt.getDate()).padStart(2, "0")}/${String(inspection.inspectedAt.getMonth() + 1).padStart(2, "0")}/${inspection.inspectedAt.getFullYear()}`,
+        "DoT file name": dotName,
         "Photo file": path.basename(renamed),
       });
     } catch {

@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { SeverityOption } from "@/lib/severities";
-import { normalizeConditionState } from "@/lib/severities";
+import type { SeverityOption } from "@/lib/condition-state";
+import { normalizeConditionState } from "@/lib/condition-state";
 import {
   useExportDownload,
   type ExportPhotoItem,
