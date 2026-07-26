@@ -17,8 +17,13 @@ import { requireAdmin, getCurrentUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export default async function ManageSystemPage() {
+type Props = {
+  searchParams: Promise<{ photoError?: string; photoSaved?: string }>;
+};
+
+export default async function ManageSystemPage({ searchParams }: Props) {
   await requireAdmin();
+  const sp = await searchParams;
   const user = await getCurrentUser();
   const version = formatAppVersion(getAppVersion());
   const channel = getConfiguredUpdateChannel();
@@ -88,6 +93,8 @@ export default async function ManageSystemPage() {
           sourceLabel={storage.photoDirSource}
           envLocked={Boolean(process.env.PHOTO_DIR?.trim())}
           returnTo="/manage/system"
+          flashError={sp.photoError ?? null}
+          flashSaved={sp.photoSaved === "1"}
         />
       </section>
 

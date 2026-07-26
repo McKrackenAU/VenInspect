@@ -27,11 +27,15 @@ export function PhotoStoragePicker({
   sourceLabel,
   envLocked,
   returnTo = "/manage/system",
+  flashError = null,
+  flashSaved = false,
 }: {
   currentPath: string;
   sourceLabel: string;
   envLocked: boolean;
   returnTo?: string;
+  flashError?: string | null;
+  flashSaved?: boolean;
 }) {
   const [value, setValue] = useState(currentPath);
   const [open, setOpen] = useState(false);
@@ -99,6 +103,17 @@ export function PhotoStoragePicker({
       <p className="text-xs text-[color:var(--ventia-muted)]">
         Active: <code className="font-mono">{currentPath}</code> · Source: {sourceLabel}
       </p>
+
+      {flashSaved ? (
+        <p className="text-sm font-medium text-[color:var(--ventia-green)]" role="status">
+          Photo path saved.
+        </p>
+      ) : null}
+      {flashError ? (
+        <p className="text-sm text-rose-600" role="alert">
+          {flashError}
+        </p>
+      ) : null}
 
       {envLocked ? (
         <p className="text-sm text-amber-700 dark:text-amber-300">

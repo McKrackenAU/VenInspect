@@ -1256,35 +1256,76 @@ export async function savePhotoStoragePath(formData: FormData) {
   await requireAdmin();
   const photoDir = String(formData.get("photoDir") ?? "").trim();
   const returnRaw = String(formData.get("returnTo") ?? "").trim();
-  const returnTo =
+  const returnBase =
     returnRaw.startsWith("/manage/") && !returnRaw.includes("..")
-      ? returnRaw
+      ? returnRaw.split("?")[0]!
       : "/manage/storage";
+
+  const finish = (query: string): never => {
+    revalidatePath("/manage/storage");
+    revalidatePath("/manage/system");
+    redirect(`${returnBase}?${query}`);
+  };
+
   if (process.env.PHOTO_DIR?.trim()) {
-    throw new Error(
-      "PHOTO_DIR is set in the environment and takes priority. Update /etc/veninspect.env (or .env) instead.",
+    finish(
+      `photoError=${encodeURIComponent(
+        "PHOTO_DIR is set in /etc/veninspect.env and locks the UI. Change or remove it there, then restart veninspect.",
+      )}`,
     );
   }
+
   if (photoDir) {
     const fs = await import("node:fs");
     const path = await import("node:path");
     const resolved = path.resolve(photoDir);
     try {
       fs.mkdirSync(resolved, { recursive: true });
-      fs.accessSync(resolved, fs.constants.W_OK);
-    } catch {
-      throw new Error(
-        `Photo path is not writable: ${resolved}. Check the mount and permissions (veninspect user).`,
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      finish(
+        `photoError=${encodeURIComponent(
+          `Could not create folder ${resolved}: ${msg}`,
+        )}`,
       );
     }
-    writeStorageSettings({ photoDir: resolved });
+    try {
+      const probe = path.join(resolved, ".veninspect-write-test");
+      fs.writeFileSync(probe, "ok");
+      fs.unlinkSync(probe);
+    } catch {
+      finish(
+        `photoError=${encodeURIComponent(
+          `Photo path is not writable by the app user: ${resolved}. On the host/CT: ensure the bind mount is up and writable (CIFS uid/gid or chown for veninspect).`,
+        )}`,
+      );
+    }
+    try {
+      writeStorageSettings({ photoDir: resolved });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      finish(
+        `photoError=${encodeURIComponent(`Could not write settings: ${msg}`)}`,
+      );
+    }
   } else {
-    writeStorageSettings({ photoDir: undefined });
+    try {
+      writeStorageSettings({ photoDir: undefined });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      finish(
+        `photoError=${encodeURIComponent(`Could not write settings: ${msg}`)}`,
+      );
+    }
   }
-  ensureDataDirs();
-  revalidatePath("/manage/storage");
-  revalidatePath("/manage/system");
-  redirect(returnTo);
+
+  try {
+    ensureDataDirs();
+  } catch {
+    /* settings saved; odd mounts may reject mkdir — uploads will report clearly */
+  }
+
+  finish("photoSaved=1");
 }
 
 export async function saveGoogleMapsApiKey(formData: FormData) {

@@ -5,8 +5,13 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-export default async function ManageStoragePage() {
+type Props = {
+  searchParams: Promise<{ photoError?: string; photoSaved?: string }>;
+};
+
+export default async function ManageStoragePage({ searchParams }: Props) {
   await requireAdmin();
+  const sp = await searchParams;
   const storage = describeStorage();
   const envLocked = Boolean(process.env.PHOTO_DIR?.trim());
 
@@ -56,6 +61,8 @@ export default async function ManageStoragePage() {
           sourceLabel={storage.photoDirSource}
           envLocked={envLocked}
           returnTo="/manage/storage"
+          flashError={sp.photoError ?? null}
+          flashSaved={sp.photoSaved === "1"}
         />
       </section>
     </div>
