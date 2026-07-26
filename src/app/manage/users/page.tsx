@@ -19,8 +19,10 @@ export default async function ManageUsersPage() {
         <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
           Create logins for field and office staff. Default admin is{" "}
           <code className="font-mono text-xs">root</code> /{" "}
-          <code className="font-mono text-xs">calvin</code>. Microsoft Entra ID
-          can replace passwords later.
+          <code className="font-mono text-xs">calvin</code>. Microsoft Entra
+          sign-in matches users by work email (set env vars in{" "}
+          <code className="font-mono text-xs">/etc/veninspect.env</code>
+          ).
         </p>
       </div>
 
@@ -66,7 +68,7 @@ export default async function ManageUsersPage() {
           <select
             name="role"
             defaultValue="INSPECTOR"
-            className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+            className="field-input"
           >
             <option value="INSPECTOR">Inspector</option>
             <option value="ADMIN">Admin</option>

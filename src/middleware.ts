@@ -8,6 +8,7 @@ import {
 
 const PUBLIC_PREFIXES = [
   "/login",
+  "/api/auth/microsoft",
   "/icons",
   "/manifest.webmanifest",
   "/_next",

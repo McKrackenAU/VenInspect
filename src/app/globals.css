@@ -106,6 +106,26 @@ button {
   outline-offset: 1px;
 }
 
+/* Native <select> dropdowns: keep option list readable in dark mode */
+html.dark select,
+html.dark select.field-input {
+  color-scheme: dark;
+  background-color: var(--field-bg);
+  color: var(--ventia-ink);
+}
+
+html.dark select option,
+html.dark select.field-input option {
+  background-color: #12151a;
+  color: #e8eaed;
+}
+
+html.dark select option:checked,
+html.dark select option:hover {
+  background-color: #1f2a24;
+  color: #e8eaed;
+}
+
 .btn-primary {
   display: inline-flex;
   min-height: var(--touch);

@@ -146,7 +146,7 @@ export function UserQualificationsForm({
         <select
           value={role}
           onChange={(e) => setRole(e.target.value)}
-          className="rounded-md border border-[color:var(--ventia-border)] px-2 py-1.5 text-sm"
+          className="field-input w-auto min-w-[8rem] py-1.5 text-sm"
         >
           <option value="INSPECTOR">Inspector</option>
           <option value="ADMIN">Admin</option>

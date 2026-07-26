@@ -11,6 +11,7 @@ import {
   readStorageSettings,
 } from "@/lib/paths";
 import { getDateTimePrefs } from "@/lib/date-time";
+import { isMicrosoftAuthEnabled } from "@/lib/microsoft-auth";
 import Link from "next/link";
 import { requireAdmin, getCurrentUser } from "@/lib/auth";
 
@@ -29,6 +30,11 @@ export default async function ManageSystemPage() {
   const mapProvider = getMapProvider();
   const dt = getDateTimePrefs();
   const isRoot = user?.username === "root";
+  const microsoftOn = isMicrosoftAuthEnabled();
+  const appBase =
+    process.env.APP_BASE_URL?.trim() ||
+    process.env.AUTH_URL?.trim() ||
+    "(set APP_BASE_URL)";
 
   return (
     <div className="space-y-8">
@@ -70,6 +76,26 @@ export default async function ManageSystemPage() {
             <dt className="text-[color:var(--ventia-muted)]">Platform</dt>
             <dd className="font-mono text-xs">
               {process.platform} / {process.arch}
+            </dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-[color:var(--ventia-muted)]">Microsoft Entra sign-in</dt>
+            <dd className="text-sm">
+              {microsoftOn ? (
+                <span className="font-medium text-[color:var(--ventia-green)]">
+                  Enabled — button shown on login
+                </span>
+              ) : (
+                <span className="text-[color:var(--ventia-muted)]">
+                  Off — set{" "}
+                  <code className="font-mono text-xs">AUTH_MICROSOFT_ENTRA_ID_*</code>{" "}
+                  and <code className="font-mono text-xs">APP_BASE_URL</code> in{" "}
+                  <code className="font-mono text-xs">/etc/veninspect.env</code>
+                </span>
+              )}
+              <p className="mt-1 break-all font-mono text-[10px] text-[color:var(--ventia-muted)]">
+                Redirect URI: {appBase}/api/auth/microsoft/callback
+              </p>
             </dd>
           </div>
         </dl>
