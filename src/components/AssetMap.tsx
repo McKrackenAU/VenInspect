@@ -281,6 +281,13 @@ export function AssetMap({
       const map = L.map(el, {
         center: [center.lat, center.lng],
         zoom: withCoords.length ? 11 : 10,
+        // Explicit — never leave pan disabled after overlays / programmatic moves
+        dragging: true,
+        scrollWheelZoom: true,
+        touchZoom: true,
+        doubleClickZoom: true,
+        boxZoom: true,
+        keyboard: true,
       });
 
       const tileOpts = {
@@ -318,19 +325,6 @@ export function AssetMap({
         }).addTo(map);
       }
 
-      // Links / overlays can leave Leaflet drag stuck after mouseup is lost.
-      const restoreInteraction = () => {
-        map.dragging.enable();
-        map.scrollWheelZoom.enable();
-        map.touchZoom.enable();
-        map.doubleClickZoom.enable();
-        map.boxZoom.enable();
-        map.keyboard.enable();
-      };
-      map.on("mousedown", restoreInteraction);
-      map.on("touchstart", restoreInteraction);
-      map.on("dragend", restoreInteraction);
-
       leafletMapRef.current = map;
       engineRef.current = "leaflet";
       leafletMarkersRef.current.clear();
@@ -347,11 +341,10 @@ export function AssetMap({
           icon,
           title: asset.assetNumber,
           riseOnHover: true,
+          // Allow map pan to start even if the gesture begins on a pin
+          bubblingMouseEvents: true,
         }).addTo(map);
-        marker.on("click", () => {
-          setSelectedId(asset.id);
-          restoreInteraction();
-        });
+        marker.on("click", () => setSelectedId(asset.id));
         leafletMarkersRef.current.set(asset.id, marker);
       }
 
@@ -675,7 +668,6 @@ export function AssetMap({
   const focusAsset = (asset: MapAsset) => {
     setSelectedId(asset.id);
     if (engineRef.current === "leaflet" && leafletMapRef.current) {
-      leafletMapRef.current.dragging.enable();
       leafletMapRef.current.panTo([asset.latitude, asset.longitude]);
       if (leafletMapRef.current.getZoom() < 15) {
         leafletMapRef.current.setZoom(16);
@@ -752,12 +744,13 @@ export function AssetMap({
         {/* Absolute fill avoids h-full % bugs inside flex layouts (blank Leaflet). */}
         <div
           ref={mapEl}
-          className="absolute inset-0 z-0 h-full w-full bg-[#e5e3df] [&.leaflet-container]:h-full [&.leaflet-container]:w-full"
+          className="absolute inset-0 z-0 h-full w-full touch-none bg-[#e5e3df] [&.leaflet-container]:h-full [&.leaflet-container]:w-full [&.leaflet-container]:touch-none"
           role="region"
           aria-label="Asset map"
         />
 
-        <div className="pointer-events-none absolute bottom-3 left-3 z-[1000] flex max-w-[calc(100%-1.5rem)] items-end gap-2">
+        {/* w-max so this never stretches into an invisible drag-blocker over the map */}
+        <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex w-max max-w-[min(100%,calc(100%-1.5rem))] items-end gap-2">
           <button
             type="button"
             onClick={() => setLayersOpen((v) => !v)}

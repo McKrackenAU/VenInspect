@@ -172,6 +172,12 @@ html.dark .btn-primary {
 /* Leaflet: hide subpixel hairlines between tiles (common on Nearmap / scaled displays) */
 .leaflet-container {
   background: #1c1c1c;
+  cursor: grab;
+  /* Keep pan gestures on the map (don’t let the page scroll instead) */
+  touch-action: none;
+}
+.leaflet-container:active {
+  cursor: grabbing;
 }
 .leaflet-container img.leaflet-tile {
   /* https://github.com/Leaflet/Leaflet/issues/3575 */
@@ -179,10 +185,7 @@ html.dark .btn-primary {
   height: 256.5px !important;
   max-width: none !important;
   max-height: none !important;
-}
-.leaflet-tile-container {
-  /* nudge compositor so gaps don’t flash white */
-  will-change: transform;
+  pointer-events: none;
 }
 
 /* Green labeled asset pins (DivIcon) */
@@ -197,12 +200,12 @@ html.dark .btn-primary {
   align-items: flex-start;
   justify-content: center;
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
-  pointer-events: auto;
 }
 .veninspect-pin svg {
   display: block;
   width: 44px;
   height: 54px;
+  pointer-events: none;
 }
 .veninspect-pin.is-selected {
   filter: drop-shadow(0 0 0 2px #fff) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
