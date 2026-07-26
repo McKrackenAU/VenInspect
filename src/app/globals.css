@@ -169,6 +169,47 @@ html.dark .btn-primary {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
+/* Leaflet: hide subpixel hairlines between tiles (common on Nearmap / scaled displays) */
+.leaflet-container {
+  background: #1c1c1c;
+}
+.leaflet-container img.leaflet-tile {
+  /* https://github.com/Leaflet/Leaflet/issues/3575 */
+  width: 256.5px !important;
+  height: 256.5px !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+.leaflet-tile-container {
+  /* nudge compositor so gaps don’t flash white */
+  will-change: transform;
+}
+
+/* Green labeled asset pins (DivIcon) */
+.veninspect-asset-marker {
+  background: transparent !important;
+  border: none !important;
+}
+.veninspect-pin {
+  display: flex;
+  width: 44px;
+  height: 54px;
+  align-items: flex-start;
+  justify-content: center;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+  pointer-events: auto;
+}
+.veninspect-pin svg {
+  display: block;
+  width: 44px;
+  height: 54px;
+}
+.veninspect-pin.is-selected {
+  filter: drop-shadow(0 0 0 2px #fff) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+  transform: scale(1.08);
+  transform-origin: center bottom;
+}
+
 html.dark .card {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }

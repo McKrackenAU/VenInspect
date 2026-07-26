@@ -32,14 +32,10 @@ type LatLng = { lat: number; lng: number };
 type GMaps = {
   Map: new (el: HTMLElement, opts?: object) => GMap;
   Marker: new (opts?: object) => GMarker;
-  InfoWindow: new () => GInfoWindow;
   LatLngBounds: new () => { extend: (p: LatLng) => void };
+  Size: new (w: number, h: number) => { width: number; height: number };
+  Point: new (x: number, y: number) => { x: number; y: number };
   SymbolPath: { CIRCLE: number };
-};
-
-type GLatLng = {
-  lat: number | (() => number);
-  lng: number | (() => number);
 };
 
 type GMap = {
@@ -51,21 +47,11 @@ type GMap = {
 
 type GMarker = {
   setMap: (m: GMap | null) => void;
-  getPosition: () => GLatLng | null | undefined;
+  getPosition: () => unknown;
   setPosition?: (p: LatLng) => void;
+  setIcon?: (icon: object) => void;
   addListener: (event: string, fn: () => void) => void;
 };
-
-type GInfoWindow = {
-  setContent: (html: string) => void;
-  open: (opts: { map: GMap; anchor: GMarker }) => void;
-};
-
-function readLatLng(p: GLatLng): LatLng {
-  const lat = typeof p.lat === "function" ? p.lat() : p.lat;
-  const lng = typeof p.lng === "function" ? p.lng() : p.lng;
-  return { lat, lng };
-}
 
 const NEARBY_KM = 5;
 const MELBOURNE: LatLng = { lat: -37.8136, lng: 144.9631 };
@@ -88,6 +74,36 @@ function storeProvider(p: MapProvider) {
   } catch {
     /* ignore */
   }
+}
+
+function markerLabel(assetNumber: string): string {
+  const t = assetNumber.trim();
+  if (t.length <= 6) return t;
+  return t.slice(0, 6);
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Green teardrop pin with asset number (for Leaflet DivIcon + Google icon URL). */
+function assetPinSvg(label: string, selected: boolean): string {
+  const fill = selected ? "#2bb673" : "#00994d";
+  const ring = selected ? "#ffffff" : "#004825";
+  const text = escapeHtml(markerLabel(label));
+  const fontSize = text.length > 4 ? 9 : 11;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="54" viewBox="0 0 44 54">
+  <path d="M22 52C22 52 40 35.5 40 20.5a18 18 0 1 0-36 0C4 35.5 22 52 22 52z" fill="${fill}" stroke="${ring}" stroke-width="2"/>
+  <text x="22" y="25" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="${fontSize}" font-weight="700" fill="#fff">${text}</text>
+</svg>`;
+}
+
+function assetPinDataUrl(label: string, selected: boolean): string {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(assetPinSvg(label, selected))}`;
 }
 
 function getGoogleMaps(): GMaps | null {
@@ -172,13 +188,13 @@ export function AssetMap({
 }: Props) {
   const mapEl = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<LeafletMap | null>(null);
-  const leafletMarkersRef = useRef<LeafletMarker[]>([]);
+  const leafletMarkersRef = useRef<Map<string, LeafletMarker>>(new Map());
   const leafletUserRef = useRef<LeafletCircleMarker | null>(null);
   const googleMapRef = useRef<GMap | null>(null);
-  const googleMarkersRef = useRef<GMarker[]>([]);
+  const googleMarkersRef = useRef<Map<string, GMarker>>(new Map());
   const googleUserRef = useRef<GMarker | null>(null);
-  const googleInfoRef = useRef<GInfoWindow | null>(null);
   const engineRef = useRef<"leaflet" | "google" | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
 
   const [selectedProvider, setSelectedProvider] = useState<MapProvider>(provider);
   const [activeProvider, setActiveProvider] = useState<MapProvider>(provider);
@@ -191,6 +207,7 @@ export function AssetMap({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const initGenRef = useRef(0);
+  selectedIdRef.current = selectedId;
 
   // Prefer last user choice from this browser; fall back to admin default.
   useEffect(() => {
@@ -206,6 +223,11 @@ export function AssetMap({
     [assets],
   );
 
+  const selectedAsset = useMemo(
+    () => withCoords.find((a) => a.id === selectedId) ?? null,
+    [selectedId, withCoords],
+  );
+
   const nearby = useMemo(() => {
     if (!userPos) return [];
     return withCoords
@@ -218,20 +240,19 @@ export function AssetMap({
   }, [userPos, withCoords]);
 
   const tearDown = useCallback(() => {
-    leafletMarkersRef.current = [];
+    leafletMarkersRef.current.clear();
     leafletUserRef.current = null;
     if (leafletMapRef.current) {
       leafletMapRef.current.remove();
       leafletMapRef.current = null;
     }
-    for (const m of googleMarkersRef.current) m.setMap(null);
-    googleMarkersRef.current = [];
+    for (const m of googleMarkersRef.current.values()) m.setMap(null);
+    googleMarkersRef.current.clear();
     if (googleUserRef.current) {
       googleUserRef.current.setMap(null);
       googleUserRef.current = null;
     }
     googleMapRef.current = null;
-    googleInfoRef.current = null;
     engineRef.current = null;
     const el = mapEl.current;
     if (el) {
@@ -262,13 +283,20 @@ export function AssetMap({
         zoom: withCoords.length ? 11 : 10,
       });
 
+      const tileOpts = {
+        // Retina doubling often causes hairline seams on aerial tiles
+        detectRetina: false as const,
+        keepBuffer: 4,
+        updateWhenZooming: false,
+      };
+
       if (mode === "nearmap" && nearmapApiKey) {
-        // OSM underlay for areas without Nearmap coverage / while tiles load
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        // Dark underlay so seams don’t flash white between Nearmap tiles
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           maxZoom: 19,
-          opacity: 0.35,
+          opacity: 0.45,
+          ...tileOpts,
         }).addTo(map);
         L.tileLayer(
           `https://api.nearmap.com/tiles/v3/Vert/{z}/{x}/{y}.jpg?apikey=${encodeURIComponent(nearmapApiKey)}`,
@@ -277,6 +305,8 @@ export function AssetMap({
               '&copy; <a href="https://www.nearmap.com/">Nearmap</a>',
             maxZoom: 21,
             maxNativeZoom: 21,
+            className: "veninspect-nearmap-tiles",
+            ...tileOpts,
           },
         ).addTo(map);
       } else {
@@ -284,19 +314,46 @@ export function AssetMap({
           attribution:
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           maxZoom: 19,
+          ...tileOpts,
         }).addTo(map);
       }
 
+      // Links / overlays can leave Leaflet drag stuck after mouseup is lost.
+      const restoreInteraction = () => {
+        map.dragging.enable();
+        map.scrollWheelZoom.enable();
+        map.touchZoom.enable();
+        map.doubleClickZoom.enable();
+        map.boxZoom.enable();
+        map.keyboard.enable();
+      };
+      map.on("mousedown", restoreInteraction);
+      map.on("touchstart", restoreInteraction);
+      map.on("dragend", restoreInteraction);
+
       leafletMapRef.current = map;
       engineRef.current = "leaflet";
-      leafletMarkersRef.current = withCoords.map((asset) => {
-        const marker = L.marker([asset.latitude, asset.longitude]).addTo(map);
-        marker.bindPopup(
-          `<strong>${asset.assetNumber}</strong><br/>${asset.name}<br/><span style="color:#5c6770">${asset.roadName} · ${asset.typeLabel}</span><br/><a href="/assets/${asset.id}">Open asset</a>`,
-        );
-        marker.on("click", () => setSelectedId(asset.id));
-        return marker;
-      });
+      leafletMarkersRef.current.clear();
+
+      for (const asset of withCoords) {
+        const selected = selectedIdRef.current === asset.id;
+        const icon = L.divIcon({
+          className: "veninspect-asset-marker",
+          html: `<div class="veninspect-pin${selected ? " is-selected" : ""}" title="${escapeHtml(asset.assetNumber)}">${assetPinSvg(asset.assetNumber, selected)}</div>`,
+          iconSize: [44, 54],
+          iconAnchor: [22, 52],
+        });
+        const marker = L.marker([asset.latitude, asset.longitude], {
+          icon,
+          title: asset.assetNumber,
+          riseOnHover: true,
+        }).addTo(map);
+        marker.on("click", () => {
+          setSelectedId(asset.id);
+          restoreInteraction();
+        });
+        leafletMarkersRef.current.set(asset.id, marker);
+      }
 
       if (withCoords.length > 1) {
         const bounds = L.latLngBounds(
@@ -326,26 +383,25 @@ export function AssetMap({
       streetViewControl: false,
       fullscreenControl: true,
     });
-    const info = new maps.InfoWindow();
     googleMapRef.current = map;
-    googleInfoRef.current = info;
     engineRef.current = "google";
+    googleMarkersRef.current.clear();
 
-    googleMarkersRef.current = withCoords.map((asset) => {
+    for (const asset of withCoords) {
+      const selected = selectedIdRef.current === asset.id;
       const marker = new maps.Marker({
         map,
         position: { lat: asset.latitude, lng: asset.longitude },
         title: asset.assetNumber,
+        icon: {
+          url: assetPinDataUrl(asset.assetNumber, selected),
+          scaledSize: new maps.Size(44, 54),
+          anchor: new maps.Point(22, 52),
+        },
       });
-      marker.addListener("click", () => {
-        setSelectedId(asset.id);
-        info.setContent(
-          `<strong>${asset.assetNumber}</strong><br/>${asset.name}<br/><span style="color:#5c6770">${asset.roadName} · ${asset.typeLabel}</span><br/><a href="/assets/${asset.id}">Open asset</a>`,
-        );
-        info.open({ map, anchor: marker });
-      });
-      return marker;
-    });
+      marker.addListener("click", () => setSelectedId(asset.id));
+      googleMarkersRef.current.set(asset.id, marker);
+    }
 
     if (withCoords.length > 1) {
       const bounds = new maps.LatLngBounds();
@@ -578,19 +634,52 @@ export function AssetMap({
     locateMe();
   }, [locateMe]);
 
+  // Keep pin styles in sync with selection (no Leaflet popups — those break drag after link clicks).
+  useEffect(() => {
+    if (!mapReady) return;
+    void (async () => {
+      if (engineRef.current === "leaflet") {
+        const L = await import("leaflet");
+        for (const asset of withCoords) {
+          const marker = leafletMarkersRef.current.get(asset.id);
+          if (!marker) continue;
+          const selected = asset.id === selectedId;
+          marker.setIcon(
+            L.divIcon({
+              className: "veninspect-asset-marker",
+              html: `<div class="veninspect-pin${selected ? " is-selected" : ""}" title="${escapeHtml(asset.assetNumber)}">${assetPinSvg(asset.assetNumber, selected)}</div>`,
+              iconSize: [44, 54],
+              iconAnchor: [22, 52],
+            }),
+          );
+        }
+        return;
+      }
+      if (engineRef.current === "google") {
+        const maps = getGoogleMaps();
+        if (!maps) return;
+        for (const asset of withCoords) {
+          const marker = googleMarkersRef.current.get(asset.id);
+          if (!marker?.setIcon) continue;
+          const selected = asset.id === selectedId;
+          marker.setIcon({
+            url: assetPinDataUrl(asset.assetNumber, selected),
+            scaledSize: new maps.Size(44, 54),
+            anchor: new maps.Point(22, 52),
+          });
+        }
+      }
+    })();
+  }, [selectedId, mapReady, withCoords]);
+
   const focusAsset = (asset: MapAsset) => {
     setSelectedId(asset.id);
     if (engineRef.current === "leaflet" && leafletMapRef.current) {
+      leafletMapRef.current.dragging.enable();
       leafletMapRef.current.panTo([asset.latitude, asset.longitude]);
-      leafletMapRef.current.setZoom(16);
-      const marker = leafletMarkersRef.current.find((m) => {
-        const ll = m.getLatLng();
-        return (
-          Math.abs(ll.lat - asset.latitude) < 1e-6 &&
-          Math.abs(ll.lng - asset.longitude) < 1e-6
-        );
-      });
-      marker?.openPopup();
+      if (leafletMapRef.current.getZoom() < 15) {
+        leafletMapRef.current.setZoom(16);
+      }
       return;
     }
     if (engineRef.current === "google" && googleMapRef.current) {
@@ -598,25 +687,8 @@ export function AssetMap({
         lat: asset.latitude,
         lng: asset.longitude,
       });
-      googleMapRef.current.setZoom(16);
-      const marker = googleMarkersRef.current.find((m) => {
-        const raw = m.getPosition();
-        if (!raw) return false;
-        const p = readLatLng(raw);
-        return (
-          Math.abs(p.lat - asset.latitude) < 1e-6 &&
-          Math.abs(p.lng - asset.longitude) < 1e-6
-        );
-      });
-      if (marker && googleInfoRef.current) {
-        googleInfoRef.current.setContent(
-          `<strong>${asset.assetNumber}</strong><br/>${asset.name}<br/><span style="color:#5c6770">${asset.roadName} · ${asset.typeLabel}</span><br/><a href="/assets/${asset.id}">Open asset</a>`,
-        );
-        googleInfoRef.current.open({
-          map: googleMapRef.current,
-          anchor: marker,
-        });
-      }
+      const z = googleMapRef.current.getZoom();
+      if (z == null || z < 15) googleMapRef.current.setZoom(16);
     }
   };
 
@@ -745,6 +817,50 @@ export function AssetMap({
         </div>
       </div>
 
+      {selectedAsset ? (
+        <section className="card space-y-3 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
+                Selected asset
+              </p>
+              <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
+                {selectedAsset.assetNumber}
+              </h2>
+              <p className="text-sm text-[color:var(--ventia-muted)]">
+                {selectedAsset.name} · {selectedAsset.roadName} ·{" "}
+                {selectedAsset.typeLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="text-xs font-medium text-[color:var(--ventia-muted)] underline-offset-2 hover:underline"
+              onClick={() => setSelectedId(null)}
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/inspect?assetId=${encodeURIComponent(selectedAsset.id)}`}
+              className="inline-flex min-h-[var(--touch)] flex-1 items-center justify-center rounded-xl bg-[color:var(--ventia-green)] px-4 py-2.5 text-sm font-semibold text-white sm:flex-none"
+            >
+              Start inspection
+            </Link>
+            <Link
+              href={`/assets/${selectedAsset.id}`}
+              className="inline-flex min-h-[var(--touch)] items-center justify-center rounded-xl border border-[color:var(--ventia-border)] px-4 py-2.5 text-sm font-semibold text-[color:var(--ventia-ink)]"
+            >
+              Open asset
+            </Link>
+          </div>
+        </section>
+      ) : withCoords.length > 0 ? (
+        <p className="text-sm text-[color:var(--ventia-muted)]">
+          Tap a green pin on the map to select an asset for inspection.
+        </p>
+      ) : null}
+
       {userPos ? (
         <section className="space-y-2 shrink-0">
           <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
@@ -757,35 +873,52 @@ export function AssetMap({
           ) : (
             <ul className="divide-y divide-[color:var(--ventia-border)] overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)]">
               {nearby.map(({ asset, km }) => (
-                <li key={asset.id}>
-                  <button
-                    type="button"
-                    onClick={() => focusAsset(asset)}
-                    className={`flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-[color:var(--ventia-green-tint)] ${
-                      selectedId === asset.id
-                        ? "bg-[color:var(--ventia-green-tint)]"
-                        : ""
-                    }`}
-                  >
-                    <span>
+                <li
+                  key={asset.id}
+                  className={`px-4 py-3 ${
+                    selectedId === asset.id
+                      ? "bg-[color:var(--ventia-green-tint)]"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => focusAsset(asset)}
+                      className="min-w-0 flex-1 text-left"
+                    >
                       <span className="block font-semibold text-[color:var(--ventia-ink)]">
                         {asset.assetNumber}
                       </span>
                       <span className="block text-sm text-[color:var(--ventia-muted)]">
                         {asset.name} · {asset.roadName}
                       </span>
-                      <Link
-                        href={`/assets/${asset.id}`}
-                        className="mt-1 inline-block text-xs font-semibold text-[color:var(--ventia-green)]"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Open →
-                      </Link>
-                    </span>
+                    </button>
                     <span className="shrink-0 text-sm font-medium text-[color:var(--ventia-blue)]">
                       {formatDistanceKm(km)}
                     </span>
-                  </button>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold">
+                    <button
+                      type="button"
+                      className="text-[color:var(--ventia-green)]"
+                      onClick={() => focusAsset(asset)}
+                    >
+                      Select on map
+                    </button>
+                    <Link
+                      href={`/inspect?assetId=${encodeURIComponent(asset.id)}`}
+                      className="text-[color:var(--ventia-green)]"
+                    >
+                      Start inspection
+                    </Link>
+                    <Link
+                      href={`/assets/${asset.id}`}
+                      className="text-[color:var(--ventia-muted)]"
+                    >
+                      Open asset
+                    </Link>
+                  </div>
                 </li>
               ))}
             </ul>
