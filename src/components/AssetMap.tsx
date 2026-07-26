@@ -190,11 +190,12 @@ export function AssetMap({
   const [locError, setLocError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layersOpen, setLayersOpen] = useState(false);
-  const [providerHydrated, setProviderHydrated] = useState(false);
+  const initGenRef = useRef(0);
 
+  // Prefer last user choice from this browser; fall back to admin default.
   useEffect(() => {
-    setSelectedProvider(readStoredProvider(provider));
-    setProviderHydrated(true);
+    const stored = readStoredProvider(provider);
+    setSelectedProvider((prev) => (prev === stored ? prev : stored));
   }, [provider]);
 
   const withCoords = useMemo(
@@ -232,21 +233,31 @@ export function AssetMap({
     googleMapRef.current = null;
     googleInfoRef.current = null;
     engineRef.current = null;
-    if (mapEl.current) mapEl.current.innerHTML = "";
+    const el = mapEl.current;
+    if (el) {
+      el.innerHTML = "";
+      // Leaflet stamps the container; clear so a remount can re-init cleanly.
+      delete (el as unknown as { _leaflet_id?: number })._leaflet_id;
+    }
   }, []);
 
   const initLeaflet = useCallback(
     async (mode: "osm" | "nearmap") => {
-      if (!mapEl.current) return;
+      const el = mapEl.current;
+      if (!el) return;
       ensureLeafletCss();
       const L = await initLeafletIcons();
+      // Stale async init after Strict Mode remount / provider switch.
+      if (mapEl.current !== el) return;
+      delete (el as unknown as { _leaflet_id?: number })._leaflet_id;
+      el.innerHTML = "";
 
       const center =
         withCoords.length > 0
           ? { lat: withCoords[0]!.latitude, lng: withCoords[0]!.longitude }
           : MELBOURNE;
 
-      const map = L.map(mapEl.current, {
+      const map = L.map(el, {
         center: [center.lat, center.lng],
         zoom: withCoords.length ? 11 : 10,
       });
@@ -346,18 +357,18 @@ export function AssetMap({
   }, [googleApiKey, withCoords]);
 
   useEffect(() => {
-    if (!providerHydrated) return;
-
-    let cancelled = false;
+    const gen = ++initGenRef.current;
     setMapReady(false);
     setMapError(null);
     setFallbackNote(null);
     setActiveProvider(selectedProvider);
 
+    const stillCurrent = () => gen === initGenRef.current;
+
     (async () => {
       try {
         tearDown();
-        if (cancelled || !mapEl.current) return;
+        if (!stillCurrent() || !mapEl.current) return;
 
         if (selectedProvider === "google") {
           if (!googleApiKey) {
@@ -369,6 +380,10 @@ export function AssetMap({
           } else {
             try {
               await initGoogle();
+              if (!stillCurrent()) {
+                tearDown();
+                return;
+              }
               setActiveProvider("google");
             } catch (e) {
               const msg =
@@ -376,7 +391,8 @@ export function AssetMap({
               setFallbackNote(`${msg} Falling back to OpenStreetMap.`);
               setActiveProvider("osm");
               tearDown();
-              if (!cancelled) await initLeaflet("osm");
+              if (!stillCurrent()) return;
+              await initLeaflet("osm");
             }
           }
         } else if (selectedProvider === "nearmap") {
@@ -395,27 +411,39 @@ export function AssetMap({
           await initLeaflet("osm");
         }
 
-        if (!cancelled) {
-          setMapReady(true);
-          setMapError(null);
+        // Drop work from a superseded init (Strict Mode / fast provider switch).
+        if (!stillCurrent()) {
+          tearDown();
+          return;
         }
+        setMapReady(true);
+        setMapError(null);
+        // Layout may still be settling (flex/absolute shell).
+        requestAnimationFrame(() => {
+          if (stillCurrent()) {
+            leafletMapRef.current?.invalidateSize({ animate: false });
+          }
+        });
+        window.setTimeout(() => {
+          if (stillCurrent()) {
+            leafletMapRef.current?.invalidateSize({ animate: false });
+          }
+        }, 250);
       } catch (e) {
-        if (!cancelled) {
-          setMapError(
-            e instanceof Error ? e.message : "Could not initialise map",
-          );
-        }
+        if (!stillCurrent()) return;
+        setMapError(
+          e instanceof Error ? e.message : "Could not initialise map",
+        );
       }
     })();
 
     return () => {
-      cancelled = true;
+      initGenRef.current += 1;
       tearDown();
     };
     // Recreate when provider/keys/asset set change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    providerHydrated,
     selectedProvider,
     googleApiKey,
     nearmapApiKey,
@@ -648,15 +676,16 @@ export function AssetMap({
         </p>
       ) : null}
 
-      <div className="relative z-0 w-full flex-1 min-h-[280px] h-[clamp(280px,calc(100dvh-14rem),900px)]">
+      <div className="relative z-0 w-full flex-1 min-h-[280px] h-[clamp(280px,calc(100dvh-14rem),900px)] overflow-hidden rounded-2xl border border-[color:var(--ventia-border)]">
+        {/* Absolute fill avoids h-full % bugs inside flex layouts (blank Leaflet). */}
         <div
           ref={mapEl}
-          className="h-full w-full overflow-hidden rounded-2xl border border-[color:var(--ventia-border)] bg-[#e5e3df]"
+          className="absolute inset-0 z-0 h-full w-full bg-[#e5e3df] [&.leaflet-container]:h-full [&.leaflet-container]:w-full"
           role="region"
           aria-label="Asset map"
         />
 
-        <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex max-w-[calc(100%-1.5rem)] items-end gap-2">
+        <div className="pointer-events-none absolute bottom-3 left-3 z-[1000] flex max-w-[calc(100%-1.5rem)] items-end gap-2">
           <button
             type="button"
             onClick={() => setLayersOpen((v) => !v)}
