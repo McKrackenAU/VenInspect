@@ -1255,15 +1255,36 @@ export async function updateAssetDetails(formData: FormData) {
 export async function savePhotoStoragePath(formData: FormData) {
   await requireAdmin();
   const photoDir = String(formData.get("photoDir") ?? "").trim();
+  const returnRaw = String(formData.get("returnTo") ?? "").trim();
+  const returnTo =
+    returnRaw.startsWith("/manage/") && !returnRaw.includes("..")
+      ? returnRaw
+      : "/manage/storage";
   if (process.env.PHOTO_DIR?.trim()) {
     throw new Error(
       "PHOTO_DIR is set in the environment and takes priority. Update /etc/veninspect.env (or .env) instead.",
     );
   }
-  writeStorageSettings({ photoDir: photoDir || undefined });
+  if (photoDir) {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const resolved = path.resolve(photoDir);
+    try {
+      fs.mkdirSync(resolved, { recursive: true });
+      fs.accessSync(resolved, fs.constants.W_OK);
+    } catch {
+      throw new Error(
+        `Photo path is not writable: ${resolved}. Check the mount and permissions (veninspect user).`,
+      );
+    }
+    writeStorageSettings({ photoDir: resolved });
+  } else {
+    writeStorageSettings({ photoDir: undefined });
+  }
   ensureDataDirs();
   revalidatePath("/manage/storage");
-  redirect("/manage/storage");
+  revalidatePath("/manage/system");
+  redirect(returnTo);
 }
 
 export async function saveGoogleMapsApiKey(formData: FormData) {

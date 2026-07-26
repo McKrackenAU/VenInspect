@@ -2,6 +2,7 @@ import { formatAppVersion, getAppVersion, getConfiguredUpdateChannel } from "@/l
 import { SystemUpdatePanel } from "@/components/SystemUpdatePanel";
 import { MapsApiKeyForm } from "@/components/MapsApiKeyForm";
 import { DateTimePrefsForm } from "@/components/DateTimePrefsForm";
+import { PhotoStoragePicker } from "@/components/PhotoStoragePicker";
 import {
   describeStorage,
   getGoogleMapsApiKey,
@@ -73,6 +74,21 @@ export default async function ManageSystemPage() {
             </dd>
           </div>
         </dl>
+      </section>
+
+      <section className="card space-y-3 p-5">
+        <h2 className="text-lg font-medium">Photo storage</h2>
+        <p className="text-sm text-[color:var(--ventia-muted)]">
+          Browse mounted disks (e.g. TrueNAS bind at <code>/mnt/…</code>) and set where
+          inspection photos are stored. Database stays on{" "}
+          <code>{storage.dataDir}</code>.
+        </p>
+        <PhotoStoragePicker
+          currentPath={storage.photoDir}
+          sourceLabel={storage.photoDirSource}
+          envLocked={Boolean(process.env.PHOTO_DIR?.trim())}
+          returnTo="/manage/system"
+        />
       </section>
 
       <section className="card space-y-3 p-5">
