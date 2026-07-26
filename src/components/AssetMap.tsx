@@ -9,6 +9,7 @@ import type {
   CircleMarker as LeafletCircleMarker,
 } from "leaflet";
 import type { MapProvider } from "@/lib/paths";
+import "leaflet/dist/leaflet.css";
 
 export type MapAsset = {
   id: string;
@@ -158,15 +159,6 @@ function loadGoogleMaps(apiKey: string): Promise<GMaps> {
   });
 }
 
-function ensureLeafletCss() {
-  if (document.querySelector('link[data-veninspect-leaflet="1"]')) return;
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-  link.dataset.veninspectLeaflet = "1";
-  document.head.appendChild(link);
-}
-
 async function initLeafletIcons() {
   const L = await import("leaflet");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -178,6 +170,30 @@ async function initLeafletIcons() {
     shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
   });
   return L;
+}
+
+/** Leaflet breaks pan/tiles if created at 0×0 — wait for the shell to lay out. */
+async function waitForMapSize(
+  el: HTMLElement,
+  isCancelled: () => boolean,
+  maxMs = 2500,
+): Promise<boolean> {
+  const start = performance.now();
+  while (performance.now() - start < maxMs) {
+    if (isCancelled()) return false;
+    if (el.clientWidth >= 40 && el.clientHeight >= 40) return true;
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+  }
+  return el.clientWidth > 0 && el.clientHeight > 0;
+}
+
+function refreshLeafletSize(map: LeafletMap | null) {
+  if (!map) return;
+  map.invalidateSize({ animate: false });
+  // Re-assert pan after size/layout settles (Leaflet can leave handlers odd at 0×0).
+  map.dragging.enable();
 }
 
 export function AssetMap({
@@ -206,13 +222,13 @@ export function AssetMap({
   const [locError, setLocError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layersOpen, setLayersOpen] = useState(false);
-  const initGenRef = useRef(0);
+  const [prefsReady, setPrefsReady] = useState(false);
   selectedIdRef.current = selectedId;
 
-  // Prefer last user choice from this browser; fall back to admin default.
+  // Resolve browser layer preference before the first map init (avoids create→destroy).
   useEffect(() => {
-    const stored = readStoredProvider(provider);
-    setSelectedProvider((prev) => (prev === stored ? prev : stored));
+    setSelectedProvider(readStoredProvider(provider));
+    setPrefsReady(true);
   }, [provider]);
 
   const withCoords = useMemo(
@@ -263,13 +279,15 @@ export function AssetMap({
   }, []);
 
   const initLeaflet = useCallback(
-    async (mode: "osm" | "nearmap") => {
+    async (mode: "osm" | "nearmap", isCancelled: () => boolean) => {
       const el = mapEl.current;
-      if (!el) return;
-      ensureLeafletCss();
+      if (!el || isCancelled()) return;
+      const sized = await waitForMapSize(el, isCancelled);
+      if (!sized || isCancelled() || mapEl.current !== el) return;
+
       const L = await initLeafletIcons();
-      // Stale async init after Strict Mode remount / provider switch.
-      if (mapEl.current !== el) return;
+      if (isCancelled() || mapEl.current !== el) return;
+
       delete (el as unknown as { _leaflet_id?: number })._leaflet_id;
       el.innerHTML = "";
 
@@ -281,7 +299,6 @@ export function AssetMap({
       const map = L.map(el, {
         center: [center.lat, center.lng],
         zoom: withCoords.length ? 11 : 10,
-        // Explicit — never leave pan disabled after overlays / programmatic moves
         dragging: true,
         scrollWheelZoom: true,
         touchZoom: true,
@@ -290,15 +307,18 @@ export function AssetMap({
         keyboard: true,
       });
 
+      if (isCancelled()) {
+        map.remove();
+        return;
+      }
+
       const tileOpts = {
-        // Retina doubling often causes hairline seams on aerial tiles
         detectRetina: false as const,
         keepBuffer: 4,
         updateWhenZooming: false,
       };
 
       if (mode === "nearmap" && nearmapApiKey) {
-        // Dark underlay so seams don’t flash white between Nearmap tiles
         L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           maxZoom: 19,
@@ -341,7 +361,6 @@ export function AssetMap({
           icon,
           title: asset.assetNumber,
           riseOnHover: true,
-          // Allow map pan to start even if the gesture begins on a pin
           bubblingMouseEvents: true,
         }).addTo(map);
         marker.on("click", () => setSelectedId(asset.id));
@@ -352,72 +371,96 @@ export function AssetMap({
         const bounds = L.latLngBounds(
           withCoords.map((a) => [a.latitude, a.longitude] as [number, number]),
         );
-        map.fitBounds(bounds, { padding: [40, 40] });
+        map.fitBounds(bounds, { padding: [40, 40], animate: false });
       }
-      setTimeout(() => map.invalidateSize(), 100);
+
+      refreshLeafletSize(map);
+      requestAnimationFrame(() => refreshLeafletSize(map));
+      window.setTimeout(() => {
+        if (!isCancelled()) refreshLeafletSize(map);
+      }, 100);
+      window.setTimeout(() => {
+        if (!isCancelled()) refreshLeafletSize(map);
+      }, 400);
     },
     [nearmapApiKey, withCoords],
   );
 
-  const initGoogle = useCallback(async () => {
-    if (!mapEl.current || !googleApiKey) {
-      throw new Error("Google Maps key missing");
-    }
-    const maps = await loadGoogleMaps(googleApiKey);
-    const center =
-      withCoords.length > 0
-        ? { lat: withCoords[0]!.latitude, lng: withCoords[0]!.longitude }
-        : MELBOURNE;
-
-    const map = new maps.Map(mapEl.current, {
-      center,
-      zoom: withCoords.length ? 11 : 10,
-      mapTypeControl: true,
-      streetViewControl: false,
-      fullscreenControl: true,
-    });
-    googleMapRef.current = map;
-    engineRef.current = "google";
-    googleMarkersRef.current.clear();
-
-    for (const asset of withCoords) {
-      const selected = selectedIdRef.current === asset.id;
-      const marker = new maps.Marker({
-        map,
-        position: { lat: asset.latitude, lng: asset.longitude },
-        title: asset.assetNumber,
-        icon: {
-          url: assetPinDataUrl(asset.assetNumber, selected),
-          scaledSize: new maps.Size(44, 54),
-          anchor: new maps.Point(22, 52),
-        },
-      });
-      marker.addListener("click", () => setSelectedId(asset.id));
-      googleMarkersRef.current.set(asset.id, marker);
-    }
-
-    if (withCoords.length > 1) {
-      const bounds = new maps.LatLngBounds();
-      for (const a of withCoords) {
-        bounds.extend({ lat: a.latitude, lng: a.longitude });
+  const initGoogle = useCallback(
+    async (isCancelled: () => boolean) => {
+      if (!mapEl.current || !googleApiKey) {
+        throw new Error("Google Maps key missing");
       }
-      map.fitBounds(bounds, { padding: 40 });
-    }
-  }, [googleApiKey, withCoords]);
+      const sized = await waitForMapSize(mapEl.current, isCancelled);
+      if (!sized || isCancelled()) return;
+
+      const maps = await loadGoogleMaps(googleApiKey);
+      if (isCancelled() || !mapEl.current) return;
+
+      const center =
+        withCoords.length > 0
+          ? { lat: withCoords[0]!.latitude, lng: withCoords[0]!.longitude }
+          : MELBOURNE;
+
+      const map = new maps.Map(mapEl.current, {
+        center,
+        zoom: withCoords.length ? 11 : 10,
+        mapTypeControl: true,
+        streetViewControl: false,
+        fullscreenControl: true,
+        gestureHandling: "greedy",
+        draggable: true,
+      });
+      if (isCancelled()) return;
+
+      googleMapRef.current = map;
+      engineRef.current = "google";
+      googleMarkersRef.current.clear();
+
+      for (const asset of withCoords) {
+        const selected = selectedIdRef.current === asset.id;
+        const marker = new maps.Marker({
+          map,
+          position: { lat: asset.latitude, lng: asset.longitude },
+          title: asset.assetNumber,
+          icon: {
+            url: assetPinDataUrl(asset.assetNumber, selected),
+            scaledSize: new maps.Size(44, 54),
+            anchor: new maps.Point(22, 52),
+          },
+        });
+        marker.addListener("click", () => setSelectedId(asset.id));
+        googleMarkersRef.current.set(asset.id, marker);
+      }
+
+      if (withCoords.length > 1) {
+        const bounds = new maps.LatLngBounds();
+        for (const a of withCoords) {
+          bounds.extend({ lat: a.latitude, lng: a.longitude });
+        }
+        map.fitBounds(bounds, { padding: 40 });
+      }
+    },
+    [googleApiKey, withCoords],
+  );
 
   useEffect(() => {
-    const gen = ++initGenRef.current;
+    if (!prefsReady) return;
+
+    let cancelled = false;
+    const isCancelled = () => cancelled;
+
     setMapReady(false);
     setMapError(null);
     setFallbackNote(null);
     setActiveProvider(selectedProvider);
 
-    const stillCurrent = () => gen === initGenRef.current;
-
     (async () => {
       try {
+        // Only effect cleanup may destroy maps. Stale async must never tearDown —
+        // that was wiping the live map right after first load.
         tearDown();
-        if (!stillCurrent() || !mapEl.current) return;
+        if (cancelled || !mapEl.current) return;
 
         if (selectedProvider === "google") {
           if (!googleApiKey) {
@@ -425,23 +468,21 @@ export function AssetMap({
               "Google Maps selected but no API key — using OpenStreetMap.",
             );
             setActiveProvider("osm");
-            await initLeaflet("osm");
+            await initLeaflet("osm", isCancelled);
           } else {
             try {
-              await initGoogle();
-              if (!stillCurrent()) {
-                tearDown();
-                return;
-              }
+              await initGoogle(isCancelled);
+              if (cancelled) return;
               setActiveProvider("google");
             } catch (e) {
+              if (cancelled) return;
               const msg =
                 e instanceof Error ? e.message : "Google Maps failed to load";
               setFallbackNote(`${msg} Falling back to OpenStreetMap.`);
               setActiveProvider("osm");
               tearDown();
-              if (!stillCurrent()) return;
-              await initLeaflet("osm");
+              if (cancelled) return;
+              await initLeaflet("osm", isCancelled);
             }
           }
         } else if (selectedProvider === "nearmap") {
@@ -450,36 +491,22 @@ export function AssetMap({
               "Nearmap selected but no API key — using OpenStreetMap.",
             );
             setActiveProvider("osm");
-            await initLeaflet("osm");
+            await initLeaflet("osm", isCancelled);
           } else {
             setActiveProvider("nearmap");
-            await initLeaflet("nearmap");
+            await initLeaflet("nearmap", isCancelled);
           }
         } else {
           setActiveProvider("osm");
-          await initLeaflet("osm");
+          await initLeaflet("osm", isCancelled);
         }
 
-        // Drop work from a superseded init (Strict Mode / fast provider switch).
-        if (!stillCurrent()) {
-          tearDown();
-          return;
-        }
+        if (cancelled) return;
         setMapReady(true);
         setMapError(null);
-        // Layout may still be settling (flex/absolute shell).
-        requestAnimationFrame(() => {
-          if (stillCurrent()) {
-            leafletMapRef.current?.invalidateSize({ animate: false });
-          }
-        });
-        window.setTimeout(() => {
-          if (stillCurrent()) {
-            leafletMapRef.current?.invalidateSize({ animate: false });
-          }
-        }, 250);
+        refreshLeafletSize(leafletMapRef.current);
       } catch (e) {
-        if (!stillCurrent()) return;
+        if (cancelled) return;
         setMapError(
           e instanceof Error ? e.message : "Could not initialise map",
         );
@@ -487,12 +514,13 @@ export function AssetMap({
     })();
 
     return () => {
-      initGenRef.current += 1;
+      cancelled = true;
       tearDown();
     };
     // Recreate when provider/keys/asset set change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    prefsReady,
     selectedProvider,
     googleApiKey,
     nearmapApiKey,
