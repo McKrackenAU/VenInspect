@@ -750,6 +750,7 @@ export async function adminDeleteInspectionAction(formData: FormData): Promise<{
   revalidatePath("/approvals");
   revalidatePath("/manage");
   revalidatePath("/manage/trash");
+  revalidatePath("/manage/reports");
 
   const nextRaw = String(formData.get("next") ?? "").trim();
   const next = nextRaw.startsWith("/") ? nextRaw : `/manage/assets/${assetId}`;

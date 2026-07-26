@@ -10,6 +10,7 @@ export type AdminNavLink = {
 export const adminPrimaryLinks: AdminNavLink[] = [
   { href: "/manage", label: "Dashboard" },
   { href: "/manage/assets", label: "Assets" },
+  { href: "/manage/reports", label: "Reports" },
   { href: "/manage/schedule", label: "Schedule" },
   { href: "/manage/users", label: "People" },
 ];
@@ -28,6 +29,11 @@ export const adminMenuGroups: AdminNavGroup[] = [
         href: "/manage/assets",
         label: "Assets",
         description: "Browse and edit the structure register",
+      },
+      {
+        href: "/manage/reports",
+        label: "Reports",
+        description: "All inspections — filter, export, bulk trash/purge",
       },
       {
         href: "/manage/assets/import",

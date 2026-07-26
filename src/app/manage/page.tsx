@@ -45,9 +45,11 @@ export default async function ManageHomePage({
 
         <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           <Stat label="Assets in registry" value={String(assetCount)} href="/manage/assets" />
+          <Stat label="Reports (all inspections)" value="→" href="/manage/reports" />
           <Stat label="Users" value={String(userCount)} href="/manage/users" />
           <Stat label="Schedule board" value="→" href="/manage/schedule" />
           <Stat label="System / updates" value="→" href="/manage/system" />
+          <Stat label="Trash" value="→" href="/manage/trash" />
           <Stat label="Condition states" value="→" href="/manage/severities" />
           <Stat label="Export configurator" value="→" href="/manage/export-config" />
           <Stat label="Inspection types" value="→" href="/manage/inspection-types" />

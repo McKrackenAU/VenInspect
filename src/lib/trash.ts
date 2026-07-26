@@ -144,6 +144,92 @@ async function assertAdminPassword(password: string, adminId: string) {
   }
 }
 
+function parseIdList(formData: FormData): string[] {
+  const raw = String(formData.get("ids") ?? "").trim();
+  if (!raw) return [];
+  return [
+    ...new Set(
+      raw
+        .split(/[\n,|]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/** Bulk soft-delete (move to Trash). Confirm word DELETE + admin password. */
+export async function bulkTrashInspectionsAction(formData: FormData): Promise<{
+  ok: true;
+  count: number;
+}> {
+  const admin = await requireAdmin();
+  const password = String(formData.get("password") ?? "");
+  const confirmText = String(formData.get("confirmText") ?? "").trim();
+  const ids = parseIdList(formData);
+  if (!ids.length) throw new Error("Select at least one report");
+  if (!password) throw new Error("Password required");
+  if (confirmText !== "DELETE") {
+    throw new Error('Type DELETE to confirm bulk move to Trash');
+  }
+  await assertAdminPassword(password, admin.id);
+
+  const result = await prisma.inspection.updateMany({
+    where: { id: { in: ids }, deletedAt: null },
+    data: { deletedAt: new Date(), deletedById: admin.id },
+  });
+
+  revalidatePath("/manage/trash");
+  revalidatePath("/manage/reports");
+  revalidatePath("/manage");
+  revalidatePath("/assets");
+  return { ok: true, count: result.count };
+}
+
+/**
+ * Bulk permanent delete (live or trashed). Removes photos + DB rows.
+ * Confirm word PURGE + admin password.
+ */
+export async function bulkPurgeInspectionsAction(formData: FormData): Promise<{
+  ok: true;
+  purged: number;
+  filesRemoved: number;
+}> {
+  const admin = await requireAdmin();
+  const password = String(formData.get("password") ?? "");
+  const confirmText = String(formData.get("confirmText") ?? "").trim();
+  const ids = parseIdList(formData);
+  if (!ids.length) throw new Error("Select at least one report");
+  if (!password) throw new Error("Password required");
+  if (confirmText !== "PURGE") {
+    throw new Error("Type PURGE to permanently delete selected reports and photos");
+  }
+  await assertAdminPassword(password, admin.id);
+
+  let filesRemoved = 0;
+  let purged = 0;
+  const assetIds = new Set<string>();
+  for (const id of ids) {
+    const row = await prisma.inspection.findUnique({
+      where: { id },
+      select: { id: true, assetId: true },
+    });
+    if (!row) continue;
+    const result = await permanentlyDeleteInspection(id);
+    filesRemoved += result.filesRemoved;
+    purged += 1;
+    assetIds.add(row.assetId);
+  }
+
+  revalidatePath("/manage/trash");
+  revalidatePath("/manage/reports");
+  revalidatePath("/manage");
+  for (const assetId of assetIds) {
+    revalidatePath(`/assets/${assetId}`);
+    revalidatePath(`/manage/assets/${assetId}`);
+  }
+  return { ok: true, purged, filesRemoved };
+}
+
 /** Purge one trashed report now (files + DB). */
 export async function purgeTrashItemAction(formData: FormData): Promise<{
   ok: true;
