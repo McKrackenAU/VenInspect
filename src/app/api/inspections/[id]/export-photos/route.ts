@@ -7,64 +7,15 @@ import {
   parseFormPayload,
   serializeFormPayload,
 } from "@/lib/inspection-templates";
+import { getTemplateForLevel } from "@/lib/inspection-templates";
 import { getExportConfig } from "@/lib/export-config";
+import {
+  buildExportPhotoPool,
+  mergeExportPhotoOrder,
+} from "@/lib/export-photos";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-export type ExportPhotoDto = {
-  key: string;
-  label: string;
-  detail?: string;
-  /** Defect condition state (CS1…); form photos omit this */
-  severity?: string | null;
-};
-
-function buildPhotoList(
-  defects: {
-    id: string;
-    defectCode: string;
-    description: string;
-    severity: string;
-    photoPath: string | null;
-    comparisonPhotoPath: string | null;
-    subcategory: string | null;
-    category: string | null;
-  }[],
-  media: Record<string, { id: string; path: string; caption?: string }[]>,
-  includeComparison: boolean,
-): ExportPhotoDto[] {
-  const list: ExportPhotoDto[] = [];
-  for (const d of defects) {
-    if (d.photoPath) {
-      list.push({
-        key: `defect:${d.id}:current`,
-        label: `${d.defectCode} (current)`,
-        detail: d.description,
-        severity: d.severity,
-      });
-    }
-    if (includeComparison && d.comparisonPhotoPath) {
-      list.push({
-        key: `defect:${d.id}:comparison`,
-        label: `${d.defectCode} (comparison)`,
-        detail: d.description,
-        severity: d.severity,
-      });
-    }
-  }
-  for (const [sectionKey, items] of Object.entries(media)) {
-    for (const item of items) {
-      list.push({
-        key: `form:${item.id}`,
-        label: item.caption || `Form photo`,
-        detail: sectionKey,
-        severity: null,
-      });
-    }
-  }
-  return list;
-}
 
 export async function GET(
   _req: NextRequest,
@@ -77,7 +28,12 @@ export async function GET(
   const { id } = await context.params;
   const inspection = await prisma.inspection.findUnique({
     where: { id },
-    include: { defects: { orderBy: { defectCode: "asc" } } },
+    include: {
+      defects: {
+        orderBy: [{ sortOrder: "asc" }, { defectCode: "asc" }],
+        include: { photos: { orderBy: { sortOrder: "asc" } } },
+      },
+    },
   });
   if (!inspection) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -88,19 +44,26 @@ export async function GET(
 
   const payload = parseFormPayload(inspection.formPayload);
   const exportCfg = getExportConfig();
-  const photos = buildPhotoList(
+  const template = getTemplateForLevel(inspection.level);
+
+  // Ordering UI always includes general/form photos (report pool), even if ZIP
+  // config later omits them — user can still see and order everything.
+  const pool = buildExportPhotoPool(
     inspection.defects,
     payload.media ?? {},
-    exportCfg.includeComparisonPhotos,
+    {
+      includeComparison: exportCfg.includeComparisonPhotos,
+      includeFormPhotos: true,
+      template,
+    },
   );
-  const order =
-    payload.exportPhotoOrder?.filter((k) => photos.some((p) => p.key === k)) ??
-    [];
-  const missing = photos.map((p) => p.key).filter((k) => !order.includes(k));
+
+  const photos = pool.map(({ path: _path, ...rest }) => rest);
+  const order = mergeExportPhotoOrder(payload.exportPhotoOrder, pool);
 
   return NextResponse.json({
     photos,
-    order: [...order, ...missing],
+    order,
   });
 }
 
@@ -118,8 +81,6 @@ export async function PUT(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   if (!canEditInspection(user, inspection) && user.role !== "ADMIN") {
-    // Allow any viewer who can export to save preferred order as admin/creator preferred —
-    // soft: allow anyone who can view to persist order for pack consistency
     if (!canViewInspection(user, inspection)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -145,5 +106,6 @@ export async function PUT(
     data: { formPayload: serializeFormPayload(next) },
   });
   revalidatePath(`/inspections/${id}/report`);
+  revalidatePath(`/inspections/${id}/client-export`);
   return NextResponse.json({ ok: true });
 }

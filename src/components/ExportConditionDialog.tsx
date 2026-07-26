@@ -8,6 +8,7 @@ export type ExportPhotoItem = {
   label: string;
   detail?: string;
   severity?: string | null;
+  group?: "general" | "defect";
 };
 
 /** Shared condition-state picker dialog for PDF / Client Export. */

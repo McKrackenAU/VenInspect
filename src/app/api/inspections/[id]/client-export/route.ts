@@ -11,6 +11,11 @@ import { buildInspectionPdf } from "@/lib/report-pdf";
 import { getExportConfig } from "@/lib/export-config";
 import { defectMatchesConditionStates } from "@/lib/severities";
 import { formatPersonCredential } from "@/lib/report-people";
+import {
+  buildExportPhotoPool,
+  filterExportPhotosByCondition,
+  mergeExportPhotoOrder,
+} from "@/lib/export-photos";
 import * as XLSX from "xlsx";
 
 export const runtime = "nodejs";
@@ -107,7 +112,10 @@ export async function GET(
       createdBy: true,
       approvedBy: true,
       reviewedBy: true,
-      defects: { orderBy: { defectCode: "asc" } },
+      defects: {
+        orderBy: [{ sortOrder: "asc" }, { defectCode: "asc" }],
+        include: { photos: { orderBy: { sortOrder: "asc" } } },
+      },
       categories: { orderBy: [{ category: "asc" }, { subcategory: "asc" }] },
       permitChecks: true,
     },
@@ -183,85 +191,64 @@ export async function GET(
   };
   const packPhotos: PackPhoto[] = [];
 
-  if (exportCfg.includePhotos) {
-    for (const d of defects) {
-      const folder = folderName(d.subcategory || d.category, d.defectCode);
-      const photos: { label: string; path: string | null; key: string }[] = [
-        { label: "current", path: d.photoPath, key: `defect:${d.id}:current` },
-      ];
-      if (exportCfg.includeComparisonPhotos) {
-        photos.push({
-          label: "comparison",
-          path: d.comparisonPhotoPath,
-          key: `defect:${d.id}:comparison`,
-        });
-      }
-      for (const p of photos) {
-        if (!p.path) continue;
-        try {
-          const abs = absolutePhotoPath(p.path);
-          await fs.access(abs);
-          const base = path.basename(p.path);
-          const name = `Photos/${folder}/${p.label}_${base}`;
-          packPhotos.push({
-            key: p.key,
-            zipName: name,
-            absPath: abs,
-            index: {
-              Folder: folder,
-              Component: d.subcategory || d.category || "Uncategorised",
-              "Defect code": d.defectCode,
-              "Condition state": d.severity,
-              Description: d.description,
-              Comments: d.comments ?? "",
-              "Photo file": `${p.label}_${base}`,
-              "Asset number": inspection.asset.assetNumber,
-              Inspection: inspection.titleLabel,
-            },
-          });
-        } catch {
-          /* missing file */
-        }
-      }
-    }
-  }
+  const pool = buildExportPhotoPool(
+    inspection.defects,
+    formPayload.media ?? {},
+    {
+      includeComparison: exportCfg.includeComparisonPhotos,
+      // Always include general/section photos in the pack pool (report photos)
+      includeFormPhotos: true,
+      template,
+    },
+  );
+  const filteredPool = filterExportPhotosByCondition(pool, severityFilter).filter(
+    (p) => {
+      if (p.group === "general") return true;
+      return exportCfg.includePhotos;
+    },
+  );
 
-  if (exportCfg.includeFormPhotos && formPayload.media) {
-    for (const [key, items] of Object.entries(formPayload.media)) {
-      for (const item of items) {
-        try {
-          const abs = absolutePhotoPath(item.path);
-          await fs.access(abs);
-          const base = path.basename(item.path);
-          const folder = sanitizePathSegment(key.replace(/::/g, "__"), "form");
-          const name = `FormPhotos/${folder}/${base}`;
-          packPhotos.push({
-            key: `form:${item.id}`,
-            zipName: name,
-            absPath: abs,
-            index: {
-              Folder: `FormPhotos/${folder}`,
-              Component: key,
-              "Defect code": item.defectId ?? "",
-              "Condition state": "",
-              Description: item.caption || "Form photo",
-              Comments: "",
-              "Photo file": base,
-              "Asset number": inspection.asset.assetNumber,
-              Inspection: inspection.titleLabel,
-            },
-          });
-        } catch {
-          /* missing */
-        }
-      }
+  for (const p of filteredPool) {
+    try {
+      const abs = absolutePhotoPath(p.path);
+      await fs.access(abs);
+      const base = path.basename(p.path);
+      const isGeneral = p.group === "general";
+      const folder = isGeneral
+        ? sanitizePathSegment(
+            (p.detail || "General").replace(/[·/\\]+/g, "_"),
+            "General",
+          )
+        : folderName(p.subcategory || p.category, p.defectCode);
+      const zipName = isGeneral
+        ? `GeneralPhotos/${folder}/${base}`
+        : `Photos/${folder}/${base}`;
+      packPhotos.push({
+        key: p.key,
+        zipName,
+        absPath: abs,
+        index: {
+          Folder: isGeneral ? `GeneralPhotos/${folder}` : folder,
+          Component: p.subcategory || p.category || p.detail || "General",
+          "Defect code": p.defectCode ?? "",
+          "Condition state": p.severity ?? "",
+          Description: p.description ?? p.label,
+          Comments: p.comments ?? "",
+          "Photo file": base,
+          "Asset number": inspection.asset.assetNumber,
+          Inspection: inspection.titleLabel,
+          Group: isGeneral ? "General" : "Defect",
+        },
+      });
+    } catch {
+      /* missing file */
     }
   }
 
   const orderParam = req.nextUrl.searchParams.get("photoOrder");
   const preferredOrder = orderParam
     ? orderParam.split("|").filter(Boolean)
-    : formPayload.exportPhotoOrder ?? [];
+    : mergeExportPhotoOrder(formPayload.exportPhotoOrder, filteredPool);
   const byKey = new Map(packPhotos.map((p) => [p.key, p]));
   const ordered: PackPhoto[] = [];
   for (const k of preferredOrder) {
@@ -271,6 +258,7 @@ export async function GET(
       byKey.delete(k);
     }
   }
+  // Any remaining: general first, then defect (pool order)
   for (const p of packPhotos) {
     if (byKey.has(p.key)) ordered.push(p);
   }

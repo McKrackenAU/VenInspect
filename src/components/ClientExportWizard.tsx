@@ -3,12 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { SeverityOption } from "@/lib/severities";
+import { normalizeConditionState } from "@/lib/severities";
 import {
   useExportDownload,
   type ExportPhotoItem,
 } from "@/components/ExportConditionDialog";
 
-type PhotoItem = ExportPhotoItem & { severity?: string | null };
+type PhotoItem = ExportPhotoItem & {
+  severity?: string | null;
+  group?: "general" | "defect";
+};
 
 export function ClientExportWizard({
   inspectionId,
@@ -70,14 +74,27 @@ export function ClientExportWizard({
   );
 
   const orderedPhotos = useMemo(() => {
+    const wanted = new Set(selected.map(normalizeConditionState));
     const visible = photos.filter((p) => {
-      if (p.severity == null || p.severity === "") return true; // form photos
-      return selected.includes(p.severity);
+      if (p.group === "general" || p.severity == null || p.severity === "") {
+        return true;
+      }
+      const norm = normalizeConditionState(p.severity);
+      return wanted.has(norm) || wanted.has(p.severity.trim().toUpperCase());
     });
     const byKey = new Map(visible.map((p) => [p.key, p]));
     const order = photoOrder.filter((k) => byKey.has(k));
-    const missing = visible.map((p) => p.key).filter((k) => !order.includes(k));
-    return [...order, ...missing]
+    const missing = visible
+      .map((p) => p.key)
+      .filter((k) => !order.includes(k));
+    // Missing general photos stay at the top; missing defects at the end
+    const missingGeneral = missing.filter(
+      (k) => byKey.get(k)?.group === "general",
+    );
+    const missingDefect = missing.filter(
+      (k) => byKey.get(k)?.group !== "general",
+    );
+    return [...missingGeneral, ...order, ...missingDefect]
       .map((k) => byKey.get(k))
       .filter((p): p is PhotoItem => !!p);
   }, [photos, photoOrder, selected]);
@@ -90,7 +107,6 @@ export function ClientExportWizard({
     const tmp = next[index]!;
     next[index] = next[j]!;
     next[j] = tmp;
-    // Keep non-visible keys at the end so switching CS back doesn't lose order
     const hidden = photoOrder.filter((k) => !next.includes(k));
     setPhotoOrder([...next, ...hidden]);
   }
@@ -195,56 +211,81 @@ export function ClientExportWizard({
           Photo order in ZIP / index
         </h2>
         <p className="text-sm text-[color:var(--ventia-muted)]">
-          Use ↑ ↓ to set the client pack sequence (register order).
+          Use ↑ ↓ to set the client pack sequence (register order). General /
+          section photos from the report are listed first by default, then defect
+          photos.
         </p>
 
         {loadingPhotos ? (
           <p className="text-sm text-[color:var(--ventia-muted)]">Loading photos…</p>
+        ) : photos.length === 0 ? (
+          <p className="text-sm text-[color:var(--ventia-muted)]">
+            No photos on this inspection yet. Add defect photos on the inspection
+            page, then return here to order them.
+          </p>
         ) : orderedPhotos.length === 0 ? (
           <p className="text-sm text-[color:var(--ventia-muted)]">
-            No photos for the selected condition states. The pack can still include
-            the report PDF and index.
+            {photos.length} photo{photos.length === 1 ? "" : "s"} on this inspection,
+            but none match the selected condition states. Tick more states above (or
+            All) to include them in the pack.
           </p>
         ) : (
           <ol className="space-y-2">
-            {orderedPhotos.map((p, i) => (
-              <li
-                key={p.key}
-                className="flex items-center gap-2 rounded-xl border border-[color:var(--ventia-border)] px-3 py-2.5 text-sm"
-              >
-                <span className="w-6 shrink-0 text-xs font-medium text-[color:var(--ventia-muted)]">
-                  {i + 1}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium text-[color:var(--ventia-ink)]">
-                    {p.label}
-                  </span>
-                  {p.detail ? (
-                    <span className="block truncate text-xs text-[color:var(--ventia-muted)]">
-                      {p.detail}
-                    </span>
+            {orderedPhotos.map((p, i) => {
+              const prev = orderedPhotos[i - 1];
+              const showGeneralHeading =
+                p.group === "general" && prev?.group !== "general";
+              const showDefectHeading =
+                p.group !== "general" &&
+                (i === 0 || prev?.group === "general");
+              return (
+                <li key={p.key} className="space-y-2">
+                  {showGeneralHeading ? (
+                    <p className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
+                      General / section photos
+                    </p>
                   ) : null}
-                </span>
-                <button
-                  type="button"
-                  disabled={i === 0 || busy}
-                  className="rounded-lg border border-[color:var(--ventia-border)] px-2.5 py-1.5 text-xs font-semibold disabled:opacity-30"
-                  onClick={() => movePhoto(i, -1)}
-                  aria-label="Move up"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  disabled={i === orderedPhotos.length - 1 || busy}
-                  className="rounded-lg border border-[color:var(--ventia-border)] px-2.5 py-1.5 text-xs font-semibold disabled:opacity-30"
-                  onClick={() => movePhoto(i, 1)}
-                  aria-label="Move down"
-                >
-                  ↓
-                </button>
-              </li>
-            ))}
+                  {showDefectHeading ? (
+                    <p className="pt-2 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
+                      Defect photos
+                    </p>
+                  ) : null}
+                  <div className="flex items-center gap-2 rounded-xl border border-[color:var(--ventia-border)] px-3 py-2.5 text-sm">
+                    <span className="w-6 shrink-0 text-xs font-medium text-[color:var(--ventia-muted)]">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium text-[color:var(--ventia-ink)]">
+                        {p.label}
+                      </span>
+                      {p.detail ? (
+                        <span className="block truncate text-xs text-[color:var(--ventia-muted)]">
+                          {p.detail}
+                        </span>
+                      ) : null}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={i === 0 || busy}
+                      className="rounded-lg border border-[color:var(--ventia-border)] px-2.5 py-1.5 text-xs font-semibold disabled:opacity-30"
+                      onClick={() => movePhoto(i, -1)}
+                      aria-label="Move up"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      disabled={i === orderedPhotos.length - 1 || busy}
+                      className="rounded-lg border border-[color:var(--ventia-border)] px-2.5 py-1.5 text-xs font-semibold disabled:opacity-30"
+                      onClick={() => movePhoto(i, 1)}
+                      aria-label="Move down"
+                    >
+                      ↓
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         )}
       </section>
