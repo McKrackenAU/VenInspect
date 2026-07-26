@@ -169,12 +169,12 @@ export default async function ManageUserHistoryPage({
                         >
                           PDF
                         </a>
-                        <a
-                          href={`/api/inspections/${insp.id}/client-export`}
+                        <Link
+                          href={`/inspections/${insp.id}/client-export`}
                           className="text-[color:var(--ventia-blue)] hover:underline"
                         >
                           Client Export
-                        </a>
+                        </Link>
                       </>
                     ) : (
                       <Link

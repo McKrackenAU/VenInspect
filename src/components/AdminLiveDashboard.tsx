@@ -250,7 +250,7 @@ export function AdminLiveDashboard({
                     </p>
                   </div>
                   <Link
-                    href={`/api/inspections/${row.id}/client-export`}
+                    href={`/inspections/${row.id}/client-export`}
                     className="text-xs font-semibold text-[color:var(--ventia-blue)]"
                   >
                     Export

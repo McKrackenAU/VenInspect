@@ -16,6 +16,8 @@ export type ExportPhotoDto = {
   key: string;
   label: string;
   detail?: string;
+  /** Defect condition state (CS1…); form photos omit this */
+  severity?: string | null;
 };
 
 function buildPhotoList(
@@ -23,6 +25,7 @@ function buildPhotoList(
     id: string;
     defectCode: string;
     description: string;
+    severity: string;
     photoPath: string | null;
     comparisonPhotoPath: string | null;
     subcategory: string | null;
@@ -38,6 +41,7 @@ function buildPhotoList(
         key: `defect:${d.id}:current`,
         label: `${d.defectCode} (current)`,
         detail: d.description,
+        severity: d.severity,
       });
     }
     if (includeComparison && d.comparisonPhotoPath) {
@@ -45,6 +49,7 @@ function buildPhotoList(
         key: `defect:${d.id}:comparison`,
         label: `${d.defectCode} (comparison)`,
         detail: d.description,
+        severity: d.severity,
       });
     }
   }
@@ -54,6 +59,7 @@ function buildPhotoList(
         key: `form:${item.id}`,
         label: item.caption || `Form photo`,
         detail: sectionKey,
+        severity: null,
       });
     }
   }

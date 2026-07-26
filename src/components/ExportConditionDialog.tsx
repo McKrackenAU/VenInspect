@@ -7,6 +7,7 @@ export type ExportPhotoItem = {
   key: string;
   label: string;
   detail?: string;
+  severity?: string | null;
 };
 
 /** Shared condition-state picker dialog for PDF / Client Export. */

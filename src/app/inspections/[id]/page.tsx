@@ -245,8 +245,8 @@ export default async function InspectionPage({
           Photographic record
         </h2>
         <p className="text-sm text-[color:var(--ventia-muted)]">
-          Defect photos are on the Defects page. Client export uses DoT-style names and
-          your photo order.
+          Defect photos are on the Defects page. Client Export opens a page to set
+          photo order, then builds the ZIP with DoT-style names.
         </p>
         {inspection.defects.filter((d) => d.photoPath).length === 0 ? (
           <p className="text-sm text-[color:var(--ventia-muted)]">

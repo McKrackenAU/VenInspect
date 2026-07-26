@@ -98,11 +98,7 @@ export default async function InspectionReportPage({
             defaultSelected={exportCfg.defaultConditionStates}
             allowConditionFilter={exportCfg.filterPdfByConditionStates}
           />
-          <ClientExportButton
-            inspectionId={inspection.id}
-            conditionStates={conditionStates}
-            defaultSelected={exportCfg.defaultConditionStates}
-          />
+          <ClientExportButton inspectionId={inspection.id} />
           <Link
             href={`/inspections/${inspection.id}/scope`}
             className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm font-semibold text-[color:var(--ventia-green)]"
