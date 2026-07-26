@@ -68,10 +68,7 @@ export type StorageSettings = {
   assetvisionApiKey?: string;
   /** Treatment types for defects */
   treatmentTypes?: { value: string; label: string }[];
-  /**
-   * Site-wide login methods (admin can flip Microsoft off if Entra is down).
-   * Defaults: both true. Password still needs env/user; Microsoft needs Entra env.
-   */
+  /** Legacy login toggles (Microsoft Entra removed for now). */
   authAllowPassword?: boolean;
   authAllowMicrosoft?: boolean;
 };

@@ -32,7 +32,7 @@ export function AppNav({ userName, isAdmin }: Props) {
 
   return (
     <header className="no-print sticky top-0 z-20 border-b border-[color:var(--ventia-border)] bg-[color:var(--nav-bg)] backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 xl:max-w-7xl 2xl:max-w-[96rem]">
+      <div className="mx-auto flex w-full max-w-[96rem] flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6 xl:max-w-[110rem] 2xl:max-w-[128rem] 2xl:px-8">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {isManage ? <AdminSideMenu variant="icon" /> : null}
           <Link
@@ -101,7 +101,7 @@ export function AppNav({ userName, isAdmin }: Props) {
       </div>
 
       <nav
-        className="mx-auto hidden w-full max-w-6xl items-center gap-1 px-4 pb-2 text-sm md:flex xl:max-w-7xl 2xl:max-w-[96rem]"
+        className="mx-auto hidden w-full max-w-[96rem] items-center gap-1 px-4 pb-2 text-sm md:flex md:px-6 xl:max-w-[110rem] 2xl:max-w-[128rem] 2xl:px-8"
         aria-label="Desktop"
       >
         {links.map((l) => {

@@ -116,12 +116,15 @@ export function MapsApiKeyForm({
   return (
     <form action={saveGoogleMapsApiKey} className="space-y-4">
       <p className="text-sm text-[color:var(--ventia-muted)]">
-        Choose the basemap for Asset map. Tiles load in the browser — VenInspect does not
-        proxy imagery, so server load stays low.
+        Set the default basemap and API keys. Field users can also switch providers with
+        the Layers control on the map. Tiles load in the browser — VenInspect does not
+        proxy imagery.
       </p>
 
       <label className="block space-y-1 text-sm">
-        <span className="font-medium text-[color:var(--ventia-muted)]">Map provider</span>
+        <span className="font-medium text-[color:var(--ventia-muted)]">
+          Default map provider
+        </span>
         <select
           name="mapProvider"
           defaultValue={mapProvider}

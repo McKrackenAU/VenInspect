@@ -69,6 +69,26 @@ function readLatLng(p: GLatLng): LatLng {
 
 const NEARBY_KM = 5;
 const MELBOURNE: LatLng = { lat: -37.8136, lng: 144.9631 };
+const MAP_PROVIDER_STORAGE_KEY = "veninspect-map-provider";
+
+function readStoredProvider(fallback: MapProvider): MapProvider {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(MAP_PROVIDER_STORAGE_KEY);
+    if (raw === "osm" || raw === "google" || raw === "nearmap") return raw;
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
+function storeProvider(p: MapProvider) {
+  try {
+    localStorage.setItem(MAP_PROVIDER_STORAGE_KEY, p);
+  } catch {
+    /* ignore */
+  }
+}
 
 function getGoogleMaps(): GMaps | null {
   const g = (window as unknown as { google?: { maps?: GMaps } }).google;
@@ -160,6 +180,7 @@ export function AssetMap({
   const googleInfoRef = useRef<GInfoWindow | null>(null);
   const engineRef = useRef<"leaflet" | "google" | null>(null);
 
+  const [selectedProvider, setSelectedProvider] = useState<MapProvider>(provider);
   const [activeProvider, setActiveProvider] = useState<MapProvider>(provider);
   const [fallbackNote, setFallbackNote] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -168,6 +189,13 @@ export function AssetMap({
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [providerHydrated, setProviderHydrated] = useState(false);
+
+  useEffect(() => {
+    setSelectedProvider(readStoredProvider(provider));
+    setProviderHydrated(true);
+  }, [provider]);
 
   const withCoords = useMemo(
     () =>
@@ -318,18 +346,20 @@ export function AssetMap({
   }, [googleApiKey, withCoords]);
 
   useEffect(() => {
+    if (!providerHydrated) return;
+
     let cancelled = false;
     setMapReady(false);
     setMapError(null);
     setFallbackNote(null);
-    setActiveProvider(provider);
+    setActiveProvider(selectedProvider);
 
     (async () => {
       try {
         tearDown();
         if (cancelled || !mapEl.current) return;
 
-        if (provider === "google") {
+        if (selectedProvider === "google") {
           if (!googleApiKey) {
             setFallbackNote(
               "Google Maps selected but no API key — using OpenStreetMap.",
@@ -349,7 +379,7 @@ export function AssetMap({
               if (!cancelled) await initLeaflet("osm");
             }
           }
-        } else if (provider === "nearmap") {
+        } else if (selectedProvider === "nearmap") {
           if (!nearmapApiKey) {
             setFallbackNote(
               "Nearmap selected but no API key — using OpenStreetMap.",
@@ -385,11 +415,20 @@ export function AssetMap({
     // Recreate when provider/keys/asset set change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    provider,
+    providerHydrated,
+    selectedProvider,
     googleApiKey,
     nearmapApiKey,
     withCoords.map((a) => a.id).join(","),
   ]);
+
+  const chooseProvider = useCallback((next: MapProvider) => {
+    if (next === "google" && !googleApiKey) return;
+    if (next === "nearmap" && !nearmapApiKey) return;
+    storeProvider(next);
+    setSelectedProvider(next);
+    setLayersOpen(false);
+  }, [googleApiKey, nearmapApiKey]);
 
   useEffect(() => {
     if (!mapReady || !userPos) return;
@@ -586,16 +625,6 @@ export function AssetMap({
         </span>
       </div>
 
-      <p className="text-[10px] text-[color:var(--ventia-muted)]">
-        Basemap: {providerLabel}
-        {activeProvider === "nearmap"
-          ? " (tiles load in your browser from Nearmap — not via the VenInspect server)."
-          : activeProvider === "google"
-            ? " (loaded in your browser from Google)."
-            : " — free, no API key."}{" "}
-        Change under Admin → System → Maps.
-      </p>
-
       {fallbackNote ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           {fallbackNote}
@@ -619,12 +648,73 @@ export function AssetMap({
         </p>
       ) : null}
 
-      <div
-        ref={mapEl}
-        className="z-0 w-full flex-1 overflow-hidden rounded-2xl border border-[color:var(--ventia-border)] bg-[#e5e3df] min-h-[280px] h-[clamp(280px,calc(100dvh-14rem),900px)]"
-        role="region"
-        aria-label="Asset map"
-      />
+      <div className="relative z-0 w-full flex-1 min-h-[280px] h-[clamp(280px,calc(100dvh-14rem),900px)]">
+        <div
+          ref={mapEl}
+          className="h-full w-full overflow-hidden rounded-2xl border border-[color:var(--ventia-border)] bg-[#e5e3df]"
+          role="region"
+          aria-label="Asset map"
+        />
+
+        <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex max-w-[calc(100%-1.5rem)] items-end gap-2">
+          <button
+            type="button"
+            onClick={() => setLayersOpen((v) => !v)}
+            className="pointer-events-auto relative h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border-2 border-black/80 shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ventia-green)] sm:h-20 sm:w-20"
+            aria-expanded={layersOpen}
+            aria-label={`Map layers — ${providerLabel}`}
+            title={`Layers · ${providerLabel}`}
+          >
+            <span
+              className="absolute inset-0 bg-[linear-gradient(135deg,#c8d8c0_0%,#a8c0d8_40%,#d8d0c0_100%)]"
+              aria-hidden
+            />
+            <span
+              className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/75 to-transparent"
+              aria-hidden
+            />
+            <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-[11px] font-semibold text-white drop-shadow">
+              <LayersIcon />
+              Layers
+            </span>
+          </button>
+
+          {layersOpen ? (
+            <div className="pointer-events-auto flex items-end gap-2 overflow-x-auto rounded-2xl bg-white/95 p-2 shadow-lg ring-1 ring-black/10 dark:bg-[#1c2128]/95 dark:ring-white/10">
+              <MapLayerTile
+                label="Streets"
+                active={activeProvider === "osm"}
+                previewClass="bg-[linear-gradient(135deg,#dce8d4_0%,#c5d4e8_45%,#e8e0d0_100%)]"
+                onClick={() => chooseProvider("osm")}
+              />
+              <MapLayerTile
+                label="Google"
+                active={activeProvider === "google"}
+                disabled={!googleApiKey}
+                previewClass="bg-[linear-gradient(135deg,#1a3a2a_0%,#3d5a3a_40%,#8a7a4a_100%)]"
+                onClick={() => chooseProvider("google")}
+                title={
+                  googleApiKey
+                    ? "Google Maps"
+                    : "Google Maps key not configured (Admin → System → Maps)"
+                }
+              />
+              <MapLayerTile
+                label="Nearmap"
+                active={activeProvider === "nearmap"}
+                disabled={!nearmapApiKey}
+                previewClass="bg-[linear-gradient(135deg,#2a4a3a_0%,#5a6a3a_35%,#8a7040_70%,#c4a86a_100%)]"
+                onClick={() => chooseProvider("nearmap")}
+                title={
+                  nearmapApiKey
+                    ? "Nearmap aerial"
+                    : "Nearmap key not configured (Admin → System → Maps)"
+                }
+              />
+            </div>
+          ) : null}
+        </div>
+      </div>
 
       {userPos ? (
         <section className="space-y-2 shrink-0">
@@ -674,5 +764,67 @@ export function AssetMap({
         </section>
       ) : null}
     </div>
+  );
+}
+
+function LayersIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 3.5 3 8l9 4.5L21 8l-9-4.5Z"
+        fill="currentColor"
+        opacity="0.95"
+      />
+      <path
+        d="M3 12.5 12 17l9-4.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3 16.5 12 21l9-4.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.85"
+      />
+    </svg>
+  );
+}
+
+function MapLayerTile({
+  label,
+  active,
+  disabled,
+  previewClass,
+  onClick,
+  title,
+}: {
+  label: string;
+  active: boolean;
+  disabled?: boolean;
+  previewClass: string;
+  onClick: () => void;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title ?? label}
+      className={`flex w-[4.25rem] shrink-0 flex-col items-center gap-1 rounded-xl p-1 transition disabled:cursor-not-allowed disabled:opacity-40 ${
+        active ? "ring-2 ring-[color:var(--ventia-green)]" : ""
+      }`}
+    >
+      <span
+        className={`block h-12 w-full rounded-lg border border-black/15 shadow-sm ${previewClass}`}
+      />
+      <span className="text-[10px] font-semibold text-[color:var(--ventia-ink)]">
+        {label}
+      </span>
+    </button>
   );
 }

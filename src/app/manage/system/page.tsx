@@ -2,7 +2,6 @@ import { formatAppVersion, getAppVersion, getConfiguredUpdateChannel } from "@/l
 import { SystemUpdatePanel } from "@/components/SystemUpdatePanel";
 import { MapsApiKeyForm } from "@/components/MapsApiKeyForm";
 import { DateTimePrefsForm } from "@/components/DateTimePrefsForm";
-import { LoginMethodsForm } from "@/components/LoginMethodsForm";
 import {
   describeStorage,
   getGoogleMapsApiKey,
@@ -12,7 +11,6 @@ import {
   readStorageSettings,
 } from "@/lib/paths";
 import { getDateTimePrefs } from "@/lib/date-time";
-import { getLoginMethodSettings } from "@/lib/auth-settings";
 import Link from "next/link";
 import { requireAdmin, getCurrentUser } from "@/lib/auth";
 
@@ -31,11 +29,6 @@ export default async function ManageSystemPage() {
   const mapProvider = getMapProvider();
   const dt = getDateTimePrefs();
   const isRoot = user?.username === "root";
-  const loginMethods = getLoginMethodSettings();
-  const appBase =
-    process.env.APP_BASE_URL?.trim() ||
-    process.env.AUTH_URL?.trim() ||
-    "(set APP_BASE_URL)";
 
   return (
     <div className="space-y-8">
@@ -79,22 +72,7 @@ export default async function ManageSystemPage() {
               {process.platform} / {process.arch}
             </dd>
           </div>
-          <div className="sm:col-span-2">
-            <dt className="text-[color:var(--ventia-muted)]">Entra redirect URI</dt>
-            <dd className="mt-1 break-all font-mono text-[10px] text-[color:var(--ventia-muted)]">
-              {appBase}/api/auth/microsoft/callback
-            </dd>
-          </div>
         </dl>
-      </section>
-
-      <section className="card space-y-3 p-5">
-        <h2 className="text-lg font-medium">Login methods</h2>
-        <LoginMethodsForm
-          allowPassword={loginMethods.allowPassword}
-          allowMicrosoft={loginMethods.allowMicrosoft}
-          microsoftConfigured={loginMethods.microsoftConfigured}
-        />
       </section>
 
       <section className="card space-y-3 p-5">

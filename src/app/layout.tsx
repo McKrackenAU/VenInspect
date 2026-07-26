@@ -72,7 +72,7 @@ export default async function RootLayout({
           userName={session?.name ?? null}
           isAdmin={session?.role === "ADMIN"}
         />
-        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-5 pb-24 md:pb-8 xl:max-w-7xl 2xl:max-w-[96rem]">
+        <main className="mx-auto flex w-full max-w-[96rem] flex-1 flex-col px-4 py-5 pb-24 md:px-6 md:pb-8 xl:max-w-[110rem] 2xl:max-w-[128rem] 2xl:px-8">
           {children}
         </main>
         <AppFooter />

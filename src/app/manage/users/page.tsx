@@ -19,10 +19,7 @@ export default async function ManageUsersPage() {
         <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
           Create logins for field and office staff. Default admin is{" "}
           <code className="font-mono text-xs">root</code> /{" "}
-          <code className="font-mono text-xs">calvin</code>. Microsoft Entra
-          sign-in matches users by work email (set env vars in{" "}
-          <code className="font-mono text-xs">/etc/veninspect.env</code>
-          ).
+          <code className="font-mono text-xs">calvin</code>.
         </p>
       </div>
 
@@ -61,7 +58,9 @@ export default async function ManageUsersPage() {
           <input
             name="password"
             type="password"
-            placeholder="Password (required if Password login checked)"
+            required
+            minLength={4}
+            placeholder="Password (min 4 characters)"
             className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
           />
           <select
@@ -73,24 +72,6 @@ export default async function ManageUsersPage() {
             <option value="ADMIN">Admin</option>
           </select>
           <div className="flex flex-wrap items-center gap-4 text-sm sm:col-span-2">
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                name="allowPasswordLogin"
-                defaultChecked
-                className="accent-[color:var(--ventia-green)]"
-              />
-              Password login
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                name="allowMicrosoftLogin"
-                defaultChecked
-                className="accent-[color:var(--ventia-green)]"
-              />
-              Microsoft login
-            </label>
             <label className="flex items-center gap-2">
               <input type="checkbox" name="level1Qualified" className="accent-[color:var(--ventia-green)]" />
               Level 1 qualified
@@ -141,13 +122,6 @@ export default async function ManageUsersPage() {
                 Role: {u.role}
                 {u.level1Qualified ? " · L1" : ""}
                 {u.level2Qualified ? " · L2" : ""}
-                {" · login: "}
-                {[
-                  u.allowPasswordLogin !== false ? "password" : null,
-                  u.allowMicrosoftLogin !== false ? "Microsoft" : null,
-                ]
-                  .filter(Boolean)
-                  .join(" + ") || "none"}
               </p>
               <p className="mt-1">
                 <Link
