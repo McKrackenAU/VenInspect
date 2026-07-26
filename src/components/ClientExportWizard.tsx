@@ -168,7 +168,7 @@ export function ClientExportWizard({
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-5">
       <div>
         <p className="text-sm text-[color:var(--ventia-muted)]">
           <Link
@@ -187,143 +187,146 @@ export function ClientExportWizard({
         </p>
       </div>
 
-      <section className="card space-y-3 p-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
-          Condition states to include
-        </h2>
-        <ul className="space-y-2">
-          {conditionStates.map((s) => (
-            <li key={s.value}>
-              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[color:var(--ventia-border)] px-3 py-2.5 hover:border-[color:var(--ventia-green)]">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(s.value)}
-                  onChange={() =>
-                    setSelected((prev) =>
-                      prev.includes(s.value)
-                        ? prev.filter((c) => c !== s.value)
-                        : [...prev, s.value],
-                    )
-                  }
-                  className="mt-1 accent-[color:var(--ventia-green)]"
-                />
-                <span className="text-sm">
-                  <span className="font-medium">{s.label}</span>
-                  {s.description ? (
-                    <span className="mt-0.5 block text-xs text-[color:var(--ventia-muted)]">
-                      {s.description}
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-            </li>
-          ))}
-        </ul>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            className="text-xs font-semibold text-[color:var(--ventia-blue)]"
-            onClick={() => setSelected(allCodes)}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            className="text-xs font-semibold text-[color:var(--ventia-blue)]"
-            onClick={() => setSelected([])}
-          >
-            None
-          </button>
-        </div>
-      </section>
-
-      <section className="card space-y-3 p-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
-          Photo order in ZIP / index
-        </h2>
-        <p className="text-sm text-[color:var(--ventia-muted)]">
-          Use ↑ ↓ to set the client pack sequence (register order). General /
-          section photos from the report are listed first by default, then defect
-          photos.
-        </p>
-
-        {loadingPhotos ? (
-          <p className="text-sm text-[color:var(--ventia-muted)]">Loading photos…</p>
-        ) : photos.length === 0 ? (
-          <p className="text-sm text-[color:var(--ventia-muted)]">
-            No photos on this inspection yet. Add defect photos on the inspection
-            page, then return here to order them.
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <aside className="card w-full shrink-0 space-y-2 p-3 lg:sticky lg:top-4 lg:w-52">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-[10px] font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
+              Condition states
+            </h2>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="text-[11px] font-semibold text-[color:var(--ventia-blue)]"
+                onClick={() => setSelected(allCodes)}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className="text-[11px] font-semibold text-[color:var(--ventia-blue)]"
+                onClick={() => setSelected([])}
+              >
+                None
+              </button>
+            </div>
+          </div>
+          <ul className="space-y-0.5">
+            {conditionStates.map((s) => (
+              <li key={s.value}>
+                <label
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-[color:var(--ventia-border)]/40"
+                  title={s.description || s.label}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(s.value)}
+                    onChange={() =>
+                      setSelected((prev) =>
+                        prev.includes(s.value)
+                          ? prev.filter((c) => c !== s.value)
+                          : [...prev, s.value],
+                      )
+                    }
+                    className="accent-[color:var(--ventia-green)]"
+                  />
+                  <span className="truncate text-sm font-medium">{s.label}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] leading-snug text-[color:var(--ventia-muted)]">
+            {selected.length} of {conditionStates.length} selected
           </p>
-        ) : orderedPhotos.length === 0 ? (
+        </aside>
+
+        <section className="card min-w-0 flex-1 space-y-3 p-5">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
+            Photo order in ZIP / index
+          </h2>
           <p className="text-sm text-[color:var(--ventia-muted)]">
-            {photos.length} photo{photos.length === 1 ? "" : "s"} on this inspection,
-            but none match the selected condition states. Tick more states above (or
-            All) to include them in the pack.
+            Use ↑ ↓ to set the client pack sequence (register order). General /
+            section photos from the report are listed first by default, then defect
+            photos.
           </p>
-        ) : (
-          <ol className="space-y-2">
-            {orderedPhotos.map((p, i) => {
-              const prev = orderedPhotos[i - 1];
-              const showGeneralHeading =
-                p.group === "general" && prev?.group !== "general";
-              const showDefectHeading =
-                p.group !== "general" &&
-                (i === 0 || prev?.group === "general");
-              return (
-                <li key={p.key} className="space-y-2">
-                  {showGeneralHeading ? (
-                    <p className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
-                      General / section photos
-                    </p>
-                  ) : null}
-                  {showDefectHeading ? (
-                    <p className="pt-2 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
-                      Defect photos
-                    </p>
-                  ) : null}
-                  <div className="flex items-center gap-2 rounded-xl border border-[color:var(--ventia-border)] px-3 py-2.5 text-sm">
-                    <span className="w-6 shrink-0 text-xs font-medium text-[color:var(--ventia-muted)]">
-                      {p.registerNo ?? i + 1}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium text-[color:var(--ventia-ink)]">
-                        {p.label}
+
+          {loadingPhotos ? (
+            <p className="text-sm text-[color:var(--ventia-muted)]">Loading photos…</p>
+          ) : photos.length === 0 ? (
+            <p className="text-sm text-[color:var(--ventia-muted)]">
+              No photos on this inspection yet. Add defect photos on the inspection
+              page, then return here to order them.
+            </p>
+          ) : orderedPhotos.length === 0 ? (
+            <p className="text-sm text-[color:var(--ventia-muted)]">
+              {photos.length} photo{photos.length === 1 ? "" : "s"} on this inspection,
+              but none match the selected condition states. Tick more states (or
+              All) to include them in the pack.
+            </p>
+          ) : (
+            <ol className="space-y-2">
+              {orderedPhotos.map((p, i) => {
+                const prev = orderedPhotos[i - 1];
+                const showGeneralHeading =
+                  p.group === "general" && prev?.group !== "general";
+                const showDefectHeading =
+                  p.group !== "general" &&
+                  (i === 0 || prev?.group === "general");
+                return (
+                  <li key={p.key} className="space-y-2">
+                    {showGeneralHeading ? (
+                      <p className="pt-1 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
+                        General / section photos
+                      </p>
+                    ) : null}
+                    {showDefectHeading ? (
+                      <p className="pt-2 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
+                        Defect photos
+                      </p>
+                    ) : null}
+                    <div className="flex items-center gap-2 rounded-xl border border-[color:var(--ventia-border)] px-3 py-2.5 text-sm">
+                      <span className="w-6 shrink-0 text-xs font-medium text-[color:var(--ventia-muted)]">
+                        {p.registerNo ?? i + 1}
                       </span>
-                      {p.detail ? (
-                        <span className="block truncate text-xs text-[color:var(--ventia-muted)]">
-                          {p.detail}
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium text-[color:var(--ventia-ink)]">
+                          {p.label}
                         </span>
-                      ) : null}
-                      <span className="mt-0.5 block font-mono text-[11px] text-[color:var(--ventia-muted)]">
-                        {p.previewName ?? "—"}
-                        {p.dateLabel ? ` · ${p.dateLabel}` : ""}
+                        {p.detail ? (
+                          <span className="block truncate text-xs text-[color:var(--ventia-muted)]">
+                            {p.detail}
+                          </span>
+                        ) : null}
+                        <span className="mt-0.5 block font-mono text-[11px] text-[color:var(--ventia-muted)]">
+                          {p.previewName ?? "—"}
+                          {p.dateLabel ? ` · ${p.dateLabel}` : ""}
+                        </span>
                       </span>
-                    </span>
-                    <button
-                      type="button"
-                      disabled={i === 0 || busy}
-                      className="rounded-lg border border-[color:var(--ventia-border)] px-2.5 py-1.5 text-xs font-semibold disabled:opacity-30"
-                      onClick={() => movePhoto(i, -1)}
-                      aria-label="Move up"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      disabled={i === orderedPhotos.length - 1 || busy}
-                      className="rounded-lg border border-[color:var(--ventia-border)] px-2.5 py-1.5 text-xs font-semibold disabled:opacity-30"
-                      onClick={() => movePhoto(i, 1)}
-                      aria-label="Move down"
-                    >
-                      ↓
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </section>
+                      <button
+                        type="button"
+                        disabled={i === 0 || busy}
+                        className="rounded-lg border border-[color:var(--ventia-border)] px-2.5 py-1.5 text-xs font-semibold disabled:opacity-30"
+                        onClick={() => movePhoto(i, -1)}
+                        aria-label="Move up"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={i === orderedPhotos.length - 1 || busy}
+                        className="rounded-lg border border-[color:var(--ventia-border)] px-2.5 py-1.5 text-xs font-semibold disabled:opacity-30"
+                        onClick={() => movePhoto(i, 1)}
+                        aria-label="Move down"
+                      >
+                        ↓
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </section>
+      </div>
 
       {error ? (
         <p className="text-sm text-rose-600" role="alert">
