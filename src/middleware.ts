@@ -43,6 +43,49 @@ function isAdminApiPath(pathname: string): boolean {
   );
 }
 
+function readSessionTokenFromRequest(request: NextRequest): string | null {
+  const fromJar = request.cookies.get(SESSION_COOKIE)?.value;
+  if (fromJar) return fromJar;
+  const header = request.headers.get("cookie") ?? "";
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const [rawName, ...rest] = part.trim().split("=");
+    if (rawName === SESSION_COOKIE) {
+      const raw = rest.join("=");
+      try {
+        return decodeURIComponent(raw);
+      } catch {
+        return raw;
+      }
+    }
+  }
+  return null;
+}
+
+function isAssetImportPath(pathname: string): boolean {
+  return (
+    pathname === "/api/manage/asset-import" ||
+    pathname === "/api/assets/import" ||
+    pathname === "/api/assets/registry-import"
+  );
+}
+
+/** Page-minted HMAC ticket — lets import proceed even if Cookie was stripped. */
+async function hasValidImportTicket(request: NextRequest): Promise<boolean> {
+  if (!isAssetImportPath(request.nextUrl.pathname)) return false;
+  const ticket =
+    request.headers.get("x-veninspect-import-ticket") ||
+    request.nextUrl.searchParams.get("ticket") ||
+    "";
+  if (!ticket.trim()) return false;
+  const payload = await verifySession(ticket.trim(), sessionSecret());
+  return Boolean(
+    payload &&
+      payload.role === "ADMIN" &&
+      payload.name.startsWith("asset-import:"),
+  );
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -55,13 +98,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const token = readSessionTokenFromRequest(request);
   const session = token ? await verifySession(token, sessionSecret()) : null;
   const admin = isAdminSession(session);
   const root = isRootUsername(session?.username);
   const isServerAction =
     request.headers.has("Next-Action") ||
     request.headers.has("next-action");
+  const importTicketOk = await hasValidImportTicket(request);
 
   // Bare host / IP with no session → login (clean URL, no ?next=/)
   if (!session && (pathname === "/" || pathname === "")) {
@@ -90,6 +134,11 @@ export async function middleware(request: NextRequest) {
       url.search = "";
       return NextResponse.redirect(url);
     }
+    return NextResponse.next();
+  }
+
+  // Asset import may authenticate solely via page-minted ticket (Cookie optional).
+  if (!session && importTicketOk) {
     return NextResponse.next();
   }
 

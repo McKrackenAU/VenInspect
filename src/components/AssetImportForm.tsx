@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   StyledFileInput,
   TemplateDownloadButtons,
@@ -31,6 +31,22 @@ export function AssetImportForm({ importTicket }: { importTicket: string }) {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const syncSession = useCallback(async () => {
+    try {
+      await fetch("/api/manage/session-sync", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
+    } catch {
+      /* non-fatal — ticket auth still works */
+    }
+  }, []);
+
+  useEffect(() => {
+    void syncSession();
+  }, [syncSession]);
+
   return (
     <div className="space-y-4">
       <form
@@ -43,17 +59,36 @@ export function AssetImportForm({ importTicket }: { importTicket: string }) {
           const fd = new FormData(form);
           startTransition(async () => {
             try {
-              const res = await fetch("/api/manage/asset-import", {
-                method: "POST",
-                body: fd,
-                credentials: "include",
-                cache: "no-store",
-                headers: {
-                  // Multipart uploads sometimes omit/lose cookies behind proxies.
-                  // This ticket is minted on the Import page after requireAdmin().
-                  "X-VenInspect-Import-Ticket": importTicket,
-                },
+              await syncSession();
+
+              const file = fd.get("file");
+              const mode = String(fd.get("mode") ?? "upsert");
+              if (!(file instanceof File) || file.size === 0) {
+                throw new Error("Choose an Excel (.xlsx) or CSV file");
+              }
+
+              const params = new URLSearchParams({
+                mode,
+                filename: file.name || "import.xlsx",
+                ticket: importTicket,
               });
+
+              // Raw body + ticket query/header — avoids multipart Cookie loss
+              // behind reverse proxies that broke admin auth on FormData posts.
+              const res = await fetch(
+                `/api/manage/asset-import?${params.toString()}`,
+                {
+                  method: "POST",
+                  body: file,
+                  credentials: "include",
+                  cache: "no-store",
+                  headers: {
+                    // Always octet-stream so the API never tries multipart parse.
+                    "Content-Type": "application/octet-stream",
+                    "X-VenInspect-Import-Ticket": importTicket,
+                  },
+                },
+              );
 
               const text = await res.text();
               let body: (ImportOk | ImportErr) | null = null;
@@ -78,7 +113,7 @@ export function AssetImportForm({ importTicket }: { importTicket: string }) {
                 if (res.status === 403) {
                   throw new Error(
                     msg ||
-                      "Admin access required. Refresh this Import page, then retry.",
+                      "Admin access required. Hard-refresh this Import page, then retry.",
                   );
                 }
                 throw new Error(msg || `Import failed (HTTP ${res.status})`);
@@ -118,66 +153,61 @@ export function AssetImportForm({ importTicket }: { importTicket: string }) {
           <StyledFileInput
             name="file"
             required
-            accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            label="Choose import file"
-            hint="Bulk import is supported (hundreds of assets). Match the template headers."
+            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
           />
         </div>
 
-        <fieldset className="space-y-2 text-sm text-[color:var(--ventia-ink)]">
-          <legend className="font-medium">When Code already exists</legend>
-          <label className="flex items-center gap-2">
-            <input type="radio" name="mode" value="upsert" defaultChecked />
-            Update existing asset (match on Code / serial)
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="radio" name="mode" value="skip" />
-            Skip existing
-          </label>
-        </fieldset>
-
-        <p className="text-xs text-[color:var(--ventia-muted)]">
-          Template columns: Code, AV ID, Name, Road Name, Type, Sub Classification
-          (e.g. PED_UNDERPASS), Location, Latitude, Longitude, Classification,
-          Chainage From, Chainage To, Notes. Asset Vision exports still work
-          (Asset ID → AV ID). Types inferred from name when Type is blank.
-        </p>
+        <div className="space-y-1.5 text-sm">
+          <span className="font-medium text-[color:var(--ventia-ink)]">
+            When a code already exists
+          </span>
+          <select
+            name="mode"
+            defaultValue="upsert"
+            className="w-full rounded-lg border border-[color:var(--ventia-border)] bg-[color:var(--panel)] px-3 py-2 text-[color:var(--ventia-ink)]"
+          >
+            <option value="upsert">Update existing rows</option>
+            <option value="skip">Skip existing codes</option>
+          </select>
+        </div>
 
         <button
           type="submit"
           disabled={pending}
-          className="btn-primary-inline w-full sm:w-auto"
+          className="btn-primary-inline inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
         >
           {pending ? "Importing…" : "Import assets"}
         </button>
-
-        {error ? (
-          <p className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900 dark:border-rose-800 dark:bg-rose-950/60 dark:text-rose-100">
-            {error}
-          </p>
-        ) : null}
-
-        {result ? (
-          <div className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--ventia-green-tint)] p-4 text-sm">
-            <p className="font-medium text-[color:var(--ventia-green)]">
-              Import complete
-            </p>
-            <ul className="mt-2 list-inside list-disc text-[color:var(--ventia-muted)]">
-              <li>Parsed: {result.total}</li>
-              <li>Created: {result.created}</li>
-              <li>Updated: {result.updated}</li>
-              <li>Skipped: {result.skipped}</li>
-            </ul>
-            {result.errors.length > 0 ? (
-              <ul className="mt-3 max-h-40 overflow-auto text-xs text-amber-800 dark:text-amber-200">
-                {result.errors.map((e) => (
-                  <li key={e}>{e}</li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ) : null}
       </form>
+
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
+          {error}
+        </p>
+      ) : null}
+
+      {result ? (
+        <div className="rounded-lg border border-[color:var(--ventia-border)] bg-[color:var(--panel)] px-4 py-3 text-sm text-[color:var(--ventia-ink)]">
+          <p className="font-medium">
+            Imported {result.total} row{result.total === 1 ? "" : "s"}:{" "}
+            {result.created} created, {result.updated} updated, {result.skipped}{" "}
+            skipped.
+          </p>
+          {result.errors.length > 0 ? (
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-[color:var(--ventia-muted)]">
+              {result.errors.slice(0, 20).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+              {result.errors.length > 20 ? (
+                <li>…and {result.errors.length - 20} more</li>
+              ) : null}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
