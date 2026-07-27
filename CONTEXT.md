@@ -66,6 +66,12 @@ Same-day second inspection on an asset uses `{DDMMYYYY-HHmmss}`. Inspection `tit
 
 Ventia greens/blue — see `globals.css`. Logos in `public/brand/` when licensed.
 
+## Outbound email
+
+SMTP via Admin → System → Outbound email (or env). Default from
+`noreply@inspect-it.online`. Cloudflare hosts DNS; use Resend (or similar) for
+SMTP — not a local mail daemon. Powers forgot-password links.
+
 ## Microsoft login (planned, not implemented)
 
 Entra ID / work MFA — stubs in `.env.example`.
