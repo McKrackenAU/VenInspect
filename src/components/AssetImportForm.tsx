@@ -20,10 +20,42 @@ type ImportErr = {
   error?: string;
 };
 
+const JSON_FALLBACK_MAX = 8 * 1024 * 1024; // 8 MB decoded
+
+async function parseImportResponse(res: Response): Promise<{
+  ok: boolean;
+  status: number;
+  body: (ImportOk | ImportErr) | null;
+  text: string;
+  isHtml: boolean;
+}> {
+  const text = await res.text();
+  const isHtml = /^\s*</.test(text);
+  let body: (ImportOk | ImportErr) | null = null;
+  if (!isHtml && text) {
+    try {
+      body = JSON.parse(text) as ImportOk | ImportErr;
+    } catch {
+      body = null;
+    }
+  }
+  return { ok: res.ok, status: res.status, body, text, isHtml };
+}
+
+function errorFromParsed(parsed: Awaited<ReturnType<typeof parseImportResponse>>) {
+  const msg =
+    (parsed.body && "error" in parsed.body && parsed.body.error) ||
+    (!parsed.isHtml && parsed.text ? parsed.text.slice(0, 300) : null);
+  if (msg) return msg;
+  if (parsed.isHtml) {
+    return `Upload blocked (HTTP ${parsed.status}) by the reverse proxy / Cloudflare (HTML page, not the app). Retrying with a different upload method…`;
+  }
+  return `Import failed (HTTP ${parsed.status})`;
+}
+
 /**
- * Uses plain fetch → /api/manage/asset-import (not a server action).
- * Large server-action posts often lose the session cookie; middleware then
- * returns JSON and Next shows "Unexpected response was received from the server."
+ * Prefer multipart (no custom headers — Cloudflare often blocks octet-stream).
+ * On HTML 403/413, fall back to JSON+base64 for smaller files.
  */
 export function AssetImportForm({
   importGrant,
@@ -54,72 +86,85 @@ export function AssetImportForm({
           setError(null);
           setResult(null);
           const form = e.currentTarget;
-          const fd = new FormData(form);
+          const fdIn = new FormData(form);
           startTransition(async () => {
             try {
-              const file = fd.get("file");
-              const mode = String(fd.get("mode") ?? "upsert");
+              const file = fdIn.get("file");
+              const mode = String(fdIn.get("mode") ?? "upsert");
               if (!(file instanceof File) || file.size === 0) {
                 throw new Error("Choose an Excel (.xlsx) or CSV file");
               }
 
-              const params = new URLSearchParams({
-                mode,
-                filename: file.name || "import.xlsx",
-                grant: importGrant,
-              });
+              // 1) Standard multipart — no custom headers / query (WAF-friendly)
+              const fd = new FormData();
+              fd.set("file", file);
+              fd.set("mode", mode);
+              fd.set("importGrant", importGrant);
 
-              const res = await fetch(
-                `/api/manage/asset-import?${params.toString()}`,
-                {
+              let parsed = await parseImportResponse(
+                await fetch("/api/manage/asset-import", {
                   method: "POST",
-                  body: file,
+                  body: fd,
                   credentials: "include",
                   cache: "no-store",
-                  headers: {
-                    "Content-Type": "application/octet-stream",
-                    "X-VenInspect-Import-Grant": importGrant,
-                  },
-                },
+                }),
               );
 
-              const text = await res.text();
-              let body: (ImportOk | ImportErr) | null = null;
-              try {
-                body = text ? (JSON.parse(text) as ImportOk | ImportErr) : null;
-              } catch {
-                body = null;
-              }
-
-              if (!res.ok) {
-                const msg =
-                  (body && "error" in body && body.error) ||
-                  (text && !text.startsWith("<")
-                    ? text.slice(0, 300)
-                    : null);
-                if (!msg && text.startsWith("<")) {
-                  throw new Error(
-                    `Upload blocked (HTTP ${res.status}). The proxy returned a web page instead of JSON — try a smaller CSV, or check reverse-proxy body limits.`,
+              // 2) HTML block (Cloudflare/nginx) → JSON base64 for smaller files
+              if (
+                !parsed.ok &&
+                parsed.isHtml &&
+                file.size <= JSON_FALLBACK_MAX
+              ) {
+                const bytes = new Uint8Array(await file.arrayBuffer());
+                let binary = "";
+                const chunk = 0x8000;
+                for (let i = 0; i < bytes.length; i += chunk) {
+                  binary += String.fromCharCode(
+                    ...bytes.subarray(i, i + chunk),
                   );
                 }
-                throw new Error(
-                  msg || `Import failed (HTTP ${res.status})`,
+                const contentBase64 = btoa(binary);
+                parsed = await parseImportResponse(
+                  await fetch("/api/manage/asset-import", {
+                    method: "POST",
+                    credentials: "include",
+                    cache: "no-store",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      grant: importGrant,
+                      mode,
+                      filename: file.name || "import.xlsx",
+                      contentBase64,
+                    }),
+                  }),
                 );
               }
 
-              if (!body || body.ok !== true) {
+              if (!parsed.ok) {
+                if (parsed.isHtml) {
+                  throw new Error(
+                    `Upload blocked (HTTP ${parsed.status}) before it reached VenInspect — usually Cloudflare WAF or a reverse-proxy body limit. Try exporting a CSV under a few MB, or temporarily set the Cloudflare WAF for /api/manage/asset-import to allow. (App ${appVersion})`,
+                  );
+                }
+                throw new Error(errorFromParsed(parsed));
+              }
+
+              if (!parsed.body || parsed.body.ok !== true) {
                 throw new Error(
-                  (body && "error" in body && body.error) ||
+                  (parsed.body &&
+                    "error" in parsed.body &&
+                    parsed.body.error) ||
                     "Import failed — empty response from server.",
                 );
               }
 
               setResult({
-                created: body.created,
-                updated: body.updated,
-                skipped: body.skipped,
-                total: body.total,
-                errors: body.errors ?? [],
+                created: parsed.body.created,
+                updated: parsed.body.updated,
+                skipped: parsed.body.skipped,
+                total: parsed.body.total,
+                errors: parsed.body.errors ?? [],
               });
             } catch (err) {
               setError(err instanceof Error ? err.message : "Import failed");
@@ -127,8 +172,6 @@ export function AssetImportForm({
           });
         }}
       >
-        <input type="hidden" name="importGrant" value={importGrant} />
-
         <div className="space-y-2">
           <p className="text-sm font-medium text-[color:var(--ventia-ink)]">
             Download a blank template first
