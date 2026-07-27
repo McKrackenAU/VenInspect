@@ -71,7 +71,7 @@ export function AppNav({ userName, isAdmin, isRoot }: Props) {
                 href="/"
                 className={`rounded-md px-3 py-1.5 ${
                   !isManage
-                    ? "bg-[color:var(--btn-primary-bg)] text-[color:var(--btn-primary-fg)]"
+                    ? "bg-[color:var(--btn-primary-bg)] font-semibold text-[color:var(--btn-primary-fg)]"
                     : "text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
                 }`}
               >
@@ -81,7 +81,7 @@ export function AppNav({ userName, isAdmin, isRoot }: Props) {
                 href="/manage"
                 className={`rounded-md px-3 py-1.5 ${
                   isManage
-                    ? "bg-[color:var(--btn-primary-bg)] text-[color:var(--btn-primary-fg)]"
+                    ? "bg-[color:var(--btn-primary-bg)] font-semibold text-[color:var(--btn-primary-fg)]"
                     : "text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
                 }`}
               >

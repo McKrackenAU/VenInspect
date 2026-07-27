@@ -14,7 +14,8 @@
   --foreground: var(--ventia-ink);
   --panel: var(--ventia-paper);
   --accent: var(--ventia-green);
-  /* Primary filled controls — always contrast with their fill */
+  /* Primary filled controls — always brand dark green + white (readable in
+     light and dark). Accent green is --ventia-green / --ventia-green-mid. */
   --btn-primary-bg: #004825;
   --btn-primary-fg: #ffffff;
   --touch: 3rem;
@@ -40,9 +41,9 @@ html.dark {
   --foreground: #e8eaed;
   --panel: #1a1d21;
   --accent: var(--ventia-green);
-  /* Bright fill needs dark label text */
-  --btn-primary-bg: #3dd68c;
-  --btn-primary-fg: #0d1117;
+  /* Keep filled CTAs on brand dark green so white labels stay readable */
+  --btn-primary-bg: #004825;
+  --btn-primary-fg: #ffffff;
   --nav-bg: rgba(13, 17, 23, 0.92);
   --field-bg: #12151a;
   --danger-bg: #3f1219;
@@ -212,6 +213,28 @@ html.dark select option:hover {
 .btn-primary-inline:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/*
+ * Many controls use Tailwind: bg-[color:var(--ventia-green)] text-white.
+ * In dark mode --ventia-green becomes a bright accent, so white-on-bright
+ * (and some light-mode cascades) become unreadable. Force brand fill + white
+ * label whenever that green fill utility is present.
+ * Match on the unique prefix — a trailing "]" would end the attribute selector.
+ */
+[class*="bg-[color:var(--ventia-green)"] {
+  background-color: var(--btn-primary-bg) !important;
+  color: var(--btn-primary-fg) !important;
+}
+
+[class*="bg-[color:var(--ventia-blue)"] {
+  background-color: #0077c8 !important;
+  color: #ffffff !important;
+}
+
+html.dark [class*="bg-[color:var(--ventia-blue)"] {
+  background-color: #0077c8 !important;
+  color: #ffffff !important;
 }
 
 .card {
