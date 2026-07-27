@@ -133,10 +133,10 @@ else
 fi
 
 FROM_VER="unknown"
-if [[ -f "$APP_LIVE/VERSION" ]]; then
-  FROM_VER=$(tr -d '[:space:]' <"$APP_LIVE/VERSION" | sed 's/^[vV]//')
-elif [[ -f "$APP_LIVE/package.json" ]]; then
+if [[ -f "$APP_LIVE/package.json" ]]; then
   FROM_VER=$(python3 -c "import json;print(json.load(open('$APP_LIVE/package.json')).get('version',''))" 2>/dev/null || echo unknown)
+elif [[ -f "$APP_LIVE/VERSION" ]]; then
+  FROM_VER=$(tr -d '[:space:]' <"$APP_LIVE/VERSION" | sed 's/^[vV]//')
 fi
 
 write_status "running" "Updating from ${FROM_VER} → ${GIT_REF} via ${CHANNEL}…" "$FROM_VER" "" "$CHANNEL"
@@ -171,10 +171,10 @@ as_app "$APP_STAGE" npx prisma generate || fail "prisma generate failed"
 as_app "$APP_STAGE" npm run build || fail "next build failed"
 
 TO_VER="$FROM_VER"
-if [[ -f "$APP_STAGE/VERSION" ]]; then
-  TO_VER=$(tr -d '[:space:]' <"$APP_STAGE/VERSION" | sed 's/^[vV]//')
-elif [[ -f "$APP_STAGE/package.json" ]]; then
+if [[ -f "$APP_STAGE/package.json" ]]; then
   TO_VER=$(python3 -c "import json;print(json.load(open('$APP_STAGE/package.json')).get('version',''))" 2>/dev/null || echo "$FROM_VER")
+elif [[ -f "$APP_STAGE/VERSION" ]]; then
+  TO_VER=$(tr -d '[:space:]' <"$APP_STAGE/VERSION" | sed 's/^[vV]//')
 fi
 
 # When a specific release tag was requested, refuse a mismatched tree

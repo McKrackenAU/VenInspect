@@ -898,7 +898,8 @@ export function AssetMap({
                 label="Streets"
                 description="OpenStreetMap"
                 active={activeProvider === "osm"}
-                previewClass="bg-[linear-gradient(135deg,#dce8d4_0%,#c5d4e8_45%,#e8e0d0_100%)]"
+                logoSrc="/brand/map/openstreetmap.svg"
+                logoAlt="OpenStreetMap"
                 onClick={() => chooseProvider("osm")}
               />
               <MapLayerTile
@@ -908,7 +909,8 @@ export function AssetMap({
                 }
                 active={activeProvider === "google"}
                 disabled={!googleApiKey}
-                previewClass="bg-[linear-gradient(135deg,#1a3a2a_0%,#3d5a3a_40%,#8a7a4a_100%)]"
+                logoSrc="/brand/map/google-maps.svg"
+                logoAlt="Google Maps"
                 onClick={() => chooseProvider("google")}
                 title={
                   googleApiKey
@@ -923,7 +925,8 @@ export function AssetMap({
                 }
                 active={activeProvider === "nearmap"}
                 disabled={!nearmapApiKey}
-                previewClass="bg-[linear-gradient(135deg,#2a4a3a_0%,#5a6a3a_35%,#8a7040_70%,#c4a86a_100%)]"
+                logoSrc="/brand/map/nearmap.png"
+                logoAlt="Nearmap"
                 onClick={() => chooseProvider("nearmap")}
                 title={
                   nearmapApiKey
@@ -1193,7 +1196,8 @@ function MapLayerTile({
   description,
   active,
   disabled,
-  previewClass,
+  logoSrc,
+  logoAlt,
   onClick,
   title,
 }: {
@@ -1201,7 +1205,8 @@ function MapLayerTile({
   description?: string;
   active: boolean;
   disabled?: boolean;
-  previewClass: string;
+  logoSrc: string;
+  logoAlt: string;
   onClick: () => void;
   title?: string;
 }) {
@@ -1220,9 +1225,17 @@ function MapLayerTile({
       }`}
     >
       <span
-        className={`block h-11 w-14 shrink-0 rounded-md border border-black/15 shadow-sm ${previewClass}`}
+        className="flex h-11 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-black/10 bg-white shadow-sm dark:border-white/10"
         aria-hidden
-      />
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- static brand marks in /public */}
+        <img
+          src={logoSrc}
+          alt={logoAlt}
+          className="h-[78%] w-[78%] object-contain"
+          draggable={false}
+        />
+      </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold text-[color:var(--ventia-ink)]">
           {label}

@@ -81,7 +81,9 @@ as_app npx prisma generate
 as_app npm run build
 
 TO_VER="unknown"
-if [[ -f "$APP_STAGE/VERSION" ]]; then
+if [[ -f "$APP_STAGE/package.json" ]]; then
+  TO_VER=$(python3 -c "import json;print(json.load(open('$APP_STAGE/package.json')).get('version',''))" 2>/dev/null || echo unknown)
+elif [[ -f "$APP_STAGE/VERSION" ]]; then
   TO_VER=$(tr -d '[:space:]' <"$APP_STAGE/VERSION" | sed 's/^[vV]//')
 fi
 echo "==> Staging build OK — ${TO_VER}. Swapping…"
