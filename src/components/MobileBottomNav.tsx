@@ -80,7 +80,7 @@ export function MobileBottomNav() {
                 <span
                   className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${
                     isPrimary
-                      ? "bg-[color:var(--ventia-green)] text-white shadow-sm"
+                      ? "bg-[color:var(--btn-primary-bg)] text-[color:var(--btn-primary-fg)] shadow-sm"
                       : active
                         ? "bg-[color:var(--ventia-green-tint)]"
                         : ""

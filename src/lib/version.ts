@@ -58,6 +58,8 @@ export function remoteVersionUrls(channel: UpdateChannel): {
       versionFileFallbacks: [
         "https://github.com/McKrackenAU/VenInspect/raw/main/VERSION",
         "https://api.github.com/repos/McKrackenAU/VenInspect/contents/VERSION?ref=main",
+        // GitHub Releases “Latest” (shown on the repo Releases page)
+        "https://api.github.com/repos/McKrackenAU/VenInspect/releases/latest",
       ],
       repoLabel: "GitHub (McKrackenAU/VenInspect)",
     };
@@ -77,8 +79,16 @@ export function parseRemoteVersion(text: string): string | null {
   if (!trimmed) return null;
   if (trimmed.startsWith("{")) {
     try {
-      const pkg = JSON.parse(trimmed) as { version?: string };
-      return pkg.version?.replace(/^v/i, "") ?? null;
+      const json = JSON.parse(trimmed) as {
+        version?: string;
+        tag_name?: string;
+        name?: string;
+      };
+      // package.json → version; GitHub release → tag_name
+      const fromPkg = json.version?.replace(/^v/i, "");
+      if (fromPkg) return fromPkg;
+      const fromTag = (json.tag_name || json.name || "").replace(/^v/i, "");
+      return fromTag || null;
     } catch {
       return null;
     }

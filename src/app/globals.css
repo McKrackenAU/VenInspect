@@ -14,12 +14,16 @@
   --foreground: var(--ventia-ink);
   --panel: var(--ventia-paper);
   --accent: var(--ventia-green);
+  /* Primary filled controls — always contrast with their fill */
+  --btn-primary-bg: #004825;
+  --btn-primary-fg: #ffffff;
   --touch: 3rem;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --nav-bg: rgba(255, 255, 255, 0.95);
   --field-bg: #ffffff;
   --danger-bg: #fff1f2;
   --danger-fg: #9f1239;
+  color-scheme: light;
 }
 
 /* Cursor / Grok–style dark surface */
@@ -36,6 +40,9 @@ html.dark {
   --foreground: #e8eaed;
   --panel: #1a1d21;
   --accent: var(--ventia-green);
+  /* Bright fill needs dark label text */
+  --btn-primary-bg: #3dd68c;
+  --btn-primary-fg: #0d1117;
   --nav-bg: rgba(13, 17, 23, 0.92);
   --field-bg: #12151a;
   --danger-bg: #3f1219;
@@ -90,6 +97,19 @@ button {
   font: inherit;
 }
 
+/*
+ * Reset native <button> UA styles. Partially-styled buttons (border only,
+ * or Tailwind fill without an explicit text color) were unreadable in light
+ * mode because the browser kept system ButtonFace / ButtonText colors.
+ */
+button {
+  color: inherit;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
 .field-input {
   width: 100%;
   min-height: var(--touch);
@@ -133,19 +153,21 @@ html.dark select option:hover {
   align-items: center;
   justify-content: center;
   border-radius: 0.75rem;
-  background: var(--ventia-green);
+  border: none;
+  background: var(--btn-primary-bg);
   padding: 0.85rem 1.25rem;
   font-size: 1.05rem;
   font-weight: 600;
-  color: #fff;
-}
-
-html.dark .btn-primary {
-  color: #0d1117;
+  color: var(--btn-primary-fg);
 }
 
 .btn-primary:active {
-  background: var(--ventia-green-mid);
+  filter: brightness(1.05);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .btn-secondary {
@@ -160,6 +182,32 @@ html.dark .btn-primary {
   font-weight: 600;
   color: var(--ventia-green);
   background: var(--panel);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/** Compact primary (nav / inline actions — not full-width) */
+.btn-primary-inline {
+  display: inline-flex;
+  min-height: 2.5rem;
+  width: auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  border: none;
+  background: var(--btn-primary-bg);
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--btn-primary-fg);
+}
+
+.btn-primary-inline:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .card {

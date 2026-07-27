@@ -194,7 +194,8 @@ export function SystemUpdatePanel({
           type="button"
           onClick={() => void runCheck()}
           disabled={checking || updating}
-          className="rounded-xl border border-[color:var(--ventia-border)] px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
+          className="btn-secondary px-4 py-2.5 text-sm"
+          style={{ minHeight: "2.5rem" }}
         >
           {checking ? "Checking…" : "Check for updates"}
         </button>
@@ -202,7 +203,7 @@ export function SystemUpdatePanel({
           type="button"
           onClick={() => void onUpdate()}
           disabled={updating || (check != null && check.ok && !check.updateAvailable)}
-          className="rounded-xl bg-[color:var(--ventia-green)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+          className="btn-primary-inline"
         >
           {updating ? "Updating…" : "Update to latest"}
         </button>
@@ -210,7 +211,7 @@ export function SystemUpdatePanel({
           <button
             type="button"
             onClick={() => void onReset()}
-            className="rounded-xl border border-amber-500/50 px-4 py-2.5 text-sm font-semibold text-amber-800 dark:text-amber-200"
+            className="rounded-xl border border-amber-600 bg-[color:var(--panel)] px-4 py-2.5 text-sm font-semibold text-amber-900 dark:border-amber-500/50 dark:text-amber-200"
           >
             Reset stuck update
           </button>
