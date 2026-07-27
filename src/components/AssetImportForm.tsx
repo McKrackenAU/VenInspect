@@ -5,8 +5,26 @@ import {
   StyledFileInput,
   TemplateDownloadButtons,
 } from "@/components/StyledFileInput";
-import { importAssetsFromFile } from "@/lib/actions";
 
+type ImportOk = {
+  ok: true;
+  created: number;
+  updated: number;
+  skipped: number;
+  total: number;
+  errors: string[];
+};
+
+type ImportErr = {
+  ok?: false;
+  error?: string;
+};
+
+/**
+ * Uses plain fetch → /api/manage/asset-import (not a server action).
+ * Large server-action posts often lose the session cookie; middleware then
+ * returns JSON and Next shows "Unexpected response was received from the server."
+ */
 export function AssetImportForm({
   importGrant,
   appVersion,
@@ -27,7 +45,7 @@ export function AssetImportForm({
   return (
     <div className="space-y-4">
       <p className="text-xs text-[color:var(--ventia-muted)]">
-        App {appVersion} · import grant {importGrant.slice(0, 8)}…
+        App {appVersion}
       </p>
       <form
         className="space-y-4 rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5 shadow-sm"
@@ -37,20 +55,71 @@ export function AssetImportForm({
           setResult(null);
           const form = e.currentTarget;
           const fd = new FormData(form);
-          // Ensure grant is present even if the hidden input was stripped
-          fd.set("importGrant", importGrant);
           startTransition(async () => {
             try {
-              const outcome = await importAssetsFromFile(fd);
-              if (!outcome.ok) {
-                throw new Error(outcome.error);
+              const file = fd.get("file");
+              const mode = String(fd.get("mode") ?? "upsert");
+              if (!(file instanceof File) || file.size === 0) {
+                throw new Error("Choose an Excel (.xlsx) or CSV file");
               }
+
+              const params = new URLSearchParams({
+                mode,
+                filename: file.name || "import.xlsx",
+                grant: importGrant,
+              });
+
+              const res = await fetch(
+                `/api/manage/asset-import?${params.toString()}`,
+                {
+                  method: "POST",
+                  body: file,
+                  credentials: "include",
+                  cache: "no-store",
+                  headers: {
+                    "Content-Type": "application/octet-stream",
+                    "X-VenInspect-Import-Grant": importGrant,
+                  },
+                },
+              );
+
+              const text = await res.text();
+              let body: (ImportOk | ImportErr) | null = null;
+              try {
+                body = text ? (JSON.parse(text) as ImportOk | ImportErr) : null;
+              } catch {
+                body = null;
+              }
+
+              if (!res.ok) {
+                const msg =
+                  (body && "error" in body && body.error) ||
+                  (text && !text.startsWith("<")
+                    ? text.slice(0, 300)
+                    : null);
+                if (!msg && text.startsWith("<")) {
+                  throw new Error(
+                    `Upload blocked (HTTP ${res.status}). The proxy returned a web page instead of JSON — try a smaller CSV, or check reverse-proxy body limits.`,
+                  );
+                }
+                throw new Error(
+                  msg || `Import failed (HTTP ${res.status})`,
+                );
+              }
+
+              if (!body || body.ok !== true) {
+                throw new Error(
+                  (body && "error" in body && body.error) ||
+                    "Import failed — empty response from server.",
+                );
+              }
+
               setResult({
-                created: outcome.created,
-                updated: outcome.updated,
-                skipped: outcome.skipped,
-                total: outcome.total,
-                errors: outcome.errors ?? [],
+                created: body.created,
+                updated: body.updated,
+                skipped: body.skipped,
+                total: body.total,
+                errors: body.errors ?? [],
               });
             } catch (err) {
               setError(err instanceof Error ? err.message : "Import failed");

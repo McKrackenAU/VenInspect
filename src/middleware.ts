@@ -128,7 +128,12 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!session) {
-    if (isAdminApiPath(pathname) || isServerAction) {
+    // Never return JSON/HTML for server actions — that breaks the action
+    // protocol with "Unexpected response was received from the server."
+    if (isServerAction) {
+      return NextResponse.next();
+    }
+    if (isAdminApiPath(pathname)) {
       return NextResponse.json(
         { error: "Not signed in. Refresh the page and sign in again." },
         { status: 401 },
@@ -145,7 +150,10 @@ export async function middleware(request: NextRequest) {
 
   // System root: admin panel only (hidden from field portal)
   if (root && !isRootAllowedPath(pathname)) {
-    if (pathname.startsWith("/api/") || isServerAction) {
+    if (isServerAction) {
+      return NextResponse.next();
+    }
+    if (pathname.startsWith("/api/")) {
       return NextResponse.json(
         { error: "Root account is limited to the admin portal." },
         { status: 403 },
