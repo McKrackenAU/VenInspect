@@ -177,7 +177,8 @@ export function UserQualificationsForm({
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="New password (optional)"
+          placeholder="Reset password (optional, min 8)"
+          minLength={8}
           className="min-w-[10rem] flex-1 rounded-md border border-[color:var(--ventia-border)] px-2 py-1.5 text-sm"
         />
         <button

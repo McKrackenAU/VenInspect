@@ -59,8 +59,8 @@ export default async function ManageUsersPage() {
             name="password"
             type="password"
             required
-            minLength={4}
-            placeholder="Password (min 4 characters)"
+            minLength={8}
+            placeholder="Password (min 8 characters)"
             className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
           />
           <select
