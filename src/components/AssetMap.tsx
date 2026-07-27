@@ -223,6 +223,8 @@ export function AssetMap({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layersOpen, setLayersOpen] = useState(false);
   const [prefsReady, setPrefsReady] = useState(false);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   selectedIdRef.current = selectedId;
 
   // Resolve browser layer preference before the first map init (avoids create→destroy).
@@ -254,6 +256,43 @@ export function AssetMap({
       .filter((x) => x.km <= NEARBY_KM)
       .sort((a, b) => a.km - b.km);
   }, [userPos, withCoords]);
+
+  const typeOptions = useMemo(() => {
+    const labels = new Set(withCoords.map((a) => a.typeLabel));
+    return [...labels].sort((a, b) => a.localeCompare(b));
+  }, [withCoords]);
+
+  const isFiltering = query.trim().length > 0 || typeFilter !== "all";
+
+  const searchResults = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return withCoords.filter((a) => {
+      if (typeFilter !== "all" && a.typeLabel !== typeFilter) return false;
+      if (!term) return true;
+      return (
+        a.assetNumber.toLowerCase().includes(term) ||
+        a.name.toLowerCase().includes(term) ||
+        a.roadName.toLowerCase().includes(term) ||
+        a.typeLabel.toLowerCase().includes(term)
+      );
+    });
+  }, [withCoords, query, typeFilter]);
+
+  /** List shown in the panel: search hits when filtering, else nearby (or empty prompt). */
+  const panelList = useMemo(() => {
+    if (isFiltering) {
+      return searchResults.slice(0, 80).map((asset) => ({
+        asset,
+        km: userPos
+          ? haversineKm(userPos.lat, userPos.lng, asset.latitude, asset.longitude)
+          : null,
+      }));
+    }
+    if (userPos) {
+      return nearby.map(({ asset, km }) => ({ asset, km }));
+    }
+    return [];
+  }, [isFiltering, searchResults, nearby, userPos]);
 
   const tearDown = useCallback(() => {
     leafletMarkersRef.current.clear();
@@ -693,6 +732,24 @@ export function AssetMap({
     })();
   }, [selectedId, mapReady, withCoords]);
 
+  // Dim pins that don't match the active search/filter.
+  useEffect(() => {
+    if (!mapReady) return;
+    const matchIds = new Set(searchResults.map((a) => a.id));
+    for (const [id, marker] of leafletMarkersRef.current) {
+      const el = marker.getElement();
+      if (!el) continue;
+      const on = !isFiltering || matchIds.has(id);
+      el.style.opacity = on ? "1" : "0.22";
+      el.style.pointerEvents = on ? "" : "none";
+    }
+    for (const [id, marker] of googleMarkersRef.current) {
+      const on = !isFiltering || matchIds.has(id);
+      const m = marker as GMarker & { setOpacity?: (n: number) => void };
+      m.setOpacity?.(on ? 1 : 0.22);
+    }
+  }, [mapReady, searchResults, isFiltering]);
+
   const focusAsset = (asset: MapAsset) => {
     setSelectedId(asset.id);
     if (engineRef.current === "leaflet" && leafletMapRef.current) {
@@ -729,7 +786,7 @@ export function AssetMap({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -740,36 +797,39 @@ export function AssetMap({
           {locating ? "Locating…" : "Use my location"}
         </button>
         <span className="text-xs text-[color:var(--ventia-muted)]">
-          {withCoords.length} mapped · {assets.length - withCoords.length} without
-          coords
+          {withCoords.length} mapped
+          {assets.length - withCoords.length > 0
+            ? ` · ${assets.length - withCoords.length} without coords`
+            : ""}
         </span>
       </div>
 
-      {fallbackNote ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          {fallbackNote}
-        </p>
+      {fallbackNote || locError || withCoords.length === 0 ? (
+        <div className="space-y-2">
+          {fallbackNote ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              {fallbackNote}
+            </p>
+          ) : null}
+          {locError ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              {locError}
+            </p>
+          ) : null}
+          {withCoords.length === 0 ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              No assets have coordinates yet. Admins: set lat/long under{" "}
+              <Link href="/manage/assets" className="font-semibold underline">
+                Admin → Assets
+              </Link>
+              .
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
-      {locError ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          {locError}
-        </p>
-      ) : null}
-
-      {withCoords.length === 0 ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          No assets have coordinates yet — the map centres on Melbourne with no pins.
-          Admins: open{" "}
-          <Link href="/manage/assets" className="font-semibold underline">
-            Admin → Assets
-          </Link>
-          , edit an asset, and set latitude / longitude.
-        </p>
-      ) : null}
-
-      <div className="relative z-0 w-full flex-1 min-h-[280px] h-[clamp(280px,calc(100dvh-14rem),900px)] overflow-hidden rounded-2xl border border-[color:var(--ventia-border)]">
-        {/* Absolute fill avoids h-full % bugs inside flex layouts (blank Leaflet). */}
+      {/* Map owns a stable viewport — search/results overlay it (do not push height). */}
+      <div className="relative z-0 min-h-[280px] w-full flex-1 overflow-hidden rounded-2xl border border-[color:var(--ventia-border)]">
         <div
           ref={mapEl}
           className="absolute inset-0 z-0 h-full w-full touch-none bg-[#e5e3df] [&.leaflet-container]:h-full [&.leaflet-container]:w-full [&.leaflet-container]:touch-none"
@@ -777,12 +837,12 @@ export function AssetMap({
           aria-label="Asset map"
         />
 
-        {/* w-max so this never stretches into an invisible drag-blocker over the map */}
-        <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex w-max max-w-[min(100%,calc(100%-1.5rem))] items-end gap-2">
+        {/* Layers — top-left so the result sheet does not cover it on mobile */}
+        <div className="pointer-events-none absolute left-3 top-3 z-[500] flex w-max max-w-[min(100%,calc(100%-1.5rem))] items-start gap-2">
           <button
             type="button"
             onClick={() => setLayersOpen((v) => !v)}
-            className="pointer-events-auto relative h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-xl border-2 border-black/80 shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ventia-green)] sm:h-20 sm:w-20"
+            className="pointer-events-auto relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border-2 border-black/80 shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ventia-green)] sm:h-16 sm:w-16"
             aria-expanded={layersOpen}
             aria-label={`Map layers — ${providerLabel}`}
             title={`Layers · ${providerLabel}`}
@@ -795,14 +855,14 @@ export function AssetMap({
               className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/75 to-transparent"
               aria-hidden
             />
-            <span className="absolute bottom-1.5 left-1.5 flex items-center gap-1 text-[11px] font-semibold text-white drop-shadow">
+            <span className="absolute bottom-1 left-1 flex items-center gap-0.5 text-[10px] font-semibold text-white drop-shadow sm:bottom-1.5 sm:left-1.5 sm:text-[11px]">
               <LayersIcon />
               Layers
             </span>
           </button>
 
           {layersOpen ? (
-            <div className="pointer-events-auto flex items-end gap-2 overflow-x-auto rounded-2xl bg-white/95 p-2 shadow-lg ring-1 ring-black/10 dark:bg-[#1c2128]/95 dark:ring-white/10">
+            <div className="pointer-events-auto flex items-start gap-2 overflow-x-auto rounded-2xl bg-white/95 p-2 shadow-lg ring-1 ring-black/10 dark:bg-[#1c2128]/95 dark:ring-white/10">
               <MapLayerTile
                 label="Streets"
                 active={activeProvider === "osm"}
@@ -836,27 +896,143 @@ export function AssetMap({
             </div>
           ) : null}
         </div>
+
+        {/* Desktop: side results panel */}
+        <aside className="pointer-events-none absolute inset-y-0 left-0 z-[450] hidden w-[min(22rem,42%)] p-3 md:flex">
+          <MapResultsPanel
+            className="pointer-events-auto flex h-full w-full flex-col overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)]/95 shadow-lg backdrop-blur-sm"
+            query={query}
+            setQuery={setQuery}
+            typeFilter={typeFilter}
+            setTypeFilter={setTypeFilter}
+            typeOptions={typeOptions}
+            isFiltering={isFiltering}
+            panelList={panelList}
+            selectedAsset={selectedAsset}
+            selectedId={selectedId}
+            userPos={userPos}
+            onFocus={focusAsset}
+            onClearSelection={() => setSelectedId(null)}
+          />
+        </aside>
+
+        {/* Mobile: bottom results sheet — overlays map, does not shrink it */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[450] md:hidden">
+          <MapResultsPanel
+            className="pointer-events-auto flex max-h-[min(42dvh,22rem)] w-full flex-col overflow-hidden rounded-t-2xl border border-b-0 border-[color:var(--ventia-border)] bg-[color:var(--panel)]/95 shadow-[0_-8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
+            query={query}
+            setQuery={setQuery}
+            typeFilter={typeFilter}
+            setTypeFilter={setTypeFilter}
+            typeOptions={typeOptions}
+            isFiltering={isFiltering}
+            panelList={panelList}
+            selectedAsset={selectedAsset}
+            selectedId={selectedId}
+            userPos={userPos}
+            onFocus={focusAsset}
+            onClearSelection={() => setSelectedId(null)}
+            mobile
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type PanelRow = { asset: MapAsset; km: number | null };
+
+function MapResultsPanel({
+  className,
+  query,
+  setQuery,
+  typeFilter,
+  setTypeFilter,
+  typeOptions,
+  isFiltering,
+  panelList,
+  selectedAsset,
+  selectedId,
+  userPos,
+  onFocus,
+  onClearSelection,
+  mobile = false,
+}: {
+  className?: string;
+  query: string;
+  setQuery: (q: string) => void;
+  typeFilter: string;
+  setTypeFilter: (t: string) => void;
+  typeOptions: string[];
+  isFiltering: boolean;
+  panelList: PanelRow[];
+  selectedAsset: MapAsset | null;
+  selectedId: string | null;
+  userPos: LatLng | null;
+  onFocus: (asset: MapAsset) => void;
+  onClearSelection: () => void;
+  mobile?: boolean;
+}) {
+  return (
+    <div className={className}>
+      {mobile ? (
+        <div
+          className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[color:var(--ventia-border)]"
+          aria-hidden
+        />
+      ) : null}
+
+      <div className="shrink-0 space-y-2 border-b border-[color:var(--ventia-border)] p-3">
+        <label className="block">
+          <span className="sr-only">Search assets</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search code, name, or road…"
+            className="field-input w-full text-sm"
+            autoComplete="off"
+          />
+        </label>
+        {typeOptions.length > 1 ? (
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="field-input w-full text-sm"
+            aria-label="Filter by type"
+          >
+            <option value="all">All types</option>
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        <p className="text-xs text-[color:var(--ventia-muted)]">
+          {isFiltering
+            ? `${panelList.length} match${panelList.length === 1 ? "" : "es"}`
+            : userPos
+              ? `Nearby (within ${NEARBY_KM} km)`
+              : "Type to search the registry"}
+        </p>
       </div>
 
       {selectedAsset ? (
-        <section className="card space-y-3 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
-                Selected asset
-              </p>
-              <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
+        <div className="shrink-0 space-y-2 border-b border-[color:var(--ventia-border)] bg-[color:var(--ventia-green-tint)]/60 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="font-mono text-sm font-bold text-[color:var(--ventia-green)]">
                 {selectedAsset.assetNumber}
-              </h2>
-              <p className="text-sm text-[color:var(--ventia-muted)]">
-                {selectedAsset.name} · {selectedAsset.roadName} ·{" "}
-                {selectedAsset.typeLabel}
+              </p>
+              <p className="truncate text-xs text-[color:var(--ventia-muted)]">
+                {selectedAsset.name} · {selectedAsset.roadName}
               </p>
             </div>
             <button
               type="button"
-              className="text-xs font-medium text-[color:var(--ventia-muted)] underline-offset-2 hover:underline"
-              onClick={() => setSelectedId(null)}
+              className="shrink-0 text-xs text-[color:var(--ventia-muted)] underline-offset-2 hover:underline"
+              onClick={onClearSelection}
             >
               Clear
             </button>
@@ -864,88 +1040,62 @@ export function AssetMap({
           <div className="flex flex-wrap gap-2">
             <Link
               href={`/inspect?assetId=${encodeURIComponent(selectedAsset.id)}`}
-              className="inline-flex min-h-[var(--touch)] flex-1 items-center justify-center rounded-xl bg-[color:var(--ventia-green)] px-4 py-2.5 text-sm font-semibold text-white sm:flex-none"
+              className="inline-flex min-h-9 flex-1 items-center justify-center rounded-lg bg-[color:var(--ventia-green)] px-3 py-1.5 text-xs font-semibold text-white"
             >
               Start inspection
             </Link>
             <Link
               href={`/assets/${selectedAsset.id}`}
-              className="inline-flex min-h-[var(--touch)] items-center justify-center rounded-xl border border-[color:var(--ventia-border)] px-4 py-2.5 text-sm font-semibold text-[color:var(--ventia-ink)]"
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ventia-ink)]"
             >
-              Open asset
+              Open
             </Link>
           </div>
-        </section>
-      ) : withCoords.length > 0 ? (
-        <p className="text-sm text-[color:var(--ventia-muted)]">
-          Tap a green pin on the map to select an asset for inspection.
-        </p>
+        </div>
       ) : null}
 
-      {userPos ? (
-        <section className="space-y-2 shrink-0">
-          <h2 className="text-lg font-semibold text-[color:var(--ventia-green)]">
-            Nearby (within {NEARBY_KM} km)
-          </h2>
-          {nearby.length === 0 ? (
-            <p className="text-sm text-[color:var(--ventia-muted)]">
-              No mapped assets within {NEARBY_KM} km of your location.
-            </p>
-          ) : (
-            <ul className="divide-y divide-[color:var(--ventia-border)] overflow-hidden rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)]">
-              {nearby.map(({ asset, km }) => (
-                <li
-                  key={asset.id}
-                  className={`px-4 py-3 ${
-                    selectedId === asset.id
-                      ? "bg-[color:var(--ventia-green-tint)]"
-                      : ""
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => focusAsset(asset)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <span className="block font-semibold text-[color:var(--ventia-ink)]">
-                        {asset.assetNumber}
-                      </span>
-                      <span className="block text-sm text-[color:var(--ventia-muted)]">
-                        {asset.name} · {asset.roadName}
-                      </span>
-                    </button>
-                    <span className="shrink-0 text-sm font-medium text-[color:var(--ventia-blue)]">
-                      {formatDistanceKm(km)}
-                    </span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold">
-                    <button
-                      type="button"
-                      className="text-[color:var(--ventia-green)]"
-                      onClick={() => focusAsset(asset)}
-                    >
-                      Select on map
-                    </button>
-                    <Link
-                      href={`/inspect?assetId=${encodeURIComponent(asset.id)}`}
-                      className="text-[color:var(--ventia-green)]"
-                    >
-                      Start inspection
-                    </Link>
-                    <Link
-                      href={`/assets/${asset.id}`}
-                      className="text-[color:var(--ventia-muted)]"
-                    >
-                      Open asset
-                    </Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ) : null}
+      <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {panelList.length === 0 ? (
+          <li className="px-3 py-4 text-sm text-[color:var(--ventia-muted)]">
+            {isFiltering
+              ? "No assets match that search."
+              : userPos
+                ? `No mapped assets within ${NEARBY_KM} km.`
+                : "Search by code, name, or road — or enable location for nearby."}
+          </li>
+        ) : (
+          panelList.map(({ asset, km }) => (
+            <li
+              key={asset.id}
+              className={`border-b border-[color:var(--ventia-border)] last:border-b-0 ${
+                selectedId === asset.id
+                  ? "bg-[color:var(--ventia-green-tint)]"
+                  : ""
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onFocus(asset)}
+                className="flex w-full items-start justify-between gap-2 px-3 py-2.5 text-left"
+              >
+                <span className="min-w-0">
+                  <span className="block font-mono text-sm font-semibold text-[color:var(--ventia-ink)]">
+                    {asset.assetNumber}
+                  </span>
+                  <span className="block truncate text-xs text-[color:var(--ventia-muted)]">
+                    {asset.name} · {asset.roadName} · {asset.typeLabel}
+                  </span>
+                </span>
+                {km != null ? (
+                  <span className="shrink-0 text-xs font-medium text-[color:var(--ventia-blue)]">
+                    {formatDistanceKm(km)}
+                  </span>
+                ) : null}
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
     </div>
   );
 }

@@ -46,14 +46,13 @@ export default async function MapPage() {
   const nearmapApiKey = getNearmapApiKey();
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div>
         <h1 className="text-2xl font-bold text-[color:var(--ventia-green)]">
           Asset map
         </h1>
-        <p className="mt-1 text-base text-[color:var(--ventia-muted)]">
-          Find structures on the map. In the field, use your location to list nearby
-          assets.
+        <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
+          Search the panel to find assets. Use your location for nearby results.
         </p>
       </div>
       <AssetMap
