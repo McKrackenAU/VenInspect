@@ -57,13 +57,13 @@ export function TemplateDownloadButtons({
     <div className="flex flex-wrap gap-2">
       <a
         href={`/api/manage/import-templates/${kind}?format=csv`}
-        className="rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs font-semibold"
+        className="inline-flex items-center rounded-lg border border-[color:var(--ventia-border)] bg-[color:var(--panel)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ventia-ink)] hover:bg-[color:var(--ventia-green-tint)]"
       >
         Download CSV template
       </a>
       <a
         href={`/api/manage/import-templates/${kind}?format=xlsx`}
-        className="rounded-lg border border-[color:var(--ventia-green)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ventia-green)]"
+        className="inline-flex items-center rounded-lg border-2 border-[color:var(--ventia-green)] bg-[color:var(--panel)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ventia-green)] hover:bg-[color:var(--ventia-green-tint)]"
       >
         Download Excel template
       </a>

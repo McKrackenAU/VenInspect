@@ -90,24 +90,28 @@ a {
   text-decoration: none;
 }
 
-input,
-textarea,
-select,
-button {
-  font: inherit;
-}
-
 /*
- * Reset native <button> UA styles. Partially-styled buttons (border only,
- * or Tailwind fill without an explicit text color) were unreadable in light
- * mode because the browser kept system ButtonFace / ButtonText colors.
+ * Native <button> reset must live in @layer base. In Tailwind v4, unlayered
+ * CSS beats utilities — a plain `button { background: transparent }` after
+ * @import was wiping every Tailwind-styled button (Import looked “gone”,
+ * light-mode labels unreadable).
  */
-button {
-  color: inherit;
-  background-color: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
+@layer base {
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+  }
+
+  button {
+    color: inherit;
+    background-color: transparent;
+    border-style: none;
+    border-width: 0;
+    padding: 0;
+    cursor: pointer;
+  }
 }
 
 .field-input {

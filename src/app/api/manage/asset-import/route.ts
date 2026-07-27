@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST multipart: file=registry workbook, mode=upsert|skip
- * Prefer the server action from the UI; this route remains for tooling.
+ * Used by the Import assets UI (multipart is more reliable than a server action).
  */
 export async function POST(req: NextRequest) {
   const auth = await requireAdminFromRequest(req);

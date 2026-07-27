@@ -1,11 +1,24 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { importAssetsFromFile } from "@/lib/actions";
 import {
   StyledFileInput,
   TemplateDownloadButtons,
 } from "@/components/StyledFileInput";
+
+type ImportOk = {
+  ok: true;
+  created: number;
+  updated: number;
+  skipped: number;
+  total: number;
+  errors: string[];
+};
+
+type ImportErr = {
+  ok?: false;
+  error?: string;
+};
 
 export function AssetImportForm() {
   const [pending, startTransition] = useTransition();
@@ -26,20 +39,66 @@ export function AssetImportForm() {
           e.preventDefault();
           setError(null);
           setResult(null);
-          const fd = new FormData(e.currentTarget);
+          const form = e.currentTarget;
+          const fd = new FormData(form);
           startTransition(async () => {
             try {
-              // Server action uses the page session (most reliable for admins).
-              const res = await importAssetsFromFile(fd);
-              if (!res.ok) {
-                throw new Error(res.error);
+              // Prefer the API route for multipart uploads — server actions
+              // often surface "An unexpected response was received from the server."
+              // when the flight payload is interrupted by proxies/body limits.
+              const res = await fetch("/api/manage/asset-import", {
+                method: "POST",
+                body: fd,
+                credentials: "same-origin",
+              });
+              const text = await res.text();
+              let body: (ImportOk | ImportErr) | null = null;
+              try {
+                body = text ? (JSON.parse(text) as ImportOk | ImportErr) : null;
+              } catch {
+                body = null;
               }
+
+              if (!res.ok) {
+                const msg =
+                  (body && "error" in body && body.error) ||
+                  (text && !text.startsWith("<")
+                    ? text.slice(0, 240)
+                    : null);
+                if (res.status === 401) {
+                  throw new Error(
+                    msg ||
+                      "Not signed in. Refresh and sign in again, then retry.",
+                  );
+                }
+                if (res.status === 403) {
+                  throw new Error(
+                    msg ||
+                      "Admin access required. Sign out and sign back in with an admin account.",
+                  );
+                }
+                if (res.status === 413) {
+                  throw new Error(
+                    msg ||
+                      "File too large for the server. Try CSV or a smaller workbook.",
+                  );
+                }
+                throw new Error(msg || `Import failed (${res.status})`);
+              }
+
+              if (!body || !("ok" in body) || body.ok !== true) {
+                throw new Error(
+                  (body && "error" in body && body.error) ||
+                    "Import failed — empty response from server.",
+                );
+              }
+
               setResult({
-                created: res.created,
-                updated: res.updated,
-                skipped: res.skipped,
-                total: res.total,
-                errors: res.errors,
+                created: body.created,
+                updated: body.updated,
+                skipped: body.skipped,
+                total: body.total,
+                errors: body.errors ?? [],
               });
             } catch (err) {
               setError(err instanceof Error ? err.message : "Import failed");
@@ -67,7 +126,7 @@ export function AssetImportForm() {
           />
         </div>
 
-        <fieldset className="space-y-2 text-sm">
+        <fieldset className="space-y-2 text-sm text-[color:var(--ventia-ink)]">
           <legend className="font-medium">When Code already exists</legend>
           <label className="flex items-center gap-2">
             <input type="radio" name="mode" value="upsert" defaultChecked />
@@ -89,36 +148,38 @@ export function AssetImportForm() {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-[color:var(--ventia-green)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[color:var(--ventia-green-mid)] disabled:opacity-60"
+          className="btn-primary-inline w-full sm:w-auto"
         >
           {pending ? "Importing…" : "Import assets"}
         </button>
-      </form>
 
-      {error && (
-        <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200">
-          {error}
-        </p>
-      )}
+        {error ? (
+          <p className="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-900 dark:border-rose-800 dark:bg-rose-950/60 dark:text-rose-100">
+            {error}
+          </p>
+        ) : null}
 
-      {result && (
-        <div className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-4 text-sm">
-          <p className="font-medium text-[color:var(--ventia-green)]">Import complete</p>
-          <ul className="mt-2 list-inside list-disc text-[color:var(--ventia-muted)]">
-            <li>Parsed: {result.total}</li>
-            <li>Created: {result.created}</li>
-            <li>Updated: {result.updated}</li>
-            <li>Skipped: {result.skipped}</li>
-          </ul>
-          {result.errors.length > 0 && (
-            <ul className="mt-3 max-h-40 overflow-auto text-xs text-amber-800">
-              {result.errors.map((e) => (
-                <li key={e}>{e}</li>
-              ))}
+        {result ? (
+          <div className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--ventia-green-tint)] p-4 text-sm">
+            <p className="font-medium text-[color:var(--ventia-green)]">
+              Import complete
+            </p>
+            <ul className="mt-2 list-inside list-disc text-[color:var(--ventia-muted)]">
+              <li>Parsed: {result.total}</li>
+              <li>Created: {result.created}</li>
+              <li>Updated: {result.updated}</li>
+              <li>Skipped: {result.skipped}</li>
             </ul>
-          )}
-        </div>
-      )}
+            {result.errors.length > 0 ? (
+              <ul className="mt-3 max-h-40 overflow-auto text-xs text-amber-800 dark:text-amber-200">
+                {result.errors.map((e) => (
+                  <li key={e}>{e}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </form>
     </div>
   );
 }
