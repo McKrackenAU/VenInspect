@@ -24,7 +24,14 @@ export function MobileBottomNav() {
   const pathname = usePathname();
   const isManage = pathname.startsWith("/manage");
 
-  if (pathname === "/login" || pathname.startsWith("/login/")) {
+  if (
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
+    pathname === "/forgot-password" ||
+    pathname.startsWith("/forgot-password/") ||
+    pathname === "/reset-password" ||
+    pathname.startsWith("/reset-password/")
+  ) {
     return null;
   }
 

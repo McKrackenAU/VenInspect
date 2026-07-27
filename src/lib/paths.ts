@@ -70,6 +70,20 @@ export type StorageSettings = {
   /** Cloudflare tunnel token (root-only UI) */
   cloudflareTunnelToken?: string;
   cloudflareTunnelHostname?: string;
+  /**
+   * Outbound email (SMTP). Cloudflare hosts DNS for the domain; VenInspect
+   * sends via an SMTP provider (e.g. Resend) as noreply@inspect-it.online.
+   */
+  emailEnabled?: boolean;
+  emailFrom?: string;
+  emailFromName?: string;
+  emailSmtpHost?: string;
+  emailSmtpPort?: number;
+  emailSmtpSecure?: boolean;
+  emailSmtpUser?: string;
+  emailSmtpPassword?: string;
+  /** Public site URL for links in emails (https://inspect-it.online) */
+  publicBaseUrl?: string;
   /** Assetvision REST */
   assetvisionBaseUrl?: string;
   assetvisionApiKey?: string;

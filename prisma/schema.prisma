@@ -77,6 +77,23 @@ model User {
   auditsAssigned      AuditAssignment[] @relation("AuditAssignee")
   auditsCreated       AuditAssignment[] @relation("AuditCreator")
   attributeSnapshots  AssetAttributeSnapshot[] @relation("SnapshotActor")
+  passwordResetTokens PasswordResetToken[]
+}
+
+/// One-time password reset link (emailed to user)
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  /// SHA-256 hex of the raw token in the email link
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Asset {

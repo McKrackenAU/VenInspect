@@ -101,6 +101,11 @@ export const adminMenuGroups: AdminNavGroup[] = [
         description: "Version, maps, date/time prefs",
       },
       {
+        href: "/manage/system/email",
+        label: "Outbound email",
+        description: "SMTP for password resets (noreply@inspect-it.online)",
+      },
+      {
         href: "/manage/trash",
         label: "Trash",
         description: "Restore or purge soft-deleted reports",

@@ -161,6 +161,17 @@ export default async function ManageSystemPage({ searchParams }: Props) {
             </Link>
           ) : null}
           <Link
+            href="/manage/system/email"
+            className="rounded-xl border border-[color:var(--ventia-border)] p-4 transition hover:border-[color:var(--ventia-green)] hover:bg-[color:var(--ventia-green-tint)]"
+          >
+            <p className="font-semibold text-[color:var(--ventia-green)]">
+              Outbound email
+            </p>
+            <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
+              SMTP for password resets from noreply@inspect-it.online
+            </p>
+          </Link>
+          <Link
             href="/manage/system/assetvision"
             className="rounded-xl border border-[color:var(--ventia-border)] p-4 transition hover:border-[color:var(--ventia-green)] hover:bg-[color:var(--ventia-green-tint)]"
           >

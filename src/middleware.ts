@@ -8,6 +8,9 @@ import {
 
 const PUBLIC_PREFIXES = [
   "/login",
+  "/forgot-password",
+  "/reset-password",
+  "/api/auth",
   "/icons",
   "/manifest.webmanifest",
   "/_next",
@@ -45,8 +48,11 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isPublic(pathname)) {
-    // Already signed in → leave login page
-    if (session && pathname === "/login") {
+    // Already signed in → leave login / forgot-password
+    if (
+      session &&
+      (pathname === "/login" || pathname === "/forgot-password")
+    ) {
       const next = request.nextUrl.searchParams.get("next");
       const dest =
         next && next.startsWith("/") && !next.startsWith("/login") ? next : "/";

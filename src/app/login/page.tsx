@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { loginAction } from "@/lib/auth-actions";
 import { getSession } from "@/lib/auth";
@@ -7,7 +8,7 @@ import { BrandMark } from "@/components/BrandMark";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: Promise<{ error?: string; next?: string }>;
+  searchParams: Promise<{ error?: string; next?: string; reset?: string }>;
 };
 
 function errorMessage(code: string | undefined): string | null {
@@ -29,6 +30,7 @@ export default async function LoginPage({ searchParams }: Props) {
   }
 
   const error = errorMessage(params.error);
+  const resetOk = params.reset === "1";
 
   return (
     <div className="relative mx-auto flex min-h-[70vh] max-w-md flex-col justify-center px-1 py-8">
@@ -45,6 +47,15 @@ export default async function LoginPage({ searchParams }: Props) {
             Sign in to continue
           </p>
         </div>
+
+        {resetOk ? (
+          <p
+            className="mb-4 rounded-lg border border-[color:var(--ventia-border)] bg-[color:var(--ventia-green-tint)] px-3 py-2 text-sm"
+            role="status"
+          >
+            Password updated. Sign in with your new password.
+          </p>
+        ) : null}
 
         {error ? (
           <p
@@ -86,6 +97,15 @@ export default async function LoginPage({ searchParams }: Props) {
             Sign in
           </button>
         </form>
+
+        <p className="mt-5 text-center text-sm text-[color:var(--ventia-muted)]">
+          <Link
+            href="/forgot-password"
+            className="font-semibold text-[color:var(--ventia-green)] hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </p>
       </div>
     </div>
   );
