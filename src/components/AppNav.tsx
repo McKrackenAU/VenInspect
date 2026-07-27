@@ -71,13 +71,8 @@ export function AppNav({ userName, isAdmin, isRoot }: Props) {
                 href="/"
                 className={
                   !isManage
-                    ? "rounded-md px-3 py-1.5 font-semibold"
+                    ? "portal-chip-active rounded-md px-3 py-1.5 font-semibold"
                     : "rounded-md px-3 py-1.5 text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
-                }
-                style={
-                  !isManage
-                    ? { backgroundColor: "#004825", color: "#ffffff" }
-                    : undefined
                 }
               >
                 User
@@ -86,13 +81,8 @@ export function AppNav({ userName, isAdmin, isRoot }: Props) {
                 href="/manage"
                 className={
                   isManage
-                    ? "rounded-md px-3 py-1.5 font-semibold"
+                    ? "portal-chip-active rounded-md px-3 py-1.5 font-semibold"
                     : "rounded-md px-3 py-1.5 text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
-                }
-                style={
-                  isManage
-                    ? { backgroundColor: "#004825", color: "#ffffff" }
-                    : undefined
                 }
               >
                 Admin

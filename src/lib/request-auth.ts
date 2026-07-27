@@ -157,7 +157,27 @@ export async function requireAdminFromRequest(
     };
   }
 
-  if (user) return { user: toAuthUser(user, session) };
+  if (user) {
+    // Heal stale session cookies (DB says ADMIN, cookie still says INSPECTOR).
+    // cookies().set is allowed in route handlers.
+    if (
+      session.role !== "ADMIN" &&
+      isAdminRole(user.role, user.username)
+    ) {
+      try {
+        const { createSessionCookie } = await import("@/lib/auth");
+        await createSessionCookie({
+          id: user.id,
+          role: "ADMIN",
+          name: user.name,
+          username: user.username,
+        });
+      } catch {
+        /* ignore — import can still proceed with DB role */
+      }
+    }
+    return { user: toAuthUser(user, session) };
+  }
 
   return {
     user: {

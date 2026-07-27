@@ -14,10 +14,6 @@
   --foreground: var(--ventia-ink);
   --panel: var(--ventia-paper);
   --accent: var(--ventia-green);
-  /* Primary filled controls — always brand dark green + white (readable in
-     light and dark). Accent green is --ventia-green / --ventia-green-mid. */
-  --btn-primary-bg: #004825;
-  --btn-primary-fg: #ffffff;
   --touch: 3rem;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --nav-bg: rgba(255, 255, 255, 0.95);
@@ -41,9 +37,6 @@ html.dark {
   --foreground: #e8eaed;
   --panel: #1a1d21;
   --accent: var(--ventia-green);
-  /* Keep filled CTAs on brand dark green so white labels stay readable */
-  --btn-primary-bg: #004825;
-  --btn-primary-fg: #ffffff;
   --nav-bg: rgba(13, 17, 23, 0.92);
   --field-bg: #12151a;
   --danger-bg: #3f1219;
@@ -91,12 +84,7 @@ a {
   text-decoration: none;
 }
 
-/*
- * Native <button> reset must live in @layer base. In Tailwind v4, unlayered
- * CSS beats utilities — a plain `button { background: transparent }` after
- * @import was wiping every Tailwind-styled button (Import looked “gone”,
- * light-mode labels unreadable).
- */
+/* UA button reset in @layer base so Tailwind utilities still win */
 @layer base {
   input,
   textarea,
@@ -158,21 +146,19 @@ html.dark select option:hover {
   align-items: center;
   justify-content: center;
   border-radius: 0.75rem;
-  border: none;
-  background: var(--btn-primary-bg);
+  background: var(--ventia-green);
   padding: 0.85rem 1.25rem;
   font-size: 1.05rem;
   font-weight: 600;
-  color: var(--btn-primary-fg);
+  color: #fff;
+}
+
+html.dark .btn-primary {
+  color: #0d1117;
 }
 
 .btn-primary:active {
-  filter: brightness(1.05);
-}
-
-.btn-primary:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+  background: var(--ventia-green-mid);
 }
 
 .btn-secondary {
@@ -189,12 +175,7 @@ html.dark select option:hover {
   background: var(--panel);
 }
 
-.btn-secondary:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-/** Compact primary (nav / inline actions — not full-width) */
+/** Compact primary for inline actions */
 .btn-primary-inline {
   display: inline-flex;
   min-height: 2.5rem;
@@ -203,11 +184,15 @@ html.dark select option:hover {
   justify-content: center;
   border-radius: 0.75rem;
   border: none;
-  background: var(--btn-primary-bg);
+  background: var(--ventia-green);
   padding: 0.625rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--btn-primary-fg);
+  color: #ffffff;
+}
+
+html.dark .btn-primary-inline {
+  color: #0d1117;
 }
 
 .btn-primary-inline:disabled {
@@ -215,21 +200,19 @@ html.dark select option:hover {
   cursor: not-allowed;
 }
 
-/*
- * Tailwind fills that use bg-[color:var(--ventia-green)] + text-white become
- * unreadable when --ventia-green is the bright dark-mode accent.
- * Match the exact token ending `var(--ventia-green)]` — NOT `green-tint`,
- * which previously false-matched and painted inactive nav chips dark green
- * with the wrong label color.
+/**
+ * Portal User/Admin chip — explicit contrast in both themes.
+ * Do not use broad CSS attribute overrides on --ventia-green (that broke
+ * text/border utilities across the app).
  */
-[class*="var(--ventia-green)]"] {
-  background-color: #004825 !important;
-  color: #ffffff !important;
+.portal-chip-active {
+  background-color: #004825;
+  color: #ffffff;
 }
 
-[class*="var(--ventia-blue)]"] {
-  background-color: #0077c8 !important;
-  color: #ffffff !important;
+html.dark .portal-chip-active {
+  background-color: #3dd68c;
+  color: #0d1117;
 }
 
 .card {

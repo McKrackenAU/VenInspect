@@ -1,25 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { importAssetsFromFile } from "@/lib/actions";
 import {
   StyledFileInput,
   TemplateDownloadButtons,
 } from "@/components/StyledFileInput";
-
-type ImportOk = {
-  ok: true;
-  created: number;
-  updated: number;
-  skipped: number;
-  total: number;
-  errors: string[];
-};
-
-type ImportErr = {
-  ok?: false;
-  error?: string;
-};
 
 export function AssetImportForm() {
   const [pending, startTransition] = useTransition();
@@ -32,6 +18,16 @@ export function AssetImportForm() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Heal stale session role (DB Admin + cookie Inspector) before import.
+  useEffect(() => {
+    void fetch("/api/manage/session-sync", {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => {
+      /* non-fatal */
+    });
+  }, []);
+
   return (
     <div className="space-y-4">
       <form
@@ -40,94 +36,21 @@ export function AssetImportForm() {
           e.preventDefault();
           setError(null);
           setResult(null);
-          const form = e.currentTarget;
-          const fd = new FormData(form);
+          const fd = new FormData(e.currentTarget);
           startTransition(async () => {
             try {
-              // 1) Server action — same cookie jar as the Manage page (most reliable
-              //    for admin session). 2) API fallback for large multipart quirks.
-              let body: (ImportOk | ImportErr) | null = null;
-
-              try {
-                const actionRes = await importAssetsFromFile(fd);
-                if (
-                  actionRes &&
-                  typeof actionRes === "object" &&
-                  "ok" in actionRes
-                ) {
-                  body = actionRes as ImportOk | ImportErr;
-                }
-              } catch (actionErr) {
-                if (
-                  typeof actionErr === "object" &&
-                  actionErr &&
-                  "digest" in actionErr &&
-                  String(
-                    (actionErr as { digest?: string }).digest,
-                  ).startsWith("NEXT_REDIRECT")
-                ) {
-                  throw actionErr;
-                }
-                // Fall through to API
-                body = null;
+              // Server action shares the Manage page cookie jar (avoids false
+              // admin 403s from multipart fetch / stale session role).
+              const res = await importAssetsFromFile(fd);
+              if (!res.ok) {
+                throw new Error(res.error);
               }
-
-              if (!body) {
-                const res = await fetch("/api/manage/asset-import", {
-                  method: "POST",
-                  body: fd,
-                  credentials: "include",
-                });
-                const text = await res.text();
-                try {
-                  body = text ? (JSON.parse(text) as ImportOk | ImportErr) : null;
-                } catch {
-                  body = null;
-                }
-                if (!res.ok) {
-                  const msg =
-                    (body && "error" in body && body.error) ||
-                    (text && !text.startsWith("<")
-                      ? text.slice(0, 240)
-                      : null);
-                  if (res.status === 401) {
-                    throw new Error(
-                      msg ||
-                        "Not signed in. Refresh and sign in again, then retry.",
-                    );
-                  }
-                  if (res.status === 403) {
-                    throw new Error(
-                      msg ||
-                        "Admin access required. Sign out and sign back in with your admin account.",
-                    );
-                  }
-                  if (res.status === 413) {
-                    throw new Error(
-                      msg ||
-                        "File too large for the server. Try CSV or a smaller workbook.",
-                    );
-                  }
-                  throw new Error(msg || `Import failed (${res.status})`);
-                }
-              }
-
-              if (!body || !("ok" in body)) {
-                throw new Error("Import failed — empty response from server.");
-              }
-              if (body.ok !== true) {
-                throw new Error(
-                  ("error" in body && body.error) ||
-                    "Admin access required. Sign out and sign back in with your admin account.",
-                );
-              }
-
               setResult({
-                created: body.created,
-                updated: body.updated,
-                skipped: body.skipped,
-                total: body.total,
-                errors: body.errors ?? [],
+                created: res.created,
+                updated: res.updated,
+                skipped: res.skipped,
+                total: res.total,
+                errors: res.errors,
               });
             } catch (err) {
               if (
@@ -140,7 +63,18 @@ export function AssetImportForm() {
               ) {
                 throw err;
               }
-              setError(err instanceof Error ? err.message : "Import failed");
+              const message =
+                err instanceof Error ? err.message : "Import failed";
+              // Next sometimes wraps action failures as this generic string
+              if (
+                message === "An unexpected response was received from the server."
+              ) {
+                setError(
+                  "Import failed (session/upload). Sign out, sign back in, then try again — or use a smaller CSV.",
+                );
+              } else {
+                setError(message);
+              }
             }
           });
         }}
@@ -188,7 +122,6 @@ export function AssetImportForm() {
           type="submit"
           disabled={pending}
           className="btn-primary-inline w-full sm:w-auto"
-          style={{ backgroundColor: "#004825", color: "#ffffff" }}
         >
           {pending ? "Importing…" : "Import assets"}
         </button>

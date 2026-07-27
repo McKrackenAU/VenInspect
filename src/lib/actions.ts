@@ -1091,19 +1091,35 @@ export async function importAssetsFromFile(formData: FormData): Promise<
   | { ok: false; error: string }
 > {
   try {
-    const user = await requireUser();
+    const { getCurrentUser, getSession, createSessionCookie } = await import(
+      "@/lib/auth"
+    );
     const { isAdminRole } = await import("@/lib/roles");
-    const { getSession } = await import("@/lib/auth");
+
+    const user = await getCurrentUser();
+    if (!user) {
+      return {
+        ok: false,
+        error: "Not signed in. Refresh the page, sign in, then retry the import.",
+      };
+    }
+
     const session = await getSession();
     const admin =
       isAdminRole(user.role, user.username) ||
       isAdminRole(session?.role, session?.username);
+
     if (!admin) {
       return {
         ok: false,
         error:
-          "Admin access required. Your account role is not Admin — ask another admin to set Role=Admin under Manage → Users, then sign out and back in.",
+          "Admin access required. Open Manage → Users, confirm your Role is Admin, then sign out and back in.",
       };
+    }
+
+    // Heal stale cookies so subsequent /api/manage calls also see Admin.
+    if (session && session.role !== "ADMIN" && user.role === "ADMIN") {
+      await createSessionCookie(user);
     }
 
     const file = formData.get("file");
@@ -1124,7 +1140,6 @@ export async function importAssetsFromFile(formData: FormData): Promise<
     const result = await runAssetImport(buffer, mode);
     return { ok: true, ...result };
   } catch (e) {
-    // Next.js redirect() throws; don't mask it as an import failure
     if (
       typeof e === "object" &&
       e &&
