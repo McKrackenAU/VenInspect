@@ -157,14 +157,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Admin portal pages — never HTML-redirect server actions (breaks the
-  // action protocol with "unexpected response from the server").
+  // Admin portal pages. Server actions authenticate themselves (DB role) —
+  // do NOT 403 here on a stale cookie role; that caused false
+  // "Admin access required" on Import while the page still rendered.
   if (pathname.startsWith("/manage") && !admin) {
     if (isServerAction) {
-      return NextResponse.json(
-        { error: "Admin access required." },
-        { status: 403 },
-      );
+      return NextResponse.next();
     }
     const url = request.nextUrl.clone();
     url.pathname = "/";

@@ -1,15 +1,28 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createAssetImportGrant } from "@/lib/import-grant";
+import { formatAppVersion, getAppVersion } from "@/lib/version";
 import { AssetImportForm } from "@/components/AssetImportForm";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function ManageAssetImportPage() {
-  // Layout already requires admin; mint a short opaque grant so the upload
-  // API does not depend on Cookie headers or long HMAC query tokens.
+  // Force a real request — never serve a cached RSC payload with a dead grant.
+  await connection();
+
   const admin = await requireAdmin();
-  const importGrant = createAssetImportGrant(admin);
+  let importGrant = "";
+  let grantError: string | null = null;
+  try {
+    importGrant = createAssetImportGrant(admin);
+  } catch (e) {
+    grantError =
+      e instanceof Error
+        ? `Could not create import grant: ${e.message}`
+        : "Could not create import grant (check DATA_DIR permissions).";
+  }
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
@@ -32,7 +45,19 @@ export default async function ManageAssetImportPage() {
           of hundreds of assets are supported.
         </p>
       </div>
-      <AssetImportForm importGrant={importGrant} />
+      {grantError ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
+          {grantError}
+        </p>
+      ) : (
+        <AssetImportForm
+          importGrant={importGrant}
+          appVersion={formatAppVersion(getAppVersion())}
+        />
+      )}
     </div>
   );
 }

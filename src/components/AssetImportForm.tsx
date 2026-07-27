@@ -5,23 +5,15 @@ import {
   StyledFileInput,
   TemplateDownloadButtons,
 } from "@/components/StyledFileInput";
+import { importAssetsFromFile } from "@/lib/actions";
 
-type ImportOk = {
-  ok: true;
-  created: number;
-  updated: number;
-  skipped: number;
-  total: number;
-  errors: string[];
-};
-
-type ImportErr = {
-  ok?: false;
-  error?: string;
-  debug?: Record<string, unknown>;
-};
-
-export function AssetImportForm({ importGrant }: { importGrant: string }) {
+export function AssetImportForm({
+  importGrant,
+  appVersion,
+}: {
+  importGrant: string;
+  appVersion: string;
+}) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<{
     created: number;
@@ -34,6 +26,9 @@ export function AssetImportForm({ importGrant }: { importGrant: string }) {
 
   return (
     <div className="space-y-4">
+      <p className="text-xs text-[color:var(--ventia-muted)]">
+        App {appVersion} · import grant {importGrant.slice(0, 8)}…
+      </p>
       <form
         className="space-y-4 rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5 shadow-sm"
         onSubmit={(e) => {
@@ -42,89 +37,41 @@ export function AssetImportForm({ importGrant }: { importGrant: string }) {
           setResult(null);
           const form = e.currentTarget;
           const fd = new FormData(form);
+          // Ensure grant is present even if the hidden input was stripped
+          fd.set("importGrant", importGrant);
           startTransition(async () => {
             try {
-              const file = fd.get("file");
-              const mode = String(fd.get("mode") ?? "upsert");
-              if (!(file instanceof File) || file.size === 0) {
-                throw new Error("Choose an Excel (.xlsx) or CSV file");
+              const outcome = await importAssetsFromFile(fd);
+              if (!outcome.ok) {
+                throw new Error(outcome.error);
               }
-
-              // Short grant in the query only — no long HMAC, no Cookie dependency.
-              const params = new URLSearchParams({
-                mode,
-                filename: file.name || "import.xlsx",
-                grant: importGrant,
-              });
-
-              const res = await fetch(
-                `/api/manage/asset-import?${params.toString()}`,
-                {
-                  method: "POST",
-                  body: file,
-                  credentials: "include",
-                  cache: "no-store",
-                  headers: {
-                    "Content-Type": "application/octet-stream",
-                    "X-VenInspect-Import-Grant": importGrant,
-                  },
-                },
-              );
-
-              const text = await res.text();
-              let body: (ImportOk | ImportErr) | null = null;
-              try {
-                body = text ? (JSON.parse(text) as ImportOk | ImportErr) : null;
-              } catch {
-                body = null;
-              }
-
-              if (!res.ok) {
-                const msg =
-                  (body && "error" in body && body.error) ||
-                  (text && !text.startsWith("<")
-                    ? text.slice(0, 300)
-                    : null);
-                if (res.status === 401) {
-                  throw new Error(
-                    msg ||
-                      "Not signed in. Open the Import page again, then retry.",
-                  );
-                }
-                if (res.status === 403) {
-                  throw new Error(
-                    msg ||
-                      "Admin access required. Open Import again (fresh grant), then retry.",
-                  );
-                }
-                if (!body && text.startsWith("<")) {
-                  throw new Error(
-                    `Import blocked (HTTP ${res.status}). The reverse proxy returned HTML instead of the API — check body size limits, then open Import again.`,
-                  );
-                }
-                throw new Error(msg || `Import failed (HTTP ${res.status})`);
-              }
-
-              if (!body || body.ok !== true) {
-                throw new Error(
-                  (body && "error" in body && body.error) ||
-                    "Import failed — empty response from server.",
-                );
-              }
-
               setResult({
-                created: body.created,
-                updated: body.updated,
-                skipped: body.skipped,
-                total: body.total,
-                errors: body.errors ?? [],
+                created: outcome.created,
+                updated: outcome.updated,
+                skipped: outcome.skipped,
+                total: outcome.total,
+                errors: outcome.errors ?? [],
               });
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Import failed");
+              const msg =
+                err instanceof Error ? err.message : "Import failed";
+              // Next flight / middleware noise → plain guidance
+              if (
+                /unexpected response|admin access required\.?$/i.test(msg) &&
+                msg.length < 40
+              ) {
+                setError(
+                  "Admin access required (session blocked the upload). Confirm Role=Admin under Manage → Users, sign out and back in, open Import again, then retry.",
+                );
+              } else {
+                setError(msg);
+              }
             }
           });
         }}
       >
+        <input type="hidden" name="importGrant" value={importGrant} />
+
         <div className="space-y-2">
           <p className="text-sm font-medium text-[color:var(--ventia-ink)]">
             Download a blank template first
@@ -159,7 +106,7 @@ export function AssetImportForm({ importGrant }: { importGrant: string }) {
 
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || !importGrant}
           className="btn-primary-inline inline-flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
         >
           {pending ? "Importing…" : "Import assets"}

@@ -1083,8 +1083,9 @@ export async function updateUserQualifications(formData: FormData) {
 }
 
 /**
- * Asset registry import (server action — uses the same session cookies as the
- * page, avoiding middleware/fetch edge cases that returned false 403s).
+ * Asset registry import (server action).
+ * Auth: page-minted grant in FormData (preferred) OR live session/DB admin.
+ * Grant travels in the body so Cookie / query stripping cannot block import.
  */
 export async function importAssetsFromFile(formData: FormData): Promise<
   | { ok: true; created: number; updated: number; skipped: number; total: number; errors: string[] }
@@ -1095,31 +1096,33 @@ export async function importAssetsFromFile(formData: FormData): Promise<
       "@/lib/auth"
     );
     const { isAdminRole } = await import("@/lib/roles");
+    const { verifyAssetImportGrant } = await import("@/lib/import-grant");
+
+    const grantId = String(formData.get("importGrant") ?? "").trim();
+    const grantOk = Boolean(verifyAssetImportGrant(grantId));
 
     const user = await getCurrentUser();
-    if (!user) {
-      return {
-        ok: false,
-        error: "Not signed in. Refresh the page, sign in, then retry the import.",
-      };
-    }
-
     const session = await getSession();
-    const admin =
-      isAdminRole(user.role, user.username) ||
-      isAdminRole(session?.role, session?.username);
+    const cookieAdmin = Boolean(
+      (user && isAdminRole(user.role, user.username)) ||
+        (session && isAdminRole(session.role, session.username)),
+    );
 
-    if (!admin) {
+    if (!grantOk && !cookieAdmin) {
       return {
         ok: false,
-        error:
-          "Admin access required. Open Manage → Users, confirm your Role is Admin, then sign out and back in.",
+        error: user
+          ? "Admin access required. Your account role is not Admin in the database — Manage → Users → set Role=Admin, then sign out and back in."
+          : "Not signed in (and import grant missing/expired). Open Import again, then retry.",
       };
     }
 
-    // Heal stale cookies so subsequent /api/manage calls also see Admin.
-    if (session && session.role !== "ADMIN" && user.role === "ADMIN") {
-      await createSessionCookie(user);
+    if (user && session && session.role !== "ADMIN" && user.role === "ADMIN") {
+      try {
+        await createSessionCookie(user);
+      } catch {
+        /* non-fatal */
+      }
     }
 
     const file = formData.get("file");
@@ -1128,10 +1131,10 @@ export async function importAssetsFromFile(formData: FormData): Promise<
     if (!(file instanceof File) || file.size === 0) {
       return { ok: false, error: "Choose an Excel (.xlsx) or CSV file" };
     }
-    if (file.size > 25 * 1024 * 1024) {
+    if (file.size > 40 * 1024 * 1024) {
       return {
         ok: false,
-        error: "File too large (max 25 MB). Split the workbook or use CSV.",
+        error: "File too large (max 40 MB). Split the workbook or use CSV.",
       };
     }
 
