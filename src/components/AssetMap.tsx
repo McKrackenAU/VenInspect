@@ -222,6 +222,7 @@ export function AssetMap({
   const [locError, setLocError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [layersOpen, setLayersOpen] = useState(false);
+  const layersRootRef = useRef<HTMLDivElement>(null);
   const [prefsReady, setPrefsReady] = useState(false);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -232,6 +233,25 @@ export function AssetMap({
     setSelectedProvider(readStoredProvider(provider));
     setPrefsReady(true);
   }, [provider]);
+
+  useEffect(() => {
+    if (!layersOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const root = layersRootRef.current;
+      if (root && !root.contains(event.target as Node)) {
+        setLayersOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLayersOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [layersOpen]);
 
   const withCoords = useMemo(
     () =>
@@ -837,40 +857,55 @@ export function AssetMap({
           aria-label="Asset map"
         />
 
-        {/* Layers — top-left so the result sheet does not cover it on mobile */}
-        <div className="pointer-events-none absolute left-3 top-3 z-[500] flex w-max max-w-[min(100%,calc(100%-1.5rem))] items-start gap-2">
+        {/* Layers — top-right, clear of the search / results panels */}
+        <div
+          ref={layersRootRef}
+          className="pointer-events-none absolute right-3 top-3 z-[500] flex flex-col items-end gap-2"
+        >
           <button
             type="button"
             onClick={() => setLayersOpen((v) => !v)}
-            className="pointer-events-auto relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border-2 border-black/80 shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ventia-green)] sm:h-16 sm:w-16"
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-black/10 bg-[color:var(--panel)]/92 py-1.5 pl-1.5 pr-3 text-[color:var(--ventia-ink)] shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-md transition hover:bg-[color:var(--panel)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ventia-green)] dark:border-white/10"
             aria-expanded={layersOpen}
+            aria-haspopup="menu"
             aria-label={`Map layers — ${providerLabel}`}
             title={`Layers · ${providerLabel}`}
           >
-            <span
-              className="absolute inset-0 bg-[linear-gradient(135deg,#c8d8c0_0%,#a8c0d8_40%,#d8d0c0_100%)]"
-              aria-hidden
-            />
-            <span
-              className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/75 to-transparent"
-              aria-hidden
-            />
-            <span className="absolute bottom-1 left-1 flex items-center gap-0.5 text-[10px] font-semibold text-white drop-shadow sm:bottom-1.5 sm:left-1.5 sm:text-[11px]">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--ventia-green)] text-white shadow-sm">
               <LayersIcon />
-              Layers
             </span>
+            <span className="pr-0.5 text-left leading-tight">
+              <span className="block text-xs font-semibold tracking-wide">
+                Layers
+              </span>
+              <span className="block max-w-[7.5rem] truncate text-[11px] font-medium text-[color:var(--ventia-muted)]">
+                {providerLabel}
+              </span>
+            </span>
+            <ChevronIcon open={layersOpen} />
           </button>
 
           {layersOpen ? (
-            <div className="pointer-events-auto flex items-start gap-2 overflow-x-auto rounded-2xl bg-white/95 p-2 shadow-lg ring-1 ring-black/10 dark:bg-[#1c2128]/95 dark:ring-white/10">
+            <div
+              className="pointer-events-auto w-[min(17.5rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-black/10 bg-[color:var(--panel)]/95 p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.22)] backdrop-blur-md dark:border-white/10 dark:bg-[#1c2128]/95"
+              role="menu"
+              aria-label="Map basemap"
+            >
+              <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[color:var(--ventia-muted)]">
+                Basemap
+              </p>
               <MapLayerTile
                 label="Streets"
+                description="OpenStreetMap"
                 active={activeProvider === "osm"}
                 previewClass="bg-[linear-gradient(135deg,#dce8d4_0%,#c5d4e8_45%,#e8e0d0_100%)]"
                 onClick={() => chooseProvider("osm")}
               />
               <MapLayerTile
                 label="Google"
+                description={
+                  googleApiKey ? "Google Maps" : "Key not configured"
+                }
                 active={activeProvider === "google"}
                 disabled={!googleApiKey}
                 previewClass="bg-[linear-gradient(135deg,#1a3a2a_0%,#3d5a3a_40%,#8a7a4a_100%)]"
@@ -883,6 +918,9 @@ export function AssetMap({
               />
               <MapLayerTile
                 label="Nearmap"
+                description={
+                  nearmapApiKey ? "Aerial imagery" : "Key not configured"
+                }
                 active={activeProvider === "nearmap"}
                 disabled={!nearmapApiKey}
                 previewClass="bg-[linear-gradient(135deg,#2a4a3a_0%,#5a6a3a_35%,#8a7040_70%,#c4a86a_100%)]"
@@ -1102,7 +1140,7 @@ function MapResultsPanel({
 
 function LayersIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d="M12 3.5 3 8l9 4.5L21 8l-9-4.5Z"
         fill="currentColor"
@@ -1127,8 +1165,32 @@ function LayersIcon() {
   );
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+      className={`text-[color:var(--ventia-muted)] transition-transform duration-200 ${
+        open ? "rotate-180" : ""
+      }`}
+    >
+      <path
+        d="M6 9l6 6 6-6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function MapLayerTile({
   label,
+  description,
   active,
   disabled,
   previewClass,
@@ -1136,6 +1198,7 @@ function MapLayerTile({
   title,
 }: {
   label: string;
+  description?: string;
   active: boolean;
   disabled?: boolean;
   previewClass: string;
@@ -1145,19 +1208,39 @@ function MapLayerTile({
   return (
     <button
       type="button"
+      role="menuitemradio"
+      aria-checked={active}
       onClick={onClick}
       disabled={disabled}
       title={title ?? label}
-      className={`flex w-[4.25rem] shrink-0 flex-col items-center gap-1 rounded-xl p-1 transition disabled:cursor-not-allowed disabled:opacity-40 ${
-        active ? "ring-2 ring-[color:var(--ventia-green)]" : ""
+      className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${
+        active
+          ? "bg-[color:var(--ventia-green-tint)] ring-1 ring-[color:var(--ventia-green)]"
+          : "hover:bg-[color:var(--ventia-border)]/40"
       }`}
     >
       <span
-        className={`block h-12 w-full rounded-lg border border-black/15 shadow-sm ${previewClass}`}
+        className={`block h-11 w-14 shrink-0 rounded-md border border-black/15 shadow-sm ${previewClass}`}
+        aria-hidden
       />
-      <span className="text-[10px] font-semibold text-[color:var(--ventia-ink)]">
-        {label}
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-[color:var(--ventia-ink)]">
+          {label}
+        </span>
+        {description ? (
+          <span className="block truncate text-[11px] text-[color:var(--ventia-muted)]">
+            {description}
+          </span>
+        ) : null}
       </span>
+      {active ? (
+        <span
+          className="text-xs font-bold text-[color:var(--ventia-green)]"
+          aria-hidden
+        >
+          ✓
+        </span>
+      ) : null}
     </button>
   );
 }
