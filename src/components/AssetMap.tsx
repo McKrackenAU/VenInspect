@@ -226,6 +226,8 @@ export function AssetMap({
   const [prefsReady, setPrefsReady] = useState(false);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  /** Mobile search sheet — hidden by default so the map stays usable. */
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   selectedIdRef.current = selectedId;
 
   // Resolve browser layer preference before the first map init (avoids create→destroy).
@@ -957,24 +959,80 @@ export function AssetMap({
           />
         </aside>
 
-        {/* Mobile: bottom results sheet — overlays map, does not shrink it */}
+        {/* Mobile: search sheet is opt-in so the map stays full-screen */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[450] md:hidden">
-          <MapResultsPanel
-            className="pointer-events-auto flex max-h-[min(42dvh,22rem)] w-full flex-col overflow-hidden rounded-t-2xl border border-b-0 border-[color:var(--ventia-border)] bg-[color:var(--panel)]/95 shadow-[0_-8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
-            query={query}
-            setQuery={setQuery}
-            typeFilter={typeFilter}
-            setTypeFilter={setTypeFilter}
-            typeOptions={typeOptions}
-            isFiltering={isFiltering}
-            panelList={panelList}
-            selectedAsset={selectedAsset}
-            selectedId={selectedId}
-            userPos={userPos}
-            onFocus={focusAsset}
-            onClearSelection={() => setSelectedId(null)}
-            mobile
-          />
+          {mobileSearchOpen ? (
+            <MapResultsPanel
+              className="pointer-events-auto flex max-h-[min(55dvh,26rem)] w-full flex-col overflow-hidden rounded-t-2xl border border-b-0 border-[color:var(--ventia-border)] bg-[color:var(--panel)]/95 shadow-[0_-8px_24px_rgba(0,0,0,0.18)] backdrop-blur-sm"
+              query={query}
+              setQuery={setQuery}
+              typeFilter={typeFilter}
+              setTypeFilter={setTypeFilter}
+              typeOptions={typeOptions}
+              isFiltering={isFiltering}
+              panelList={panelList}
+              selectedAsset={selectedAsset}
+              selectedId={selectedId}
+              userPos={userPos}
+              onFocus={focusAsset}
+              onClearSelection={() => setSelectedId(null)}
+              mobile
+              onHide={() => setMobileSearchOpen(false)}
+            />
+          ) : (
+            <div className="pointer-events-auto flex flex-col gap-2 p-3 pb-3">
+              {selectedAsset ? (
+                <div className="space-y-2 rounded-2xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)]/95 p-3 shadow-lg backdrop-blur-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-sm font-bold text-[color:var(--ventia-green)]">
+                        {selectedAsset.assetNumber}
+                      </p>
+                      <p className="truncate text-xs text-[color:var(--ventia-muted)]">
+                        {selectedAsset.name} · {selectedAsset.roadName}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs text-[color:var(--ventia-muted)] underline-offset-2 hover:underline"
+                      onClick={() => setSelectedId(null)}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href={`/inspect?assetId=${encodeURIComponent(selectedAsset.id)}`}
+                      className="inline-flex min-h-9 flex-1 items-center justify-center rounded-lg bg-[color:var(--ventia-green)] px-3 py-1.5 text-xs font-semibold text-white"
+                    >
+                      Start inspection
+                    </Link>
+                    <Link
+                      href={`/assets/${selectedAsset.id}`}
+                      className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ventia-ink)]"
+                    >
+                      Open
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setMobileSearchOpen(true)}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-black/10 bg-[color:var(--panel)]/95 px-4 py-2.5 text-sm font-semibold text-[color:var(--ventia-ink)] shadow-[0_8px_24px_rgba(0,0,0,0.18)] backdrop-blur-md dark:border-white/10"
+                aria-expanded={false}
+                aria-controls="map-mobile-search"
+              >
+                <SearchGlyph />
+                Search assets
+                {isFiltering ? (
+                  <span className="rounded-full bg-[color:var(--ventia-green-tint)] px-2 py-0.5 text-[11px] font-semibold text-[color:var(--ventia-green)]">
+                    {panelList.length}
+                  </span>
+                ) : null}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -998,6 +1056,7 @@ function MapResultsPanel({
   onFocus,
   onClearSelection,
   mobile = false,
+  onHide,
 }: {
   className?: string;
   query: string;
@@ -1013,14 +1072,32 @@ function MapResultsPanel({
   onFocus: (asset: MapAsset) => void;
   onClearSelection: () => void;
   mobile?: boolean;
+  onHide?: () => void;
 }) {
   return (
-    <div className={className}>
+    <div className={className} id={mobile ? "map-mobile-search" : undefined}>
       {mobile ? (
-        <div
-          className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[color:var(--ventia-border)]"
-          aria-hidden
-        />
+        <div className="relative flex shrink-0 items-center justify-between gap-2 px-3 pb-1 pt-2.5">
+          <div
+            className="pointer-events-none absolute inset-x-0 top-2 mx-auto h-1 w-10 rounded-full bg-[color:var(--ventia-border)]"
+            aria-hidden
+          />
+          <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
+            Search
+          </p>
+          {onHide ? (
+            <button
+              type="button"
+              onClick={onHide}
+              className="mt-1 rounded-lg border border-[color:var(--ventia-border)] px-2.5 py-1 text-xs font-semibold text-[color:var(--ventia-ink)]"
+              aria-label="Hide search"
+            >
+              Hide
+            </button>
+          ) : (
+            <span className="w-12" aria-hidden />
+          )}
+        </div>
       ) : null}
 
       <div className="shrink-0 space-y-2 border-b border-[color:var(--ventia-border)] p-3">
@@ -1033,6 +1110,8 @@ function MapResultsPanel({
             placeholder="Search code, name, or road…"
             className="field-input w-full text-sm"
             autoComplete="off"
+            // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional when user opens mobile search
+            autoFocus={mobile}
           />
         </label>
         {typeOptions.length > 1 ? (
@@ -1138,6 +1217,26 @@ function MapResultsPanel({
         )}
       </ul>
     </div>
+  );
+}
+
+function SearchGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle
+        cx="11"
+        cy="11"
+        r="6.5"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M16.5 16.5 21 21"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 
