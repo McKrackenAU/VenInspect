@@ -120,3 +120,167 @@ export function compareSemver(a: string, b: string): number {
   }
   return 0;
 }
+
+/** Safe git ref for clone --branch (tags or main). Rejects shell metacharacters. */
+export function sanitizeUpdateRef(raw: string | null | undefined): string | null {
+  const ref = (raw ?? "").trim();
+  if (!ref) return null;
+  if (ref === "main") return "main";
+  // Prefer release tags like v0.1.58 or 0.1.58
+  if (!/^[A-Za-z0-9._/-]{1,64}$/.test(ref)) return null;
+  if (ref.includes("..") || ref.startsWith("-") || ref.startsWith("/")) return null;
+  return ref;
+}
+
+export type RemoteRelease = {
+  tag: string;
+  version: string;
+  name: string;
+  publishedAt: string | null;
+  prerelease: boolean;
+};
+
+function releasesApiUrl(channel: UpdateChannel): string | null {
+  if (channel === "github") {
+    return "https://api.github.com/repos/McKrackenAU/VenInspect/releases?per_page=30";
+  }
+  const base =
+    process.env.GITEA_API_BASE?.trim() ||
+    process.env.GITEA_RAW_BASE?.trim()?.replace(/\/raw\/branch\/main\/?$/, "") ||
+    "http://192.168.13.9:3000/McKraken/VenInspect";
+  // Gitea API: /api/v1/repos/{owner}/{repo}/releases
+  if (base.includes("/api/v1/")) return `${base.replace(/\/$/, "")}/releases?limit=30`;
+  try {
+    const u = new URL(base.includes("://") ? base : `http://${base}`);
+    const parts = u.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+    // pathname like /McKraken/VenInspect
+    if (parts.length >= 2) {
+      const owner = parts[0];
+      const repo = parts[1];
+      return `${u.origin}/api/v1/repos/${owner}/${repo}/releases?limit=30`;
+    }
+  } catch {
+    /* fall through */
+  }
+  return "http://192.168.13.9:3000/api/v1/repos/McKraken/VenInspect/releases?limit=30";
+}
+
+function tagsApiUrl(channel: UpdateChannel): string | null {
+  if (channel === "github") {
+    return "https://api.github.com/repos/McKrackenAU/VenInspect/tags?per_page=30";
+  }
+  return null;
+}
+
+function parseReleasesJson(text: string): RemoteRelease[] {
+  try {
+    const json = JSON.parse(text) as Array<{
+      tag_name?: string;
+      name?: string;
+      published_at?: string;
+      created_at?: string;
+      prerelease?: boolean;
+      draft?: boolean;
+    }>;
+    if (!Array.isArray(json)) return [];
+    const out: RemoteRelease[] = [];
+    for (const item of json) {
+      if (item.draft) continue;
+      const tag = (item.tag_name || item.name || "").trim();
+      if (!tag) continue;
+      const version = tag.replace(/^v/i, "");
+      if (!/^\d+\.\d+/.test(version)) continue;
+      out.push({
+        tag: tag.startsWith("v") || tag.startsWith("V") ? tag : `v${version}`,
+        version,
+        name: (item.name || tag).trim(),
+        publishedAt: item.published_at || item.created_at || null,
+        prerelease: Boolean(item.prerelease),
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function parseTagsJson(text: string): RemoteRelease[] {
+  try {
+    const json = JSON.parse(text) as Array<{ name?: string }>;
+    if (!Array.isArray(json)) return [];
+    const out: RemoteRelease[] = [];
+    for (const item of json) {
+      const tag = (item.name || "").trim();
+      if (!tag) continue;
+      const version = tag.replace(/^v/i, "");
+      if (!/^\d+\.\d+/.test(version)) continue;
+      out.push({
+        tag: tag.startsWith("v") || tag.startsWith("V") ? tag : `v${version}`,
+        version,
+        name: tag,
+        publishedAt: null,
+        prerelease: false,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** List published releases/tags for the version picker (newest first). */
+export async function listRemoteReleases(
+  channel: UpdateChannel,
+): Promise<{ releases: RemoteRelease[]; repoLabel: string; error?: string }> {
+  const urls = remoteVersionUrls(channel);
+  const headers: HeadersInit = {
+    "User-Agent": "VenInspect-UpdateCheck",
+    Accept: "application/json",
+    "Cache-Control": "no-cache",
+  };
+
+  const releaseUrl = releasesApiUrl(channel);
+  if (releaseUrl) {
+    try {
+      const res = await fetch(
+        releaseUrl.includes("?")
+          ? `${releaseUrl}&_=${Date.now()}`
+          : `${releaseUrl}?_=${Date.now()}`,
+        { cache: "no-store", headers, signal: AbortSignal.timeout(15000) },
+      );
+      if (res.ok) {
+        const releases = parseReleasesJson(await res.text());
+        if (releases.length > 0) {
+          return { releases, repoLabel: urls.repoLabel };
+        }
+      }
+    } catch {
+      /* try tags */
+    }
+  }
+
+  const tagUrl = tagsApiUrl(channel);
+  if (tagUrl) {
+    try {
+      const res = await fetch(`${tagUrl}&_=${Date.now()}`, {
+        cache: "no-store",
+        headers,
+        signal: AbortSignal.timeout(15000),
+      });
+      if (res.ok) {
+        const releases = parseTagsJson(await res.text());
+        if (releases.length > 0) {
+          return { releases, repoLabel: urls.repoLabel };
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  return {
+    releases: [],
+    repoLabel: urls.repoLabel,
+    error: `Could not list releases from ${urls.repoLabel}`,
+  };
+}

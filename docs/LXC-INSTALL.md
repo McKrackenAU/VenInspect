@@ -283,17 +283,22 @@ cat /etc/veninspect.env
 
 ### Preferred (in-app, 0.0.3+)
 
-Admin → System → Check for updates → Update to latest.  
+Admin → System → Check for updates → pick a version → Install.  
+Use **Version to install** to roll back to a previous release if a beta push was bad.  
 App **ADMIN** users only queue the job; systemd (root) runs the build. You do **not** need a Linux “super admin” inside the web app.
+
+**Note:** The first time you need rollback, install the latest build once (so the updater script that understands release tags is on the CT). After that, any listed tag can be installed.
 
 ### One-shot shell update (safe recovery / first install of updater fixes)
 
 As **root** inside the CT (no `sudo` — many CTs have none):
 
 ```bash
-curl -fsSL http://192.168.13.9:3000/McKraken/VenInspect/raw/branch/main/deploy/manual-update.sh \
+curl -fsSL https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/deploy/manual-update.sh \
   -o /tmp/manual-update.sh
 bash /tmp/manual-update.sh
+# Optional: install a specific release tag
+# bash /tmp/manual-update.sh https://github.com/McKrackenAU/VenInspect.git v0.1.58
 ```
 
 This clears stuck update status, builds in staging, swaps, and enables `veninspect-update.path`.

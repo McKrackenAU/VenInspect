@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminRole } from "@/lib/roles";
-import { getAppVersion, getConfiguredUpdateChannel } from "@/lib/version";
+import {
+  getAppVersion,
+  getConfiguredUpdateChannel,
+  sanitizeUpdateRef,
+} from "@/lib/version";
 import {
   isUpdateInProgress,
   readUpdateStatus,
@@ -36,6 +40,10 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     channel?: string;
     action?: string;
+    /** Git tag (v0.1.58) or branch (main). Omit for latest main. */
+    ref?: string;
+    tag?: string;
+    toVersion?: string;
   };
 
   if (body.action === "reset") {
@@ -51,6 +59,22 @@ export async function POST(request: Request) {
       ? body.channel
       : getConfiguredUpdateChannel();
 
+  const rawRef = body.ref || body.tag || "main";
+  const ref = sanitizeUpdateRef(rawRef);
+  if (!ref) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Invalid version ref. Choose a release from the list, or latest.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const toVersion =
+    (body.toVersion || "").replace(/^v/i, "").trim() ||
+    (ref !== "main" ? ref.replace(/^v/i, "") : undefined);
+
   if (isUpdateInProgress()) {
     return NextResponse.json(
       {
@@ -63,7 +87,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    requestUpdate({ channel, fromVersion: getAppVersion() });
+    requestUpdate({
+      channel,
+      fromVersion: getAppVersion(),
+      ref,
+      toVersion,
+    });
   } catch (e) {
     return NextResponse.json(
       {
@@ -75,10 +104,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const target =
+    ref === "main"
+      ? "latest (main)"
+      : `v${(toVersion || ref).replace(/^v/i, "")}`;
+
   return NextResponse.json({
     ok: true,
-    message:
-      "Update requested. Only one updater will run (locked). Build happens in staging, then a short restart.",
+    message: `Update requested → ${target}. Build runs in staging, then a short restart.`,
     status: readUpdateStatus(),
   });
 }

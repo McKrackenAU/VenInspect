@@ -12,6 +12,8 @@ export type UpdateStatus = {
   fromVersion?: string;
   toVersion?: string;
   channel?: string;
+  /** Git ref being installed (tag or main). */
+  ref?: string;
   logTail?: string;
 };
 
@@ -107,6 +109,9 @@ function kickUpdaterService() {
 export function requestUpdate(opts: {
   channel: string;
   fromVersion: string;
+  /** Git tag or branch to clone (e.g. v0.1.58). Defaults to main (latest). */
+  ref?: string | null;
+  toVersion?: string | null;
 }) {
   if (isUpdateInProgress()) {
     throw new Error("An update is already in progress — use Reset if it is stuck");
@@ -116,6 +121,9 @@ export function requestUpdate(opts: {
 
   const channel =
     opts.channel === "github" || opts.channel === "gitea" ? opts.channel : "github";
+
+  const ref = (opts.ref ?? "").trim() || "main";
+  const toVersion = (opts.toVersion ?? "").trim() || undefined;
 
   // Must delete first so PathExists sees a new file creation (overwrite alone may not fire).
   for (const p of [requestPath(), activePath()]) {
@@ -130,14 +138,26 @@ export function requestUpdate(opts: {
     requestedAt: new Date().toISOString(),
     channel,
     fromVersion: opts.fromVersion,
+    ref,
+    ...(toVersion ? { toVersion } : {}),
   };
   fs.writeFileSync(requestPath(), JSON.stringify(payload, null, 2), "utf8");
+
+  const targetLabel =
+    ref === "main"
+      ? "latest (main)"
+      : toVersion
+        ? `v${toVersion.replace(/^v/i, "")}`
+        : ref;
+
   writeUpdateStatus({
     state: "requested",
-    message: `Update queued (${channel}) — starting updater…`,
+    message: `Update queued → ${targetLabel} via ${channel} — starting updater…`,
     requestedAt: payload.requestedAt,
     fromVersion: opts.fromVersion,
+    toVersion,
     channel,
+    ref,
     logTail: "",
   });
   kickUpdaterService();

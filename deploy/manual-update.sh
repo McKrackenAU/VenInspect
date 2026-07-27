@@ -2,18 +2,41 @@
 # One-shot manual update for an existing VenInspect LXC install.
 # Run as root inside the CT (no sudo needed):
 #   bash /opt/veninspect/deploy/manual-update.sh
+#   bash /opt/veninspect/deploy/manual-update.sh v0.1.58
 #   OR after fetching a fresh copy:
-#   curl -fsSL http://192.168.13.9:3000/McKraken/VenInspect/raw/branch/main/deploy/manual-update.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/deploy/manual-update.sh | bash
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/veninspect}"
 APP_STAGE="${APP_STAGE:-/opt/veninspect-staging}"
 DATA_DIR="${DATA_DIR:-/var/lib/veninspect}"
 APP_USER="${APP_USER:-veninspect}"
-REPO_URL="${1:-${VENINSPECT_REPO:-https://github.com/McKrackenAU/VenInspect.git}}"
+REPO_DEFAULT="${VENINSPECT_REPO:-https://github.com/McKrackenAU/VenInspect.git}"
+
+# usage:
+#   bash manual-update.sh
+#   bash manual-update.sh v0.1.58
+#   bash manual-update.sh https://github.com/McKrackenAU/VenInspect.git v0.1.58
+ARG1="${1:-}"
+ARG2="${2:-}"
+if [[ -z "$ARG1" ]]; then
+  REPO_URL="$REPO_DEFAULT"
+  GIT_REF="${UPDATE_REF:-main}"
+elif [[ "$ARG1" == "main" || "$ARG1" =~ ^v?[0-9]+\.[0-9] ]]; then
+  REPO_URL="$REPO_DEFAULT"
+  GIT_REF="$ARG1"
+else
+  REPO_URL="$ARG1"
+  GIT_REF="${ARG2:-${UPDATE_REF:-main}}"
+fi
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Run as root inside the LXC." >&2
+  exit 1
+fi
+
+if [[ ! "$GIT_REF" =~ ^[A-Za-z0-9._/-]{1,64}$ ]] || [[ "$GIT_REF" == *..* ]]; then
+  echo "Invalid git ref: $GIT_REF" >&2
   exit 1
 fi
 
@@ -38,9 +61,9 @@ cat >"$DATA_DIR/update-status.json" <<'EOF'
 }
 EOF
 
-echo "==> Fetching latest into staging ($REPO_URL)"
+echo "==> Fetching ${GIT_REF} into staging ($REPO_URL)"
 rm -rf "$APP_STAGE"
-git clone --depth 1 --branch main "$REPO_URL" "$APP_STAGE"
+git clone --depth 1 --branch "$GIT_REF" "$REPO_URL" "$APP_STAGE"
 chown -R "$APP_USER:$APP_USER" "$APP_STAGE" 2>/dev/null || true
 
 set -a

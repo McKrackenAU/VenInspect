@@ -103,16 +103,25 @@ REPO_GITEA="${VENINSPECT_REPO_GITEA:-$REPO_GITEA}"
 REPO_GITHUB="${VENINSPECT_REPO_GITHUB:-$REPO_GITHUB}"
 
 CHANNEL="github"
+GIT_REF="main"
 if command -v python3 >/dev/null 2>&1; then
-  CHANNEL=$(ACTIVE_FILE="$ACTIVE_FILE" python3 <<'PY'
-import json, os
+  # shellcheck disable=SC2034
+  read -r CHANNEL GIT_REF < <(ACTIVE_FILE="$ACTIVE_FILE" python3 <<'PY'
+import json, os, re
 from pathlib import Path
+channel = "github"
+ref = "main"
 try:
     d = json.loads(Path(os.environ["ACTIVE_FILE"]).read_text())
     ch = (d.get("channel") or "github").strip().lower()
-    print("gitea" if ch == "gitea" else "github")
+    channel = "gitea" if ch == "gitea" else "github"
+    raw = (d.get("ref") or d.get("tag") or "main").strip()
+    if raw == "main" or re.fullmatch(r"[A-Za-z0-9._/-]{1,64}", raw):
+        if ".." not in raw and not raw.startswith("-") and not raw.startswith("/"):
+            ref = raw
 except Exception:
-    print("github")
+    pass
+print(channel, ref)
 PY
 )
 fi
@@ -130,8 +139,8 @@ elif [[ -f "$APP_LIVE/package.json" ]]; then
   FROM_VER=$(python3 -c "import json;print(json.load(open('$APP_LIVE/package.json')).get('version',''))" 2>/dev/null || echo unknown)
 fi
 
-write_status "running" "Updating from ${FROM_VER} via ${CHANNEL}…" "$FROM_VER" "" "$CHANNEL"
-log "Starting update channel=${CHANNEL} repo=${REPO_URL} from=${FROM_VER} pid=$$"
+write_status "running" "Updating from ${FROM_VER} → ${GIT_REF} via ${CHANNEL}…" "$FROM_VER" "" "$CHANNEL"
+log "Starting update channel=${CHANNEL} ref=${GIT_REF} repo=${REPO_URL} from=${FROM_VER} pid=$$"
 
 export DEBIAN_FRONTEND=noninteractive
 export GIT_TERMINAL_PROMPT=0
@@ -146,13 +155,13 @@ as_app() {
   fi
 }
 
-# Always fresh shallow clone — avoids dirty/partial staging from failed runs
-log "Cloning ${REPO_URL} into staging (clean)"
+# Always fresh shallow clone of the selected tag/branch
+log "Cloning ${REPO_URL} @ ${GIT_REF} into staging (clean)"
 rm -rf "$APP_STAGE"
-if ! git clone --depth 1 --branch main "$REPO_URL" "$APP_STAGE"; then
-  fail "git clone failed for ${CHANNEL} (${REPO_URL}). Check network / GitHub access from this CT."
+if ! git clone --depth 1 --branch "$GIT_REF" "$REPO_URL" "$APP_STAGE"; then
+  fail "git clone failed for ${CHANNEL} ref=${GIT_REF} (${REPO_URL}). Tag missing or network blocked from this CT."
 fi
-log "Clone OK"
+log "Clone OK (${GIT_REF})"
 chown -R "$APP_USER:$APP_USER" "$APP_STAGE" 2>/dev/null || true
 
 log "Installing deps + building in staging (live app still up)"
@@ -166,6 +175,14 @@ if [[ -f "$APP_STAGE/VERSION" ]]; then
   TO_VER=$(tr -d '[:space:]' <"$APP_STAGE/VERSION" | sed 's/^[vV]//')
 elif [[ -f "$APP_STAGE/package.json" ]]; then
   TO_VER=$(python3 -c "import json;print(json.load(open('$APP_STAGE/package.json')).get('version',''))" 2>/dev/null || echo "$FROM_VER")
+fi
+
+# When a specific release tag was requested, refuse a mismatched tree
+if [[ "$GIT_REF" != "main" ]]; then
+  EXPECT_VER=$(echo "$GIT_REF" | sed 's/^[vV]//')
+  if [[ -n "$EXPECT_VER" && "$TO_VER" != "$EXPECT_VER" ]]; then
+    fail "Ref ${GIT_REF} built as ${TO_VER}, expected ${EXPECT_VER}. Aborting swap."
+  fi
 fi
 
 log "Staging build OK — version ${TO_VER}. Swapping…"
