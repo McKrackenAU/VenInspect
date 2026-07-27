@@ -31,6 +31,7 @@ import { ASSET_PERMIT_FLAGS } from "@/lib/permits";
 import { seedFormPayloadFromAsset } from "@/lib/form-seed";
 import { serializeFormPayload } from "@/lib/inspection-template-types";
 import { saveAssetTypes } from "@/lib/asset-types";
+import { saveAssetSubClasses } from "@/lib/asset-subclasses";
 import { saveDocumentTags } from "@/lib/document-tags";
 import {
   parseAssetComponents,
@@ -1148,6 +1149,11 @@ export async function upsertAssetManual(formData: FormData) {
   const assetVisionId = String(formData.get("assetVisionId") ?? "").trim() || null;
   const roadName = String(formData.get("roadName") ?? "").trim() || "Unknown Road";
   const location = String(formData.get("location") ?? "").trim() || null;
+  const subClassification =
+    String(formData.get("subClassification") ?? "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "_") || null;
   const latitudeRaw = String(formData.get("latitude") ?? "").trim();
   const longitudeRaw = String(formData.get("longitude") ?? "").trim();
   const latitude = latitudeRaw ? Number(latitudeRaw) : null;
@@ -1164,6 +1170,7 @@ export async function upsertAssetManual(formData: FormData) {
       assetVisionId,
       roadName,
       location,
+      subClassification,
       latitude: Number.isFinite(latitude) ? latitude : null,
       longitude: Number.isFinite(longitude) ? longitude : null,
     },
@@ -1173,6 +1180,7 @@ export async function upsertAssetManual(formData: FormData) {
       assetVisionId,
       roadName,
       location,
+      subClassification,
       latitude: Number.isFinite(latitude) ? latitude : null,
       longitude: Number.isFinite(longitude) ? longitude : null,
     },
@@ -1501,6 +1509,27 @@ export async function saveAssetTypesAction(formData: FormData) {
   saveAssetTypes(parsed);
   revalidatePath("/manage");
   revalidatePath("/manage/asset-types");
+  revalidatePath("/manage/asset-subclasses");
+  revalidatePath("/manage/assets");
+}
+
+export async function saveAssetSubClassesAction(formData: FormData) {
+  await requireAdmin();
+  const raw = String(formData.get("subClassesJson") ?? "[]");
+  let parsed: {
+    value: string;
+    label: string;
+    description?: string;
+    forTypes?: string[];
+  }[] = [];
+  try {
+    parsed = JSON.parse(raw) as typeof parsed;
+  } catch {
+    throw new Error("Invalid asset subclasses JSON");
+  }
+  saveAssetSubClasses(parsed);
+  revalidatePath("/manage");
+  revalidatePath("/manage/asset-subclasses");
   revalidatePath("/manage/assets");
 }
 

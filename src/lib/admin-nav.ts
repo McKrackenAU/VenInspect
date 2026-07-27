@@ -71,6 +71,11 @@ export const adminMenuGroups: AdminNavGroup[] = [
         description: "Bridge, drainage, noise wall…",
       },
       {
+        href: "/manage/asset-subclasses",
+        label: "Asset subclasses",
+        description: "Underpass types and other subclasses",
+      },
+      {
         href: "/manage/document-tags",
         label: "Document tags",
         description: "Labels for asset documents",

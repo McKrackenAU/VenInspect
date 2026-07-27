@@ -17,6 +17,7 @@ import {
 import { ASSET_PERMIT_FLAGS } from "@/lib/permits";
 import { getAssetTypes } from "@/lib/asset-types";
 import { getAssetSubClasses } from "@/lib/asset-subclasses";
+import { AssetTypeSubClassFields } from "@/components/AssetTypeSubClassFields";
 import { formatAppDate } from "@/lib/date-time";
 import { getDocumentTags } from "@/lib/document-tags";
 import { parseAssetComponents, parseAssetProfile } from "@/lib/asset-profile";
@@ -274,16 +275,14 @@ export default async function ManageAssetEditPage({
               className="field-input w-full font-mono"
             />
           </label>
-          <label className="block space-y-1 text-sm">
-            <span className="font-medium text-[color:var(--ventia-muted)]">Type</span>
-            <select name="type" defaultValue={asset.type} className="field-input w-full">
-              {assetTypes.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="contents sm:contents">
+            <AssetTypeSubClassFields
+              assetTypes={assetTypes}
+              subClasses={assetSubClasses}
+              defaultType={asset.type}
+              defaultSubClass={asset.subClassification}
+            />
+          </div>
           <label className="block space-y-1 text-sm sm:col-span-2">
             <span className="font-medium text-[color:var(--ventia-muted)]">Name</span>
             <input name="name" required defaultValue={asset.name} className="field-input w-full" />
@@ -303,23 +302,6 @@ export default async function ManageAssetEditPage({
               defaultValue={asset.classification ?? ""}
               className="field-input w-full"
             />
-          </label>
-          <label className="block space-y-1 text-sm">
-            <span className="font-medium text-[color:var(--ventia-muted)]">
-              Sub classification
-            </span>
-            <select
-              name="subClassification"
-              defaultValue={asset.subClassification ?? ""}
-              className="field-input w-full"
-            >
-              <option value="">— None —</option>
-              {assetSubClasses.map((sc) => (
-                <option key={sc.value} value={sc.value}>
-                  {sc.label}
-                </option>
-              ))}
-            </select>
           </label>
           <label className="block space-y-1 text-sm">
             <span className="font-medium text-[color:var(--ventia-muted)]">

@@ -70,6 +70,22 @@ export function assetSubClassLabel(value: string | null | undefined): string {
   return opts.find((o) => o.value === value)?.label ?? value;
 }
 
+/** Subclasses offered for an asset type (empty forTypes = any type). */
+export function getAssetSubClassesForType(
+  assetType: string | null | undefined,
+  includeValue?: string | null,
+): AssetSubClassOption[] {
+  const type = (assetType ?? "").trim().toUpperCase();
+  const all = getAssetSubClasses();
+  const include = (includeValue ?? "").trim().toUpperCase();
+  return all.filter((o) => {
+    if (include && o.value === include) return true;
+    if (!o.forTypes || o.forTypes.length === 0) return true;
+    if (!type) return true;
+    return o.forTypes.includes(type);
+  });
+}
+
 /** Infer subclass from name / explicit text (e.g. import Type or Classification). */
 export function inferAssetSubClass(
   name: string,

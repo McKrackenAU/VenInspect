@@ -2,6 +2,9 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { formatAssetType } from "@/lib/inspection";
 import { upsertAssetManual } from "@/lib/actions";
+import { getAssetTypes } from "@/lib/asset-types";
+import { getAssetSubClasses } from "@/lib/asset-subclasses";
+import { AssetTypeSubClassFields } from "@/components/AssetTypeSubClassFields";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +14,12 @@ export default async function ManageAssetsPage({
   searchParams: Promise<{ q?: string; type?: string }>;
 }) {
   const { q, type } = await searchParams;
+  const assetTypes = getAssetTypes();
+  const assetSubClasses = getAssetSubClasses();
   const assets = await prisma.asset.findMany({
     where: {
       AND: [
-        type ? { type: type as "BRIDGE" | "DRAINAGE" | "NOISE_WALL" } : {},
+        type ? { type } : {},
         q
           ? {
               OR: [
@@ -80,9 +85,11 @@ export default async function ManageAssetsPage({
           className="rounded-md border border-[color:var(--ventia-border)] bg-[color:var(--panel)] px-3 py-2 text-sm"
         >
           <option value="">All types</option>
-          <option value="BRIDGE">Bridge</option>
-          <option value="DRAINAGE">Drainage</option>
-          <option value="NOISE_WALL">Noise wall</option>
+          {assetTypes.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
         </select>
         <button
           type="submit"
@@ -146,6 +153,16 @@ export default async function ManageAssetsPage({
 
       <section className="rounded-xl border border-dashed border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-5">
         <h2 className="font-medium">Add / update single asset</h2>
+        <p className="mt-1 text-xs text-[color:var(--ventia-muted)]">
+          Subclasses are managed under{" "}
+          <Link
+            href="/manage/asset-subclasses"
+            className="text-[color:var(--ventia-blue)] underline-offset-2 hover:underline"
+          >
+            Catalogues → Asset subclasses
+          </Link>
+          .
+        </p>
         <form action={upsertAssetManual} className="mt-3 grid gap-3 sm:grid-cols-2">
           <input
             name="roadName"
@@ -165,14 +182,10 @@ export default async function ManageAssetsPage({
             placeholder="Name *"
             className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
           />
-          <select
-            name="type"
-            className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
-          >
-            <option value="BRIDGE">Bridge</option>
-            <option value="DRAINAGE">Drainage</option>
-            <option value="NOISE_WALL">Noise wall</option>
-          </select>
+          <AssetTypeSubClassFields
+            assetTypes={assetTypes}
+            subClasses={assetSubClasses}
+          />
           <input
             name="assetVisionId"
             placeholder="Asset Vision ID"
@@ -181,7 +194,7 @@ export default async function ManageAssetsPage({
           <input
             name="location"
             placeholder="Location description"
-            className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm"
+            className="rounded-md border border-[color:var(--ventia-border)] px-3 py-2 text-sm sm:col-span-2"
           />
           <input
             name="latitude"
