@@ -28,19 +28,25 @@ export function formatAppVersion(version = getAppVersion()): string {
 
 export type UpdateChannel = "gitea" | "github";
 
+/**
+ * Default update channel. Live / internet installs use GitHub; set
+ * UPDATE_CHANNEL=gitea for LAN-only Gitea deployments.
+ */
 export function getConfiguredUpdateChannel(): UpdateChannel {
   const raw = (process.env.UPDATE_CHANNEL || process.env.VENINSPECT_UPDATE_SOURCE || "")
     .trim()
     .toLowerCase();
-  if (raw === "github" || raw === "gh") return "github";
   if (raw === "gitea") return "gitea";
-  // Prefer Gitea on LAN installs when unset
-  return "gitea";
+  if (raw === "github" || raw === "gh") return "github";
+  // Live repo is GitHub — prefer it when unset
+  return "github";
 }
 
 export function remoteVersionUrls(channel: UpdateChannel): {
   packageJson: string;
   versionFile: string;
+  /** Extra VERSION URLs to try if the primary fails */
+  versionFileFallbacks?: string[];
   repoLabel: string;
 } {
   if (channel === "github") {
@@ -49,6 +55,10 @@ export function remoteVersionUrls(channel: UpdateChannel): {
         "https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/package.json",
       versionFile:
         "https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/VERSION",
+      versionFileFallbacks: [
+        "https://github.com/McKrackenAU/VenInspect/raw/main/VERSION",
+        "https://api.github.com/repos/McKrackenAU/VenInspect/contents/VERSION?ref=main",
+      ],
       repoLabel: "GitHub (McKrackenAU/VenInspect)",
     };
   }

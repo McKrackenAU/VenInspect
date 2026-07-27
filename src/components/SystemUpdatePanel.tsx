@@ -14,6 +14,7 @@ type CheckResult = {
   sameVersion?: boolean;
   remoteIsOlder?: boolean;
   error?: string;
+  probed?: { channel: string; remote: string; remoteLabel: string }[];
 };
 
 type StatusPayload = {
@@ -54,9 +55,35 @@ export function SystemUpdatePanel({
     setUpdating(busy);
   }, []);
 
+  const runCheck = useCallback(async () => {
+    setChecking(true);
+    setError(null);
+    try {
+      // auto = probe GitHub + Gitea and pick the newest reachable remote
+      const res = await fetch("/api/admin/update-check?channel=auto", {
+        cache: "no-store",
+      });
+      const data = (await res.json()) as CheckResult;
+      setCheck(data);
+      if (data.ok && (data.channel === "github" || data.channel === "gitea")) {
+        setChannel(data.channel);
+      }
+      if (!data.ok) setError(data.error ?? "Check failed");
+    } catch {
+      setError("Could not check for updates");
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshStatus();
   }, [refreshStatus]);
+
+  // Show available updates as soon as the System page opens
+  useEffect(() => {
+    void runCheck();
+  }, [runCheck]);
 
   useEffect(() => {
     const shouldPoll =
@@ -70,23 +97,6 @@ export function SystemUpdatePanel({
     }, 3000);
     return () => clearInterval(id);
   }, [updating, status?.state, refreshStatus]);
-
-  async function onCheck() {
-    setChecking(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/update-check?channel=${channel}`, {
-        cache: "no-store",
-      });
-      const data = (await res.json()) as CheckResult;
-      setCheck(data);
-      if (!data.ok) setError(data.error ?? "Check failed");
-    } catch {
-      setError("Could not check for updates");
-    } finally {
-      setChecking(false);
-    }
-  }
 
   async function onUpdate() {
     if (
@@ -164,9 +174,12 @@ export function SystemUpdatePanel({
             disabled={updating}
             className="field-input"
           >
+            <option value="github">GitHub (live)</option>
             <option value="gitea">Gitea (LAN)</option>
-            <option value="github">GitHub (remote / internet)</option>
           </select>
+          <span className="block text-xs text-[color:var(--ventia-muted)]">
+            Live installs use GitHub. Check probes both and selects the newest.
+          </span>
         </label>
         <div className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--ventia-green-tint)] px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-[color:var(--ventia-muted)]">
@@ -179,7 +192,7 @@ export function SystemUpdatePanel({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => void onCheck()}
+          onClick={() => void runCheck()}
           disabled={checking || updating}
           className="rounded-xl border border-[color:var(--ventia-border)] px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
         >
@@ -218,7 +231,8 @@ export function SystemUpdatePanel({
           </p>
           {check.updateAvailable ? (
             <p className="mt-1 font-medium text-[color:var(--ventia-green-mid)]">
-              Update available — {check.currentLabel} → {check.remoteLabel}
+              Update available — {check.currentLabel} → {check.remoteLabel} via{" "}
+              {check.channel === "github" ? "GitHub" : "Gitea"}
             </p>
           ) : check.sameVersion ? (
             <p className="mt-1 text-[color:var(--ventia-muted)]">Already on the latest version.</p>

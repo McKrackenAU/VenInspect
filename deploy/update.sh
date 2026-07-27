@@ -102,17 +102,17 @@ export DATA_DIR="${DATA_DIR:-/var/lib/veninspect}"
 REPO_GITEA="${VENINSPECT_REPO_GITEA:-$REPO_GITEA}"
 REPO_GITHUB="${VENINSPECT_REPO_GITHUB:-$REPO_GITHUB}"
 
-CHANNEL="gitea"
+CHANNEL="github"
 if command -v python3 >/dev/null 2>&1; then
   CHANNEL=$(ACTIVE_FILE="$ACTIVE_FILE" python3 <<'PY'
 import json, os
 from pathlib import Path
 try:
     d = json.loads(Path(os.environ["ACTIVE_FILE"]).read_text())
-    ch = (d.get("channel") or "gitea").strip().lower()
-    print("github" if ch in ("github", "gh") else "gitea")
+    ch = (d.get("channel") or "github").strip().lower()
+    print("gitea" if ch == "gitea" else "github")
 except Exception:
-    print("gitea")
+    print("github")
 PY
 )
 fi

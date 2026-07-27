@@ -10,7 +10,7 @@ APP_DIR="${APP_DIR:-/opt/veninspect}"
 APP_STAGE="${APP_STAGE:-/opt/veninspect-staging}"
 DATA_DIR="${DATA_DIR:-/var/lib/veninspect}"
 APP_USER="${APP_USER:-veninspect}"
-REPO_URL="${1:-${VENINSPECT_REPO:-http://192.168.13.9:3000/McKraken/VenInspect.git}}"
+REPO_URL="${1:-${VENINSPECT_REPO:-https://github.com/McKrackenAU/VenInspect.git}}"
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Run as root inside the LXC." >&2

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
+import { isAdminRole } from "@/lib/roles";
 import { getAppVersion, getConfiguredUpdateChannel } from "@/lib/version";
 import {
   isUpdateInProgress,
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 async function requireAdminApi() {
   const user = await getCurrentUser();
-  if (!user || user.role !== "ADMIN") return null;
+  if (!user || !isAdminRole(user.role, user.username)) return null;
   return user;
 }
 

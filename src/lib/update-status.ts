@@ -115,7 +115,7 @@ export function requestUpdate(opts: {
   fs.mkdirSync(dir, { recursive: true });
 
   const channel =
-    opts.channel === "github" || opts.channel === "gitea" ? opts.channel : "gitea";
+    opts.channel === "github" || opts.channel === "gitea" ? opts.channel : "github";
 
   // Must delete first so PathExists sees a new file creation (overwrite alone may not fire).
   for (const p of [requestPath(), activePath()]) {
