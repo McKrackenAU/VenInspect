@@ -52,7 +52,8 @@ export default async function MapPage() {
           Asset map
         </h1>
         <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-          Search the panel to find assets. Use your location for nearby results.
+          On phones, tap Search to find assets, then Hide to free the map. Use
+          your location for nearby results.
         </p>
       </div>
       <AssetMap
