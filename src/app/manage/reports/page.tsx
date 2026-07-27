@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { format } from "date-fns";
+import { formatAppDate } from "@/lib/date-time";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { formatLevel, formatStatus } from "@/lib/inspection";
@@ -75,7 +75,7 @@ export default async function ManageReportsPage({ searchParams }: Props) {
     titleLabel: i.titleLabel,
     statusLabel: formatStatus(i.status),
     levelLabel: formatLevel(i.level),
-    inspectedLabel: format(i.inspectedAt, "dd MMM yyyy"),
+    inspectedLabel: formatAppDate(i.inspectedAt, "date"),
     assetNumber: i.asset.assetNumber,
     roadName: i.asset.roadName || "Unknown Road",
     inspectorName: i.createdBy.name,

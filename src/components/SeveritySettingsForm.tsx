@@ -49,7 +49,7 @@ export function SeveritySettingsForm({ initial }: { initial: SeverityOption[] })
               <input
                 value={row.label}
                 onChange={(e) => update(i, { label: e.target.value })}
-                placeholder="Condition 1"
+                placeholder="C1"
                 className="field-input min-w-[10rem] flex-1"
               />
               <button

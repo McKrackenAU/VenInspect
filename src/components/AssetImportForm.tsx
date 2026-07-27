@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { importAssetsFromFile } from "@/lib/actions";
 import {
   StyledFileInput,
   TemplateDownloadButtons,
@@ -25,11 +24,37 @@ export function AssetImportForm() {
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
+          setResult(null);
           const fd = new FormData(e.currentTarget);
           startTransition(async () => {
             try {
-              const res = await importAssetsFromFile(fd);
-              setResult(res);
+              const res = await fetch("/api/manage/asset-import", {
+                method: "POST",
+                body: fd,
+              });
+              const body = (await res.json().catch(() => null)) as {
+                error?: string;
+                created?: number;
+                updated?: number;
+                skipped?: number;
+                total?: number;
+                errors?: string[];
+              } | null;
+              if (!res.ok) {
+                throw new Error(
+                  body?.error ||
+                    (res.status === 413
+                      ? "File too large for the server"
+                      : `Import failed (${res.status})`),
+                );
+              }
+              setResult({
+                created: body?.created ?? 0,
+                updated: body?.updated ?? 0,
+                skipped: body?.skipped ?? 0,
+                total: body?.total ?? 0,
+                errors: body?.errors ?? [],
+              });
             } catch (err) {
               setError(err instanceof Error ? err.message : "Import failed");
             }
@@ -52,7 +77,7 @@ export function AssetImportForm() {
             required
             accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             label="Choose import file"
-            hint="Match the template column headers"
+            hint="Match the template column headers (includes AV ID, chainage from/to)"
           />
         </div>
 
@@ -69,10 +94,10 @@ export function AssetImportForm() {
         </fieldset>
 
         <p className="text-xs text-[color:var(--ventia-muted)]">
-          Asset Vision exports: uses Code as serial number, Asset ID as Asset Vision ID,
-          and Name. Optional columns: Latitude, Longitude, Parent Chainage,
-          Classification, Notes. Types inferred from name (Bridge / Culvert / Noise wall)
-          or a Type column.
+          Template columns: Code, AV ID, Name, Road Name, Type, Sub Classification
+          (e.g. PED_UNDERPASS), Location, Latitude, Longitude, Classification,
+          Chainage From, Chainage To, Notes. Asset Vision exports still work
+          (Asset ID → AV ID). Types inferred from name when Type is blank.
         </p>
 
         <button

@@ -1,13 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { format } from "date-fns";
 import {
   absolutePhotoPath,
   defectPhotoRelativePath,
   ensureDataDirs,
   sanitizePathSegment,
   getPhotoDir,
+  readStorageSettings,
 } from "@/lib/paths";
 
 /** Field photos: long edge ≤ 1280px; prefer ≤ 450 KB; hard cap 700 KB. */
@@ -24,6 +24,31 @@ function isHeicLike(buffer: Buffer, filename?: string | null) {
   if (buffer.length < 12) return false;
   const brand = buffer.subarray(4, 12).toString("ascii");
   return brand.includes("heic") || brand.includes("heif") || brand.includes("mif1");
+}
+
+function appTimeZone() {
+  return readStorageSettings().timezone?.trim() || "Australia/Melbourne";
+}
+
+/** Format taken-at as dd/MM/yyyy in the app timezone (not UTC host local). */
+export function formatWatermarkDate(takenAt: Date): string {
+  try {
+    const fmt = new Intl.DateTimeFormat("en-AU", {
+      timeZone: appTimeZone(),
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    const parts = Object.fromEntries(
+      fmt.formatToParts(takenAt).map((p) => [p.type, p.value]),
+    );
+    return `${parts.day}/${parts.month}/${parts.year}`;
+  } catch {
+    const d = takenAt.getDate();
+    const m = takenAt.getMonth() + 1;
+    const y = takenAt.getFullYear();
+    return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+  }
 }
 
 /** Prefer EXIF DateTimeOriginal → Digitized → file mtime → now. Date only. */
@@ -43,7 +68,8 @@ export async function resolveTakenDate(
         const mo = Number(m[2]);
         const d = Number(m[3]);
         if (y >= 1990 && y <= 2100 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
-          return new Date(y, mo - 1, d);
+          // Noon UTC avoids TZ day-shift when only the calendar date matters
+          return new Date(Date.UTC(y, mo - 1, d, 12, 0, 0));
         }
       }
     }
@@ -57,22 +83,39 @@ export async function resolveTakenDate(
   return new Date();
 }
 
+/**
+ * Build watermark SVG. Uses inline attributes (not CSS classes) so librsvg/sharp
+ * on Linux reliably paints text. Baseline sits above the bottom edge so glyphs
+ * are not clipped.
+ */
 function watermarkSvg(dateLabel: string, width: number, height: number) {
   const longEdge = Math.max(width, height);
-  const fontSize = Math.min(22, Math.max(14, Math.round(longEdge * 0.01)));
-  const strokeWidth = Math.max(2, Math.round(fontSize / 5));
-  const pad = Math.max(8, Math.round(fontSize * 0.6));
+  const fontSize = Math.min(36, Math.max(18, Math.round(longEdge * 0.028)));
+  const strokeWidth = Math.max(3, Math.round(fontSize / 4));
+  const padX = Math.max(10, Math.round(fontSize * 0.45));
+  // Keep alphabetic baseline clear of the bottom so digits are fully visible
+  const padY = Math.max(12, Math.round(fontSize * 0.55));
+  const y = height - padY;
   const safe = dateLabel
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+  // Dark pill behind white text for contrast on any photo
+  const pillH = Math.round(fontSize * 1.45);
+  const pillW = Math.round(fontSize * dateLabel.length * 0.62 + padX * 2);
+  const pillX = Math.max(0, padX - 6);
+  const pillY = Math.max(0, y - Math.round(fontSize * 0.95));
   return Buffer.from(
-    `<svg width="${width}" height="${height}">
-      <style>
-        .ts { fill: #ffffff; font-size: ${fontSize}px; font-family: Arial, Helvetica, sans-serif;
-              font-weight: 600; paint-order: stroke; stroke: rgba(0,0,0,0.65); stroke-width: ${strokeWidth}px; }
-      </style>
-      <text x="${pad}" y="${height - pad}" class="ts">${safe}</text>
+    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="4" ry="4" fill="rgba(0,0,0,0.45)"/>
+      <text x="${padX}" y="${y}"
+        fill="#ffffff"
+        stroke="#000000"
+        stroke-width="${strokeWidth}"
+        paint-order="stroke"
+        font-size="${fontSize}"
+        font-family="DejaVu Sans, Liberation Sans, Noto Sans, Arial, Helvetica, sans-serif"
+        font-weight="700">${safe}</text>
     </svg>`,
   );
 }
@@ -96,10 +139,11 @@ async function encodeWithWatermark(
     withoutEnlargement: true,
   });
   const { data, info } = await resized.toBuffer({ resolveWithObject: true });
-  const dateLabel = format(takenAt, "dd/MM/yyyy");
+  const dateLabel = formatWatermarkDate(takenAt);
+  const overlay = watermarkSvg(dateLabel, info.width, info.height);
   const stamped = sharp(data).composite([
     {
-      input: watermarkSvg(dateLabel, info.width, info.height),
+      input: overlay,
       top: 0,
       left: 0,
     },

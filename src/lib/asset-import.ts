@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { inferAssetSubClass } from "@/lib/asset-subclasses";
 
 export type ImportedAssetRow = {
   assetVisionId: string | null;
@@ -11,26 +12,57 @@ export type ImportedAssetRow = {
   longitude: number | null;
   parentDirection: string | null;
   parentChainage: number | null;
+  chainageFrom: number | null;
+  chainageTo: number | null;
   parentAssetCode: string | null;
   parentAssetName: string | null;
   classification: string | null;
+  subClassification: string | null;
   notes: string | null;
 };
 
 const HEADER_ALIASES: Record<string, string[]> = {
-  assetVisionId: ["asset id", "assetvisionid", "asset vision id", "avid"],
+  assetVisionId: [
+    "asset id",
+    "assetvisionid",
+    "asset vision id",
+    "avid",
+    "av id",
+    "av_id",
+  ],
   assetNumber: ["code", "asset number", "assetnumber", "serial", "sn"],
   name: ["name", "asset name", "description"],
   type: ["type", "asset type", "structure type"],
-  roadName: ["parent asset name", "road", "road name", "roadname"],
+  roadName: ["road", "road name", "roadname"],
   location: ["location", "site", "address"],
   latitude: ["latitude", "lat", "y"],
   longitude: ["longitude", "lng", "lon", "long", "x"],
   parentDirection: ["parent direction", "direction"],
   parentChainage: ["parent chainage", "chainage"],
+  chainageFrom: [
+    "chainage from",
+    "chainagefrom",
+    "from chainage",
+    "start chainage",
+    "chainage start",
+  ],
+  chainageTo: [
+    "chainage to",
+    "chainageto",
+    "to chainage",
+    "end chainage",
+    "chainage end",
+  ],
   parentAssetCode: ["parent asset code"],
   parentAssetName: ["parent asset name"],
   classification: ["classification"],
+  subClassification: [
+    "sub classification",
+    "subclassification",
+    "subclass",
+    "sub class",
+    "asset subclass",
+  ],
   notes: ["notes", "alert notes", "comments"],
 };
 
@@ -58,16 +90,16 @@ export function inferAssetType(name: string, explicit?: string | null): string {
   const e = (explicit ?? "").toLowerCase();
   if (e.includes("noise")) return "NOISE_WALL";
   if (e.includes("drain") || e.includes("culvert")) return "DRAINAGE";
-  if (e.includes("bridge")) return "BRIDGE";
+  if (e.includes("underpass") || e.includes("bridge")) return "BRIDGE";
 
   const n = name.toLowerCase();
   if (/noise\s*wall/.test(n)) return "NOISE_WALL";
   if (/culvert|drain/.test(n)) return "DRAINAGE";
-  if (/bridge/.test(n)) return "BRIDGE";
+  if (/underpass|bridge/.test(n)) return "BRIDGE";
   const right = name.includes("|") ? name.split("|").pop()!.toLowerCase() : "";
   if (/culvert/.test(right)) return "DRAINAGE";
   if (/noise/.test(right)) return "NOISE_WALL";
-  if (/bridge/.test(right)) return "BRIDGE";
+  if (/underpass|bridge/.test(right)) return "BRIDGE";
   return "BRIDGE";
 }
 
@@ -96,12 +128,15 @@ export function parseAssetWorkbook(buffer: ArrayBuffer | Buffer): {
 } {
   const wb = XLSX.read(buffer, { type: "buffer" });
   const sheet = wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) {
+    return { rows: [], errors: ["Workbook has no sheets."] };
+  }
   const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: null,
   });
 
-  let headerIndex = raw.findIndex((r) => {
+  const headerIndex = raw.findIndex((r) => {
     if (!Array.isArray(r)) return false;
     const mapped = mapHeaders(r);
     return mapped.assetNumber !== undefined;
@@ -111,7 +146,7 @@ export function parseAssetWorkbook(buffer: ArrayBuffer | Buffer): {
     return {
       rows: [],
       errors: [
-        'Could not find a header row with a Code / Asset Number column. Expected Asset Vision export columns like "Asset ID", "Code", "Name".',
+        'Could not find a header row with a Code / Asset Number column. Expected columns like "Code", "AV ID", "Name", "Road Name".',
       ],
     };
   }
@@ -136,12 +171,28 @@ export function parseAssetWorkbook(buffer: ArrayBuffer | Buffer): {
       asString(cell(r, col.name)) ??
       asString(cell(r, col.parentAssetName)) ??
       assetNumber;
-    const type = inferAssetType(name, asString(cell(r, col.type)));
+    const typeExplicit = asString(cell(r, col.type));
+    const type = inferAssetType(name, typeExplicit);
     const parentAssetName = asString(cell(r, col.parentAssetName));
     const roadName =
       asString(cell(r, col.roadName)) ??
       parentAssetName ??
       (name.includes("|") ? name.split("|")[0]!.trim() : null);
+
+    const parentChainage = asNumber(cell(r, col.parentChainage));
+    let chainageFrom = asNumber(cell(r, col.chainageFrom));
+    const chainageTo = asNumber(cell(r, col.chainageTo));
+    if (chainageFrom == null && parentChainage != null) {
+      chainageFrom = parentChainage;
+    }
+
+    const subExplicit =
+      asString(cell(r, col.subClassification)) ??
+      asString(cell(r, col.classification));
+    const subClassification =
+      inferAssetSubClass(name, asString(cell(r, col.subClassification))) ??
+      inferAssetSubClass(name, typeExplicit) ??
+      inferAssetSubClass(name, subExplicit);
 
     rows.push({
       assetVisionId: asString(cell(r, col.assetVisionId)),
@@ -153,10 +204,13 @@ export function parseAssetWorkbook(buffer: ArrayBuffer | Buffer): {
       latitude: asNumber(cell(r, col.latitude)),
       longitude: asNumber(cell(r, col.longitude)),
       parentDirection: asString(cell(r, col.parentDirection)),
-      parentChainage: asNumber(cell(r, col.parentChainage)),
+      parentChainage: parentChainage ?? chainageFrom,
+      chainageFrom,
+      chainageTo,
       parentAssetCode: asString(cell(r, col.parentAssetCode)),
       parentAssetName,
       classification: asString(cell(r, col.classification)),
+      subClassification,
       notes: asString(cell(r, col.notes)),
     });
   }

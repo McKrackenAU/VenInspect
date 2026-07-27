@@ -1,6 +1,6 @@
 import Link from "next/link";
+import { formatAppDate } from "@/lib/date-time";
 import { notFound, redirect } from "next/navigation";
-import { format } from "date-fns";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import {
@@ -330,7 +330,7 @@ export default async function InspectionPage({
               : isDraft
                 ? " · draft (only you & admins)"
                 : ""}{" "}
-            · {format(inspection.submittedAt, "dd MMM yyyy HH:mm")} · by{" "}
+            · {formatAppDate(inspection.submittedAt, "datetime")} · by{" "}
             {inspection.createdBy.name}
             {" · folder "}
             <code className="text-xs">{inspection.folderKey}</code>

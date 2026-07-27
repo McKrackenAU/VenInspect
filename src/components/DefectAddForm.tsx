@@ -195,9 +195,8 @@ export function DefectAddForm({
         <span className="text-sm font-semibold">Condition state</span>
         <select name="severity" defaultValue={defaultSeverity} className="field-input">
           {severities.map((s) => (
-            <option key={s.value} value={s.value}>
+            <option key={s.value} value={s.value} title={s.description || s.label}>
               {s.label}
-              {s.description ? ` — ${s.description}` : ""}
             </option>
           ))}
         </select>

@@ -42,6 +42,13 @@ export type StorageSettings = {
   }[];
   /** Admin-customisable asset type catalogue */
   assetTypes?: { value: string; label: string; description?: string }[];
+  /** Admin-customisable asset sub-classifications (e.g. Ped underpass) */
+  assetSubClasses?: {
+    value: string;
+    label: string;
+    forTypes?: string[];
+    description?: string;
+  }[];
   /** Admin-customisable tags for asset document uploads */
   documentTags?: { value: string; label: string }[];
   /** Optional Maps JS key when not set in environment */
@@ -115,6 +122,10 @@ export function writeStorageSettings(next: StorageSettings) {
   if (Object.prototype.hasOwnProperty.call(next, "assetTypes")) {
     if (!next.assetTypes?.length) delete merged.assetTypes;
     else merged.assetTypes = next.assetTypes;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "assetSubClasses")) {
+    if (!next.assetSubClasses?.length) delete merged.assetSubClasses;
+    else merged.assetSubClasses = next.assetSubClasses;
   }
   if (Object.prototype.hasOwnProperty.call(next, "documentTags")) {
     if (!next.documentTags?.length) delete merged.documentTags;
@@ -224,12 +235,51 @@ export function sanitizePathSegment(value: string, fallback = "Unknown") {
   return cleaned || fallback;
 }
 
+/** App timezone parts (avoids UTC host making Melbourne times look ~10–14h behind). */
+function zonedNowParts(when: Date, timeZone: string) {
+  const fmt = new Intl.DateTimeFormat("en-AU", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    fmt.formatToParts(when).map((p) => [p.type, p.value]),
+  );
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+    second: Number(parts.second),
+  };
+}
+
+function appTimeZone() {
+  return readStorageSettings().timezone?.trim() || "Australia/Melbourne";
+}
+
 export function formatInspectionDateKey(when: Date) {
-  return format(when, "ddMMyyyy");
+  try {
+    const z = zonedNowParts(when, appTimeZone());
+    return `${String(z.day).padStart(2, "0")}${String(z.month).padStart(2, "0")}${z.year}`;
+  } catch {
+    return format(when, "ddMMyyyy");
+  }
 }
 
 export function formatInspectionTimeKey(when: Date) {
-  return format(when, "HHmmss");
+  try {
+    const z = zonedNowParts(when, appTimeZone());
+    return `${String(z.hour).padStart(2, "0")}${String(z.minute).padStart(2, "0")}${String(z.second).padStart(2, "0")}`;
+  } catch {
+    return format(when, "HHmmss");
+  }
 }
 
 /**
@@ -243,9 +293,15 @@ export function buildInspectionLabel(opts: {
   includeTime?: boolean;
 }) {
   const road = opts.roadName.trim() || "Unknown Road";
-  const date = format(opts.at, "ddMMyyyy");
+  const date = formatInspectionDateKey(opts.at);
   if (opts.includeTime) {
-    return `${road} - ${opts.assetNumber} - ${date} ${format(opts.at, "HH:mm:ss")}`;
+    try {
+      const z = zonedNowParts(opts.at, appTimeZone());
+      const time = `${String(z.hour).padStart(2, "0")}:${String(z.minute).padStart(2, "0")}:${String(z.second).padStart(2, "0")}`;
+      return `${road} - ${opts.assetNumber} - ${date} ${time}`;
+    } catch {
+      return `${road} - ${opts.assetNumber} - ${date} ${format(opts.at, "HH:mm:ss")}`;
+    }
   }
   return `${road} - ${opts.assetNumber} - ${date}`;
 }

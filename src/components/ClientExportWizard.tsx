@@ -157,13 +157,17 @@ export function ClientExportWizard({
     } catch {
       /* still try export */
     }
-    const qs = new URLSearchParams({
-      severities: selected.join(","),
-    });
-    if (orderForPack.length) qs.set("photoOrder", orderForPack.join("|"));
     await downloadBlob(
-      `/api/inspections/${inspectionId}/client-export?${qs.toString()}`,
+      `/api/inspections/${inspectionId}/client-export`,
       "client-export.zip",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          severities: selected,
+          photoOrder: orderForPack,
+        }),
+      },
     );
   }
 

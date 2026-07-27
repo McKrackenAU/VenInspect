@@ -45,6 +45,7 @@ export function SectionMediaPanel({
   const [error, setError] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [raiseOpen, setRaiseOpen] = useState(false);
+  const [raiseMediaId, setRaiseMediaId] = useState<string | null>(null);
   const [description, setDescription] = useState(
     defectDefaults?.description ?? "",
   );
@@ -55,6 +56,12 @@ export function SectionMediaPanel({
     setPendingFile(file);
     setPreview(URL.createObjectURL(file));
     setError(null);
+  }
+
+  function openRaise(mediaId?: string | null) {
+    setRaiseMediaId(mediaId ?? null);
+    setDescription(defectDefaults?.description ?? "");
+    setRaiseOpen(true);
   }
 
   async function upload(file: File, asDefect: boolean) {
@@ -88,9 +95,45 @@ export function SectionMediaPanel({
       setPendingFile(null);
       setPreview(null);
       setRaiseOpen(false);
+      setRaiseMediaId(null);
       setDescription(defectDefaults?.description ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  /** Raise a defect from an already-saved form photo (keeps Raise available after Save). */
+  async function raiseFromExisting(mediaId: string) {
+    setPending(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.set("sectionId", sectionId);
+      if (fieldId) fd.set("fieldId", fieldId);
+      fd.set("mediaId", mediaId);
+      fd.set("raiseDefect", "1");
+      fd.set("description", description.trim() || "Defect raised from form");
+      fd.set("category", defectDefaults?.category ?? "General");
+      fd.set("subcategory", defectDefaults?.subcategory ?? label ?? "Form");
+      fd.set("severity", defectDefaults?.severity ?? "CS3");
+      const res = await fetch(`/api/inspections/${inspectionId}/form-media`, {
+        method: "POST",
+        body: fd,
+      });
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+        media?: Record<string, FormMediaItem[]>;
+      } | null;
+      if (!res.ok) throw new Error(body?.error || `Raise failed (${res.status})`);
+      const key = fieldId ? `${sectionId}::${fieldId}` : sectionId;
+      if (body?.media?.[key]) onMediaChange(body.media[key]);
+      setRaiseOpen(false);
+      setRaiseMediaId(null);
+      setDescription(defectDefaults?.description ?? "");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not raise defect");
     } finally {
       setPending(false);
     }
@@ -120,6 +163,44 @@ export function SectionMediaPanel({
     }
   }
 
+  const raisePanel = raiseOpen ? (
+    <div className="space-y-2 border-t border-[color:var(--ventia-border)] pt-2">
+      <label className="block text-xs">
+        Defect description
+        <textarea
+          className="field-input mt-1 min-h-[3rem] w-full"
+          rows={2}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Describe the issue…"
+        />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={pending || !description.trim()}
+          className="btn-primary text-xs"
+          onClick={() => {
+            if (raiseMediaId) void raiseFromExisting(raiseMediaId);
+            else if (pendingFile) void upload(pendingFile, true);
+          }}
+        >
+          {pending ? "Saving…" : "Create defect with photo"}
+        </button>
+        <button
+          type="button"
+          className="rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs"
+          onClick={() => {
+            setRaiseOpen(false);
+            setRaiseMediaId(null);
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-2 rounded-lg border border-dashed border-[color:var(--ventia-border)] p-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ventia-muted)]">
@@ -139,19 +220,34 @@ export function SectionMediaPanel({
                 alt={item.caption || "Form photo"}
                 className="aspect-video w-full object-cover"
               />
-              <div className="flex items-center justify-between gap-2 px-2 py-1 text-[10px] text-[color:var(--ventia-muted)]">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-2 py-1 text-[10px] text-[color:var(--ventia-muted)]">
                 <span>{item.defectId ? "Linked defect" : "Photo"}</span>
                 {editable ? (
-                  <button
-                    type="button"
-                    disabled={pending}
-                    className="text-rose-600"
-                    onClick={() => void removeItem(item.id)}
-                  >
-                    Remove
-                  </button>
+                  <span className="flex flex-wrap gap-2">
+                    {allowRaiseDefect && !item.defectId ? (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        className="font-semibold text-amber-700"
+                        onClick={() => openRaise(item.id)}
+                      >
+                        Raise as defect
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={pending}
+                      className="text-rose-600"
+                      onClick={() => void removeItem(item.id)}
+                    >
+                      Remove
+                    </button>
+                  </span>
                 ) : null}
               </div>
+              {raiseOpen && raiseMediaId === item.id ? (
+                <div className="px-2 pb-2">{raisePanel}</div>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -217,7 +313,7 @@ export function SectionMediaPanel({
                     type="button"
                     disabled={pending}
                     className="rounded-lg border border-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-700"
-                    onClick={() => setRaiseOpen(true)}
+                    onClick={() => openRaise(null)}
                   >
                     Raise as defect…
                   </button>
@@ -229,33 +325,13 @@ export function SectionMediaPanel({
                     setPendingFile(null);
                     setPreview(null);
                     setRaiseOpen(false);
+                    setRaiseMediaId(null);
                   }}
                 >
                   Discard
                 </button>
               </div>
-              {raiseOpen ? (
-                <div className="space-y-2 border-t border-[color:var(--ventia-border)] pt-2">
-                  <label className="block text-xs">
-                    Defect description
-                    <textarea
-                      className="field-input mt-1 min-h-[3rem] w-full"
-                      rows={2}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Describe the issue…"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={pending || !description.trim()}
-                    className="btn-primary text-xs"
-                    onClick={() => void upload(pendingFile, true)}
-                  >
-                    {pending ? "Saving…" : "Create defect with photo"}
-                  </button>
-                </div>
-              ) : null}
+              {raiseOpen && !raiseMediaId ? raisePanel : null}
             </div>
           ) : null}
         </div>

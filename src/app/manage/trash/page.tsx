@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { format } from "date-fns";
+import { formatAppDate } from "@/lib/date-time";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { restoreInspectionAction } from "@/lib/trash";
@@ -80,7 +80,7 @@ export default async function ManageTrashPage() {
                 <p className="text-xs text-[color:var(--ventia-muted)]">
                   {i.asset.assetNumber} · deleted{" "}
                   {i.deletedAt
-                    ? format(new Date(i.deletedAt), "dd MMM yyyy HH:mm")
+                    ? formatAppDate(i.deletedAt, "datetime")
                     : "—"}
                   {i.deletedBy ? ` by ${i.deletedBy.name}` : ""}
                 </p>

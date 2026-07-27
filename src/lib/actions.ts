@@ -1049,7 +1049,9 @@ export async function updateUserQualifications(formData: FormData) {
   revalidatePath("/manage/users");
 }
 
+/** @deprecated Prefer POST /api/manage/asset-import for large workbooks. */
 export async function importAssetsFromFile(formData: FormData) {
+  await requireAdmin();
   const file = formData.get("file");
   const mode = String(formData.get("mode") ?? "upsert"); // upsert | skip
 
@@ -1064,44 +1066,54 @@ export async function importAssetsFromFile(formData: FormData) {
   let created = 0;
   let updated = 0;
   let skipped = 0;
+  const rowErrors = [...errors];
 
   for (const row of rows) {
-    const existing = await prisma.asset.findUnique({
-      where: { assetNumber: row.assetNumber },
-    });
-
-    if (existing && mode === "skip") {
-      skipped += 1;
-      continue;
-    }
-
-    const data = {
-      assetVisionId: row.assetVisionId,
-      name: row.name,
-      type: row.type,
-      roadName: row.roadName || row.parentAssetName || "Unknown Road",
-      location: row.location,
-      latitude: row.latitude,
-      longitude: row.longitude,
-      parentDirection: row.parentDirection,
-      parentChainage: row.parentChainage,
-      parentAssetCode: row.parentAssetCode,
-      parentAssetName: row.parentAssetName,
-      classification: row.classification,
-      notes: row.notes,
-    };
-
-    if (existing) {
-      await prisma.asset.update({
+    try {
+      const existing = await prisma.asset.findUnique({
         where: { assetNumber: row.assetNumber },
-        data,
       });
-      updated += 1;
-    } else {
-      await prisma.asset.create({
-        data: { assetNumber: row.assetNumber, ...data },
-      });
-      created += 1;
+
+      if (existing && mode === "skip") {
+        skipped += 1;
+        continue;
+      }
+
+      const data = {
+        assetVisionId: row.assetVisionId,
+        name: row.name,
+        type: row.type,
+        roadName: row.roadName || row.parentAssetName || "Unknown Road",
+        location: row.location,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        parentDirection: row.parentDirection,
+        parentChainage: row.parentChainage,
+        chainageFrom: row.chainageFrom,
+        chainageTo: row.chainageTo,
+        parentAssetCode: row.parentAssetCode,
+        parentAssetName: row.parentAssetName,
+        classification: row.classification,
+        subClassification: row.subClassification,
+        notes: row.notes,
+      };
+
+      if (existing) {
+        await prisma.asset.update({
+          where: { assetNumber: row.assetNumber },
+          data,
+        });
+        updated += 1;
+      } else {
+        await prisma.asset.create({
+          data: { assetNumber: row.assetNumber, ...data },
+        });
+        created += 1;
+      }
+    } catch (e) {
+      rowErrors.push(
+        `${row.assetNumber}: ${e instanceof Error ? e.message : "row failed"}`,
+      );
     }
   }
 
@@ -1109,7 +1121,7 @@ export async function importAssetsFromFile(formData: FormData) {
   revalidatePath("/assets");
   revalidatePath("/");
 
-  return { created, updated, skipped, errors, total: rows.length };
+  return { created, updated, skipped, errors: rowErrors, total: rows.length };
 }
 
 export async function upsertAssetManual(formData: FormData) {
@@ -1175,11 +1187,18 @@ export async function updateAssetDetails(formData: FormData) {
   const roadName = String(formData.get("roadName") ?? "").trim() || "Unknown Road";
   const location = String(formData.get("location") ?? "").trim() || null;
   const classification = String(formData.get("classification") ?? "").trim() || null;
+  const subClassification =
+    String(formData.get("subClassification") ?? "").trim().toUpperCase().replace(/\s+/g, "_") ||
+    null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const latitudeRaw = String(formData.get("latitude") ?? "").trim();
   const longitudeRaw = String(formData.get("longitude") ?? "").trim();
   const latitude = latitudeRaw ? Number(latitudeRaw) : null;
   const longitude = longitudeRaw ? Number(longitudeRaw) : null;
+  const chainageFromRaw = String(formData.get("chainageFrom") ?? "").trim();
+  const chainageToRaw = String(formData.get("chainageTo") ?? "").trim();
+  const chainageFrom = chainageFromRaw ? Number(chainageFromRaw) : null;
+  const chainageTo = chainageToRaw ? Number(chainageToRaw) : null;
   const l1Default = inspectionTypeIntervalYears("LEVEL_1") || 3;
   const l2Default = inspectionTypeIntervalYears("LEVEL_2") || 5;
   const l1 = Number(String(formData.get("level1IntervalYears") ?? String(l1Default)));
@@ -1236,9 +1255,13 @@ export async function updateAssetDetails(formData: FormData) {
       roadName,
       location,
       classification,
+      subClassification,
       notes,
       latitude: Number.isFinite(latitude) ? latitude : null,
       longitude: Number.isFinite(longitude) ? longitude : null,
+      chainageFrom: Number.isFinite(chainageFrom) ? chainageFrom : null,
+      chainageTo: Number.isFinite(chainageTo) ? chainageTo : null,
+      parentChainage: Number.isFinite(chainageFrom) ? chainageFrom : null,
       level1IntervalYears: Number.isFinite(l1) && l1 > 0 ? l1 : l1Default,
       level2IntervalYears: Number.isFinite(l2) && l2 > 0 ? l2 : l2Default,
       lastLevel1At,

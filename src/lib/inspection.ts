@@ -1,10 +1,13 @@
-import { addYears, isBefore, differenceInCalendarDays, format } from "date-fns";
+import { addYears, isBefore, differenceInCalendarDays } from "date-fns";
 import type { Asset, Inspection } from "@/generated/prisma/client";
 import {
   getInspectionTypes,
   inspectionTypeIntervalYears,
   inspectionTypeLabel,
 } from "@/lib/inspection-types";
+import { formatAppDate } from "@/lib/date-time";
+import { assetTypeLabel } from "@/lib/asset-types";
+import { assetSubClassLabel } from "@/lib/asset-subclasses";
 
 export type { PermitKey } from "@/lib/permits";
 export { ASSET_PERMIT_FLAGS } from "@/lib/permits";
@@ -123,7 +126,7 @@ export function formatNextDue(
 ): string | null {
   if (status === "overdue") return "Overdue";
   if (status === "due_soon" && nextDueAt) {
-    return `Due soon (${format(nextDueAt, "dd MMM")})`;
+    return `Due soon (${formatAppDate(nextDueAt, "dayMonth")})`;
   }
   return null;
 }
@@ -164,8 +167,11 @@ export const NOISE_WALL_CATEGORIES = [
   { category: "Surrounds", subcategories: ["Access", "Vegetation", "Drainage at toe"] },
 ] as const;
 
-import { assetTypeLabel } from "@/lib/asset-types";
-
-export function formatAssetType(type: string) {
-  return assetTypeLabel(type);
+export function formatAssetType(
+  type: string,
+  subClassification?: string | null,
+) {
+  const base = assetTypeLabel(type);
+  const sub = assetSubClassLabel(subClassification);
+  return sub ? `${base} · ${sub}` : base;
 }

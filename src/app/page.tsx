@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { format } from "date-fns";
+import { formatAppDate } from "@/lib/date-time";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { computeLevelSchedule, formatLevel } from "@/lib/inspection";
@@ -147,7 +147,7 @@ export default async function DashboardPage() {
                         {assignment.asset.name}
                         {" · "}
                         {overdue ? "overdue " : "due "}
-                        {format(assignment.dueDate, "dd MMM yyyy")}
+                        {formatAppDate(assignment.dueDate, "date")}
                       </p>
                     </div>
                     <span className="shrink-0 rounded-lg bg-[color:var(--ventia-green)] px-3 py-1.5 text-sm font-semibold text-white">
@@ -178,7 +178,7 @@ export default async function DashboardPage() {
                     </p>
                     <p className="text-sm text-[color:var(--ventia-muted)]">
                       {assignment.asset.roadName} · due{" "}
-                      {format(assignment.dueDate, "dd MMM yyyy")}
+                      {formatAppDate(assignment.dueDate, "date")}
                     </p>
                   </div>
                   <span className="text-sm font-medium text-[color:var(--ventia-blue)]">
@@ -278,7 +278,7 @@ export default async function DashboardPage() {
                     <p className="truncate text-sm text-[color:var(--ventia-muted)]">
                       {asset.roadName} · {formatLevel(schedule.level)}
                       {schedule.nextDueAt
-                        ? ` · due ${format(schedule.nextDueAt, "dd MMM yyyy")}`
+                        ? ` · due ${formatAppDate(schedule.nextDueAt, "date")}`
                         : ""}
                     </p>
                   </div>

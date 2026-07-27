@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { format } from "date-fns";
+import { formatAppDate } from "@/lib/date-time";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { inspectionVisibilityWhere } from "@/lib/inspection-access";
@@ -152,7 +152,7 @@ export default async function AssetDetailPage({
                   </Link>
                   <p className="text-xs text-[color:var(--ventia-muted)]">
                     {formatLevel(insp.level)} · {formatStatus(insp.status)} ·{" "}
-                    {format(insp.submittedAt, "dd MMM yyyy HH:mm")} · by{" "}
+                    {formatAppDate(insp.submittedAt, "datetime")} · by{" "}
                     {insp.createdBy.name} · {insp.defects.length} defect
                     {insp.defects.length === 1 ? "" : "s"}
                   </p>
@@ -286,7 +286,7 @@ function ScheduleCard({
       <p className="mt-1 text-sm">
         Last:{" "}
         {schedule.lastInspectedAt
-          ? format(schedule.lastInspectedAt, "dd MMM yyyy")
+          ? formatAppDate(schedule.lastInspectedAt, "date")
           : "None"}
         {usingBaselineOnly ? (
           <span className="text-[color:var(--ventia-muted)]"> (manual baseline)</span>
@@ -294,7 +294,7 @@ function ScheduleCard({
       </p>
       <p className="text-sm">
         Next due:{" "}
-        {schedule.nextDueAt ? format(schedule.nextDueAt, "dd MMM yyyy") : "—"}
+        {schedule.nextDueAt ? formatAppDate(schedule.nextDueAt, "date") : "—"}
       </p>
     </div>
   );

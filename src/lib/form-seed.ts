@@ -1,5 +1,5 @@
-import { format } from "date-fns";
 import type { Asset } from "@/generated/prisma/client";
+import { formatAppDate } from "@/lib/date-time";
 import {
   parseAssetComponents,
   parseAssetProfile,
@@ -167,7 +167,7 @@ export function seedFormPayloadFromAsset(opts: {
 
   // Visit header always from session (not asset profile flags)
   values.si_inspector = opts.inspectorName;
-  values.si_date = format(opts.inspectedAt, "yyyy-MM-dd");
+  values.si_date = formatAppDate(opts.inspectedAt, "isoDate");
 
   // Components register always seeds condition-rating rows
   const components = parseAssetComponents(opts.asset.componentsJson);

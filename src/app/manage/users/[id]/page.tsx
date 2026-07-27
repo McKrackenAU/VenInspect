@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { format } from "date-fns";
+import { formatAppDate } from "@/lib/date-time";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { formatLevel, formatStatus } from "@/lib/inspection";
@@ -150,7 +150,7 @@ export default async function ManageUserHistoryPage({
                     <p className="text-xs text-[color:var(--ventia-muted)]">
                       {insp.asset.assetNumber} · {formatLevel(insp.level)} ·{" "}
                       {formatStatus(insp.status)} ·{" "}
-                      {format(insp.submittedAt, "dd MMM yyyy HH:mm")} ·{" "}
+                      {formatAppDate(insp.submittedAt, "datetime")} ·{" "}
                       {insp.defects.length} defects
                     </p>
                   </div>
@@ -215,7 +215,7 @@ export default async function ManageUserHistoryPage({
                 <p className="text-xs text-[color:var(--ventia-muted)]">
                   {insp.asset.assetNumber} · by {insp.createdBy.name} ·{" "}
                   {insp.approvedAt
-                    ? format(insp.approvedAt, "dd MMM yyyy")
+                    ? formatAppDate(insp.approvedAt, "date")
                     : "—"}
                 </p>
               </li>
@@ -233,7 +233,7 @@ export default async function ManageUserHistoryPage({
             {user.auditsAssigned.map((a) => (
               <li key={a.id} className="px-4 py-3 text-sm">
                 {a.asset.assetNumber} · {formatLevel(a.level)} · due{" "}
-                {format(a.dueDate, "dd MMM yyyy")} · {a.status}
+                {formatAppDate(a.dueDate, "date")} · {a.status}
               </li>
             ))}
           </ul>

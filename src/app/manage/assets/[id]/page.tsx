@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { format } from "date-fns";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import {
@@ -17,6 +16,8 @@ import {
 } from "@/lib/inspection";
 import { ASSET_PERMIT_FLAGS } from "@/lib/permits";
 import { getAssetTypes } from "@/lib/asset-types";
+import { getAssetSubClasses } from "@/lib/asset-subclasses";
+import { formatAppDate } from "@/lib/date-time";
 import { getDocumentTags } from "@/lib/document-tags";
 import { parseAssetComponents, parseAssetProfile } from "@/lib/asset-profile";
 import { AssetComponentsEditor } from "@/components/AssetComponentsEditor";
@@ -43,6 +44,7 @@ export default async function ManageAssetEditPage({
   await requireAdmin();
   const { id } = await params;
   const { saved } = await searchParams;
+  const assetSubClasses = getAssetSubClasses();
   const asset = await prisma.asset.findUnique({
     where: { id },
     include: {
@@ -138,7 +140,7 @@ export default async function ManageAssetEditPage({
                   </Link>
                   <p className="text-xs text-[color:var(--ventia-muted)]">
                     {formatLevel(insp.level)} · {formatStatus(insp.status)} ·{" "}
-                    {format(insp.submittedAt, "dd MMM yyyy HH:mm")} · by{" "}
+                    {formatAppDate(insp.submittedAt, "datetime")} · by{" "}
                     {insp.createdBy.name} · {insp.defects.length} defect
                     {insp.defects.length === 1 ? "" : "s"}
                   </p>
@@ -302,6 +304,45 @@ export default async function ManageAssetEditPage({
               className="field-input w-full"
             />
           </label>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium text-[color:var(--ventia-muted)]">
+              Sub classification
+            </span>
+            <select
+              name="subClassification"
+              defaultValue={asset.subClassification ?? ""}
+              className="field-input w-full"
+            >
+              <option value="">— None —</option>
+              {assetSubClasses.map((sc) => (
+                <option key={sc.value} value={sc.value}>
+                  {sc.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium text-[color:var(--ventia-muted)]">
+              Chainage from (m)
+            </span>
+            <input
+              name="chainageFrom"
+              defaultValue={asset.chainageFrom ?? asset.parentChainage ?? ""}
+              placeholder="e.g. 12.5"
+              className="field-input w-full font-mono"
+            />
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium text-[color:var(--ventia-muted)]">
+              Chainage to (m)
+            </span>
+            <input
+              name="chainageTo"
+              defaultValue={asset.chainageTo ?? ""}
+              placeholder="e.g. 14.0"
+              className="field-input w-full font-mono"
+            />
+          </label>
           <label className="block space-y-1 text-sm sm:col-span-2">
             <span className="font-medium text-[color:var(--ventia-muted)]">Location</span>
             <input
@@ -374,7 +415,7 @@ export default async function ManageAssetEditPage({
                 name="lastLevel1At"
                 type="date"
                 defaultValue={
-                  asset.lastLevel1At ? format(asset.lastLevel1At, "yyyy-MM-dd") : ""
+                  asset.lastLevel1At ? formatAppDate(asset.lastLevel1At, "isoDate") : ""
                 }
                 className="field-input w-full"
               />
@@ -387,7 +428,7 @@ export default async function ManageAssetEditPage({
                 name="lastLevel2At"
                 type="date"
                 defaultValue={
-                  asset.lastLevel2At ? format(asset.lastLevel2At, "yyyy-MM-dd") : ""
+                  asset.lastLevel2At ? formatAppDate(asset.lastLevel2At, "isoDate") : ""
                 }
                 className="field-input w-full"
               />
@@ -661,7 +702,7 @@ function ScheduleCard({
       <p className="mt-1 text-sm">
         Last:{" "}
         {schedule.lastInspectedAt
-          ? format(schedule.lastInspectedAt, "dd MMM yyyy")
+          ? formatAppDate(schedule.lastInspectedAt, "date")
           : "None"}
         {usingBaselineOnly ? (
           <span className="text-[color:var(--ventia-muted)]"> (manual baseline)</span>
@@ -669,7 +710,7 @@ function ScheduleCard({
       </p>
       <p className="text-sm">
         Next due:{" "}
-        {schedule.nextDueAt ? format(schedule.nextDueAt, "dd MMM yyyy") : "—"}
+        {schedule.nextDueAt ? formatAppDate(schedule.nextDueAt, "date") : "—"}
       </p>
     </div>
   );

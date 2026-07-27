@@ -52,6 +52,8 @@ Same-day second inspection on an asset uses `{DDMMYYYY-HHmmss}`. Inspection `tit
 - Grouped by **roadName**, then **assetNumber** (Code)
 - Asset Vision ID, lat/long optional
 - Types: BRIDGE | DRAINAGE | NOISE_WALL
+- Sub-classification (e.g. PED_UNDERPASS / Ped underpass) under type
+- Chainage from / to (m) on asset registry + import template
 
 ## Inspections
 

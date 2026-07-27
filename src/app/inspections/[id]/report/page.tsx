@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { format } from "date-fns";
+import { formatAppDate } from "@/lib/date-time";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { canViewInspection } from "@/lib/inspection-access";
@@ -164,20 +164,20 @@ export default async function InspectionReportPage({
           <div>
             <dt className="text-[color:var(--ventia-muted)]">Inspected</dt>
             <dd className="font-medium">
-              {format(inspection.inspectedAt, "dd MMM yyyy")}
+              {formatAppDate(inspection.inspectedAt, "date")}
             </dd>
           </div>
           <div>
             <dt className="text-[color:var(--ventia-muted)]">First submitted</dt>
             <dd className="font-medium">
-              {format(inspection.submittedAt, "dd MMM yyyy HH:mm")}
+              {formatAppDate(inspection.submittedAt, "datetime")}
             </dd>
           </div>
           {inspection.lastEditedAt ? (
             <div>
               <dt className="text-[color:var(--ventia-muted)]">Last edited</dt>
               <dd className="font-medium">
-                {format(inspection.lastEditedAt, "dd MMM yyyy HH:mm")}
+                {formatAppDate(inspection.lastEditedAt, "datetime")}
               </dd>
             </div>
           ) : null}
@@ -195,7 +195,7 @@ export default async function InspectionReportPage({
                 {approverLabel}
                 {inspection.approvedAt ? (
                   <span className="mt-0.5 block text-xs font-normal text-[color:var(--ventia-muted)]">
-                    {format(inspection.approvedAt, "dd MMM yyyy HH:mm")}
+                    {formatAppDate(inspection.approvedAt, "datetime")}
                   </span>
                 ) : null}
               </dd>
@@ -208,7 +208,7 @@ export default async function InspectionReportPage({
                 {reviewerLabel}
                 {inspection.reviewedAt ? (
                   <span className="mt-0.5 block text-xs font-normal text-[color:var(--ventia-muted)]">
-                    {format(inspection.reviewedAt, "dd MMM yyyy HH:mm")}
+                    {formatAppDate(inspection.reviewedAt, "datetime")}
                   </span>
                 ) : null}
               </dd>
@@ -229,7 +229,7 @@ export default async function InspectionReportPage({
               reviewedByLabel={reviewerLabel}
               reviewedAtLabel={
                 inspection.reviewedAt
-                  ? format(inspection.reviewedAt, "dd MMM yyyy HH:mm")
+                  ? formatAppDate(inspection.reviewedAt, "datetime")
                   : null
               }
               candidates={reviewCandidates}

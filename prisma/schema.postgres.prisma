@@ -93,9 +93,15 @@ model Asset {
   longitude           Float?
   parentDirection     String?
   parentChainage      Float?
+  /// Start chainage (m) along the parent road
+  chainageFrom        Float?
+  /// End chainage (m) along the parent road
+  chainageTo          Float?
   parentAssetCode     String?
   parentAssetName     String?
   classification      String?
+  /// Structural subclass e.g. PED_UNDERPASS under BRIDGE
+  subClassification   String?
   notes               String?
   level1IntervalYears Int       @default(3)
   level2IntervalYears Int       @default(5)

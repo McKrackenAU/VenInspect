@@ -39,7 +39,9 @@ Mobile-first field UI + PWA install. Future native shells via Capacitor — keep
 
 - Group by `roadName`, then `assetNumber` (Code)
 - Types: `BRIDGE` | `DRAINAGE` | `NOISE_WALL`
-- Import: `src/lib/asset-import.ts` / `/manage/assets/import`
+- Sub-classification e.g. `PED_UNDERPASS` (Ped underpass) via `subClassification`
+- Chainage: `chainageFrom` / `chainageTo` (import + manage details)
+- Import: `src/lib/asset-import.ts` / `POST /api/manage/asset-import` + template with AV ID
 
 ## Inspection relations & scope
 

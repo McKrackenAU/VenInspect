@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import PDFDocument from "pdfkit";
 import sharp from "sharp";
-import { format } from "date-fns";
 import {
   formatAssetType,
   formatLevel,
@@ -10,6 +9,7 @@ import {
 } from "@/lib/inspection";
 import { absolutePhotoPath } from "@/lib/paths";
 import { severityLabel } from "@/lib/severities";
+import { formatAppPattern } from "@/lib/date-time";
 import type {
   FormPayload,
   InspectionTemplate,
@@ -41,7 +41,10 @@ export type ReportPdfAsset = {
   latitude: number | null;
   longitude: number | null;
   classification: string | null;
+  subClassification?: string | null;
   parentChainage: number | null;
+  chainageFrom?: number | null;
+  chainageTo?: number | null;
   notes: string | null;
 };
 
@@ -284,7 +287,7 @@ export async function buildInspectionPdf(
     metaRow([
       ["Road / location", [input.asset.roadName, input.asset.location].filter(Boolean).join(" — ")],
       ["Asset type", formatAssetType(input.asset.type)],
-      ["Inspected", format(input.inspectedAt, "dd/MM/yyyy HH:mm")],
+      ["Inspected", formatAppPattern(input.inspectedAt, "dd/MM/yyyy HH:mm")],
       ["Inspector", input.inspectorName],
       ...(input.inspectorDetail
         ? ([["Inspector credentials", input.inspectorDetail]] as [string, string][])
@@ -300,7 +303,7 @@ export async function buildInspectionPdf(
             [
               "Approved",
               input.approvedAt
-                ? format(input.approvedAt, "dd/MM/yyyy HH:mm")
+                ? formatAppPattern(input.approvedAt, "dd/MM/yyyy HH:mm")
                 : "—",
             ],
           ] as [string, string][])
@@ -314,7 +317,7 @@ export async function buildInspectionPdf(
             [
               "Reviewed",
               input.reviewedAt
-                ? format(input.reviewedAt, "dd/MM/yyyy HH:mm")
+                ? formatAppPattern(input.reviewedAt, "dd/MM/yyyy HH:mm")
                 : "—",
             ],
           ] as [string, string][])
@@ -327,9 +330,15 @@ export async function buildInspectionPdf(
             ],
             [
               "Chainage",
-              input.asset.parentChainage != null
-                ? String(input.asset.parentChainage)
-                : "—",
+              (() => {
+                const from =
+                  input.asset.chainageFrom ?? input.asset.parentChainage;
+                const to = input.asset.chainageTo;
+                if (from != null && to != null) return `${from} – ${to}`;
+                if (from != null) return String(from);
+                if (to != null) return String(to);
+                return "—";
+              })(),
             ],
           ] as [string, string][])
         : []),
@@ -885,7 +894,7 @@ export async function buildInspectionPdf(
       });
       doc.fillColor(MUTED).font("Helvetica");
       doc.text(
-        `ID ${input.inspectionId.slice(-8).toUpperCase()} · ${generatedBy} ${format(generatedAt, "dd/MM/yyyy H:mm")}`,
+        `ID ${input.inspectionId.slice(-8).toUpperCase()} · ${generatedBy} ${formatAppPattern(generatedAt, "dd/MM/yyyy H:mm")}`,
         MARGIN + 145,
         footerY - 6,
         { lineBreak: false, width: CONTENT_W - 200 },
@@ -909,7 +918,7 @@ export function pdfFilename(input: {
   level: string;
   scopeOnly?: boolean;
 }) {
-  const date = format(input.inspectedAt, "ddMMyyyy");
+  const date = formatAppPattern(input.inspectedAt, "ddMMyyyy");
   const level = formatLevel(input.level).replace(/\s+/g, "");
   const kind = input.scopeOnly ? "Scope" : "InspectionDetailReport";
   return `${input.assetNumber}_${level}_${kind}_${date}.pdf`;

@@ -104,9 +104,15 @@ function folderName(component: string | null | undefined, defectCode?: string) {
   return comp;
 }
 
-export async function GET(
+type ExportOpts = {
+  severities?: string[] | null;
+  photoOrder?: string[] | null;
+};
+
+async function buildClientExportZip(
   req: NextRequest,
   context: { params: Promise<{ id: string }> },
+  opts: ExportOpts = {},
 ) {
   const user = await getCurrentUser();
   if (!user) {
@@ -131,12 +137,16 @@ export async function GET(
   if (!inspection) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (!canViewInspection(user, inspection)) {
+  // Admins always export; inspectors use normal view rules (incl. own drafts)
+  if (user.role !== "ADMIN" && !canViewInspection(user, inspection)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const exportCfg = getExportConfig();
-  const severityParam = req.nextUrl.searchParams.get("severities");
+  const severityParam =
+    opts.severities?.length
+      ? opts.severities.join(",")
+      : req.nextUrl.searchParams.get("severities");
   const severityFilter = severityParam
     ? severityParam
         .split(",")
@@ -215,7 +225,10 @@ export async function GET(
     },
   );
 
-  const orderParam = req.nextUrl.searchParams.get("photoOrder");
+  const orderParam =
+    opts.photoOrder?.length
+      ? opts.photoOrder.join("|")
+      : req.nextUrl.searchParams.get("photoOrder");
   const preferredOrder = orderParam
     ? orderParam.split("|").filter(Boolean)
     : mergeExportPhotoOrder(formPayload.exportPhotoOrder, filteredPool);
@@ -224,20 +237,25 @@ export async function GET(
   // if empty so a condition-state filter does not wipe numbers for other photos.
   let registerRows = await loadPhotoRegister(inspection.id);
   if (!registerRows.length) {
-    const fullOrder = mergeExportPhotoOrder(
-      formPayload.exportPhotoOrder?.length
-        ? formPayload.exportPhotoOrder
-        : preferredOrder,
-      pool,
-    );
-    const items = buildRegisterRewriteItems({
-      orderedKeys: fullOrder,
-      pool,
-      registerRows: [],
-      inspectedAt: inspection.inspectedAt,
-    });
-    await rewritePhotoRegister({ inspectionId: inspection.id, items });
-    registerRows = await loadPhotoRegister(inspection.id);
+    try {
+      const fullOrder = mergeExportPhotoOrder(
+        formPayload.exportPhotoOrder?.length
+          ? formPayload.exportPhotoOrder
+          : preferredOrder,
+        pool,
+      );
+      const items = buildRegisterRewriteItems({
+        orderedKeys: fullOrder,
+        pool,
+        registerRows: [],
+        inspectedAt: inspection.inspectedAt,
+      });
+      await rewritePhotoRegister({ inspectionId: inspection.id, items });
+      registerRows = await loadPhotoRegister(inspection.id);
+    } catch {
+      // Export must still succeed if register persistence fails
+      registerRows = [];
+    }
   }
   const registerByKey = new Map(
     registerRows.map((r) => [
@@ -369,6 +387,31 @@ export async function GET(
     headers: {
       "Content-Type": "application/zip",
       "Content-Disposition": `attachment; filename="${root}.zip"`,
+      "Cache-Control": "no-store",
     },
+  });
+}
+
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  return buildClientExportZip(req, context);
+}
+
+/** POST JSON body avoids proxy 403s from very long photoOrder query strings. */
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  let body: { severities?: string[]; photoOrder?: string[] } = {};
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    body = {};
+  }
+  return buildClientExportZip(req, context, {
+    severities: Array.isArray(body.severities) ? body.severities.map(String) : null,
+    photoOrder: Array.isArray(body.photoOrder) ? body.photoOrder.map(String) : null,
   });
 }

@@ -235,11 +235,15 @@ export function useExportDownload() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function downloadBlob(url: string, fallbackName: string) {
+  async function downloadBlob(
+    url: string,
+    fallbackName: string,
+    init?: RequestInit,
+  ) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: "no-store", ...init });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error || `Export failed (${res.status})`);

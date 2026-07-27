@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
 import { ExportPdfButton } from "@/components/ExportPdfButton";
 import { VentiaPrintLogo } from "@/components/BrandMark";
 
@@ -137,7 +136,12 @@ export function ScopeDefectPicker({
             </div>
             <div>
               <span className="text-[color:var(--ventia-muted)]">Inspected: </span>
-              {format(new Date(submittedAtIso), "dd MMM yyyy")}
+              {new Date(submittedAtIso).toLocaleDateString("en-AU", {
+                timeZone: "Australia/Melbourne",
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })}
             </div>
             <div>
               <span className="text-[color:var(--ventia-muted)]">Inspector: </span>

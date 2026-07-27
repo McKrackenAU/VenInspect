@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { format } from "date-fns";
 
 type AssetRow = {
   id: string;
@@ -108,7 +107,11 @@ export function formatNextDue(
 ): string | null {
   if (status === "overdue") return "Overdue";
   if (status === "due_soon" && nextDueAt) {
-    return `Due soon (${format(nextDueAt, "dd MMM")})`;
+    return `Due soon (${nextDueAt.toLocaleDateString("en-AU", {
+      timeZone: "Australia/Melbourne",
+      day: "2-digit",
+      month: "short",
+    })})`;
   }
   return null;
 }

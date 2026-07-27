@@ -4,14 +4,17 @@ import * as XLSX from "xlsx";
 
 export const ASSET_REGISTRY_TEMPLATE_HEADERS = [
   "Code",
+  "AV ID",
   "Name",
   "Road Name",
   "Type",
+  "Sub Classification",
   "Location",
   "Latitude",
   "Longitude",
   "Classification",
-  "Chainage",
+  "Chainage From",
+  "Chainage To",
   "Notes",
 ] as const;
 

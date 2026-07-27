@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { format } from "date-fns";
+import { formatAppDate } from "@/lib/date-time";
 import {
   migrateLegacyClearanceMeasurements,
   parseFormPayload,
@@ -59,7 +59,7 @@ async function loadHistory(assetId: string): Promise<ClearanceHistoryRow[]> {
       titleLabel: insp.titleLabel,
       level: insp.level,
       status: insp.status,
-      inspectedAt: format(insp.inspectedAt, "yyyy-MM-dd"),
+      inspectedAt: formatAppDate(insp.inspectedAt, "isoDate"),
       measurements: filled.map((m) => ({
         label: m.label || m.id,
         value: m.value,

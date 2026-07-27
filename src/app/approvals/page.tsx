@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { format } from "date-fns";
+import { formatAppDate } from "@/lib/date-time";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import {
@@ -87,7 +87,7 @@ export default async function ApprovalsPage() {
                         level1Qualified: insp.createdBy.level1Qualified,
                         level2Qualified: insp.createdBy.level2Qualified,
                       })}{" "}
-                      · {format(insp.submittedAt, "dd MMM yyyy HH:mm")} ·{" "}
+                      · {formatAppDate(insp.submittedAt, "datetime")} ·{" "}
                       {insp.defects.length} defect
                       {insp.defects.length === 1 ? "" : "s"}
                     </p>
