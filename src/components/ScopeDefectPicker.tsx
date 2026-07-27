@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ExportPdfButton } from "@/components/ExportPdfButton";
+import { ExportReportMenu } from "@/components/ExportReportMenu";
 import { VentiaPrintLogo } from "@/components/BrandMark";
 
 export type ScopeDefect = {
@@ -82,11 +82,11 @@ export function ScopeDefectPicker({
         <span className="text-xs text-[color:var(--ventia-muted)]">
           {chosen.length} of {defects.length} selected
         </span>
-        <ExportPdfButton
+        <ExportReportMenu
           inspectionId={inspectionId}
           defectIds={chosen.map((d) => d.id)}
-          label="Export scope PDF"
-          className="ml-auto rounded-md bg-[color:var(--ventia-green)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          label="Export"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-[color:var(--ventia-green)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
         />
       </div>
 

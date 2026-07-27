@@ -228,6 +228,9 @@ export default async function DashboardPage() {
         <Link href="/assets" className="btn-secondary w-full">
           Find an asset
         </Link>
+        <Link href="/reports" className="btn-secondary w-full">
+          Submitted reports
+        </Link>
         {pendingCount > 0 && (
           <Link
             href="/approvals"

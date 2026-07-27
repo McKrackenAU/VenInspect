@@ -13,6 +13,7 @@ const userLinks = [
   { href: "/map", label: "Map" },
   { href: "/assets", label: "Find asset" },
   { href: "/inspect", label: "Start inspection" },
+  { href: "/reports", label: "Reports" },
   { href: "/approvals", label: "Approvals" },
 ];
 

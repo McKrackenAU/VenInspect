@@ -7,7 +7,7 @@ import { canViewInspection } from "@/lib/inspection-access";
 import { formatLevel, formatRoadWithParentCode, formatStatus } from "@/lib/inspection";
 import { severityLabel, getSeverityOptions } from "@/lib/severities";
 import { getExportConfig } from "@/lib/export-config";
-import { ExportPdfButton } from "@/components/ExportPdfButton";
+import { ExportReportMenu } from "@/components/ExportReportMenu";
 import { ClientExportButton } from "@/components/ClientExportButton";
 import { VentiaPrintLogo } from "@/components/BrandMark";
 import { SecondReviewPanel } from "@/components/SecondReviewPanel";
@@ -94,9 +94,9 @@ export default async function InspectionReportPage({
               </button>
             </form>
           ) : null}
-          <ExportPdfButton
+          <ExportReportMenu
             inspectionId={inspection.id}
-            label="Export PDF"
+            label="Export"
             conditionStates={conditionStates}
             defaultSelected={exportCfg.defaultConditionStates}
             allowConditionFilter={exportCfg.filterPdfByConditionStates}

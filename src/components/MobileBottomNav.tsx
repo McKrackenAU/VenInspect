@@ -36,7 +36,11 @@ export function MobileBottomNav() {
   }
 
   // Hide on print / report-heavy pages where bottom chrome gets in the way
-  if (pathname.includes("/report") || pathname.includes("/scope")) {
+  // (not the /reports list — only inspection report/scope sheets)
+  if (
+    /\/inspections\/[^/]+\/(report|scope)/.test(pathname) ||
+    pathname.includes("/client-export")
+  ) {
     return null;
   }
 
