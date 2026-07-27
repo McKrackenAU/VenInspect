@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   StyledFileInput,
   TemplateDownloadButtons,
@@ -20,9 +20,8 @@ type ImportErr = {
   error?: string;
 };
 
-export function AssetImportForm() {
+export function AssetImportForm({ importTicket }: { importTicket: string }) {
   const [pending, startTransition] = useTransition();
-  const [sessionReady, setSessionReady] = useState(false);
   const [result, setResult] = useState<{
     created: number;
     updated: number;
@@ -31,24 +30,6 @@ export function AssetImportForm() {
     errors: string[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const syncSession = useCallback(async () => {
-    try {
-      await fetch("/api/manage/session-sync", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-      });
-    } catch {
-      /* non-fatal */
-    } finally {
-      setSessionReady(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    void syncSession();
-  }, [syncSession]);
 
   return (
     <div className="space-y-4">
@@ -62,14 +43,16 @@ export function AssetImportForm() {
           const fd = new FormData(form);
           startTransition(async () => {
             try {
-              // Ensure cookie role matches DB before multipart auth.
-              await syncSession();
-
               const res = await fetch("/api/manage/asset-import", {
                 method: "POST",
                 body: fd,
                 credentials: "include",
                 cache: "no-store",
+                headers: {
+                  // Multipart uploads sometimes omit/lose cookies behind proxies.
+                  // This ticket is minted on the Import page after requireAdmin().
+                  "X-VenInspect-Import-Ticket": importTicket,
+                },
               });
 
               const text = await res.text();
@@ -89,13 +72,13 @@ export function AssetImportForm() {
                 if (res.status === 401) {
                   throw new Error(
                     msg ||
-                      "Not signed in. Refresh, sign in again, then retry the import.",
+                      "Not signed in. Refresh the Import page and try again.",
                   );
                 }
                 if (res.status === 403) {
                   throw new Error(
                     msg ||
-                      "Admin access required. In Manage → Users, confirm Role=Admin on your account, then sign out and back in.",
+                      "Admin access required. Refresh this Import page, then retry.",
                   );
                 }
                 throw new Error(msg || `Import failed (HTTP ${res.status})`);
@@ -162,14 +145,10 @@ export function AssetImportForm() {
 
         <button
           type="submit"
-          disabled={pending || !sessionReady}
+          disabled={pending}
           className="btn-primary-inline w-full sm:w-auto"
         >
-          {pending
-            ? "Importing…"
-            : !sessionReady
-              ? "Preparing…"
-              : "Import assets"}
+          {pending ? "Importing…" : "Import assets"}
         </button>
 
         {error ? (

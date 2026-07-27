@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAssetImport } from "@/lib/asset-import-run";
 import { getCurrentUser } from "@/lib/auth";
+import { verifyAssetImportTicket } from "@/lib/import-ticket";
 import { requireAdminFromRequest } from "@/lib/request-auth";
 import { isAdminRole } from "@/lib/roles";
 
@@ -11,32 +12,42 @@ export const maxDuration = 300;
 
 /**
  * POST multipart: file=registry workbook, mode=upsert|skip
- * Preferred path for bulk asset import (avoids server-action flight failures).
+ *
+ * Auth (any one is enough):
+ * 1. X-VenInspect-Import-Ticket / ?ticket= — minted by the Import page after
+ *    requireAdmin() (survives multipart Cookie quirks)
+ * 2. Session cookie on the request
+ * 3. cookies() / getCurrentUser() fallback
  */
 export async function POST(req: NextRequest) {
-  // Prefer request cookies (multipart-safe), then fall back to cookies()/DB user.
-  const fromReq = await requireAdminFromRequest(req);
-  let adminUser = fromReq.user ?? null;
+  const ticket =
+    req.headers.get("x-veninspect-import-ticket") ||
+    req.nextUrl.searchParams.get("ticket") ||
+    "";
 
-  if (!adminUser) {
-    const current = await getCurrentUser();
-    if (current && isAdminRole(current.role, current.username)) {
-      adminUser = current;
+  const ticketUser = await verifyAssetImportTicket(ticket);
+  let authed = Boolean(ticketUser);
+
+  if (!authed) {
+    const fromReq = await requireAdminFromRequest(req);
+    if (fromReq.user) {
+      authed = true;
+    } else {
+      const current = await getCurrentUser();
+      if (current && isAdminRole(current.role, current.username)) {
+        authed = true;
+      }
     }
   }
 
-  if (!adminUser) {
-    const status = fromReq.error?.status ?? 403;
-    const payload = fromReq.error
-      ? await fromReq.error
-          .clone()
-          .json()
-          .catch(() => ({ error: "Admin access required." }))
-      : {
-          error:
-            "Admin access required. Open Manage → Users, confirm Role=Admin, sign out and back in, then retry.",
-        };
-    return NextResponse.json(payload, { status });
+  if (!authed) {
+    return NextResponse.json(
+      {
+        error:
+          "Admin access required. Refresh the Import page (so a new import ticket is issued), then try again. If it still fails, sign out and back in.",
+      },
+      { status: 403 },
+    );
   }
 
   let formData: FormData;
@@ -46,7 +57,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Could not read the upload body. If this keeps happening, export as CSV and retry.",
+          "Could not read the upload body. Export as CSV and retry if this continues.",
       },
       { status: 413 },
     );
@@ -62,7 +73,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ~200 assets is tiny; keep a generous ceiling for Asset Vision dumps.
   if (file.size > 40 * 1024 * 1024) {
     return NextResponse.json(
       { error: "File too large (max 40 MB)." },
