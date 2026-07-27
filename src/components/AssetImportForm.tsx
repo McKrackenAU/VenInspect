@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   StyledFileInput,
   TemplateDownloadButtons,
@@ -18,9 +18,10 @@ type ImportOk = {
 type ImportErr = {
   ok?: false;
   error?: string;
+  debug?: Record<string, unknown>;
 };
 
-export function AssetImportForm({ importTicket }: { importTicket: string }) {
+export function AssetImportForm({ importGrant }: { importGrant: string }) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<{
     created: number;
@@ -30,22 +31,6 @@ export function AssetImportForm({ importTicket }: { importTicket: string }) {
     errors: string[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const syncSession = useCallback(async () => {
-    try {
-      await fetch("/api/manage/session-sync", {
-        method: "POST",
-        credentials: "include",
-        cache: "no-store",
-      });
-    } catch {
-      /* non-fatal — ticket auth still works */
-    }
-  }, []);
-
-  useEffect(() => {
-    void syncSession();
-  }, [syncSession]);
 
   return (
     <div className="space-y-4">
@@ -59,22 +44,19 @@ export function AssetImportForm({ importTicket }: { importTicket: string }) {
           const fd = new FormData(form);
           startTransition(async () => {
             try {
-              await syncSession();
-
               const file = fd.get("file");
               const mode = String(fd.get("mode") ?? "upsert");
               if (!(file instanceof File) || file.size === 0) {
                 throw new Error("Choose an Excel (.xlsx) or CSV file");
               }
 
+              // Short grant in the query only — no long HMAC, no Cookie dependency.
               const params = new URLSearchParams({
                 mode,
                 filename: file.name || "import.xlsx",
-                ticket: importTicket,
+                grant: importGrant,
               });
 
-              // Raw body + ticket query/header — avoids multipart Cookie loss
-              // behind reverse proxies that broke admin auth on FormData posts.
               const res = await fetch(
                 `/api/manage/asset-import?${params.toString()}`,
                 {
@@ -83,9 +65,8 @@ export function AssetImportForm({ importTicket }: { importTicket: string }) {
                   credentials: "include",
                   cache: "no-store",
                   headers: {
-                    // Always octet-stream so the API never tries multipart parse.
                     "Content-Type": "application/octet-stream",
-                    "X-VenInspect-Import-Ticket": importTicket,
+                    "X-VenInspect-Import-Grant": importGrant,
                   },
                 },
               );
@@ -107,13 +88,18 @@ export function AssetImportForm({ importTicket }: { importTicket: string }) {
                 if (res.status === 401) {
                   throw new Error(
                     msg ||
-                      "Not signed in. Refresh the Import page and try again.",
+                      "Not signed in. Open the Import page again, then retry.",
                   );
                 }
                 if (res.status === 403) {
                   throw new Error(
                     msg ||
-                      "Admin access required. Hard-refresh this Import page, then retry.",
+                      "Admin access required. Open Import again (fresh grant), then retry.",
+                  );
+                }
+                if (!body && text.startsWith("<")) {
+                  throw new Error(
+                    `Import blocked (HTTP ${res.status}). The reverse proxy returned HTML instead of the API — check body size limits, then open Import again.`,
                   );
                 }
                 throw new Error(msg || `Import failed (HTTP ${res.status})`);

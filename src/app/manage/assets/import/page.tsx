@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
-import { signAssetImportTicket } from "@/lib/import-ticket";
+import { createAssetImportGrant } from "@/lib/import-grant";
 import { AssetImportForm } from "@/components/AssetImportForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function ManageAssetImportPage() {
-  // Layout already requires admin; re-load here so we can mint an import ticket
-  // tied to this admin session (multipart uploads can drop/omit cookies).
+  // Layout already requires admin; mint a short opaque grant so the upload
+  // API does not depend on Cookie headers or long HMAC query tokens.
   const admin = await requireAdmin();
-  const importTicket = await signAssetImportTicket(admin);
+  const importGrant = createAssetImportGrant(admin);
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
@@ -32,7 +32,7 @@ export default async function ManageAssetImportPage() {
           of hundreds of assets are supported.
         </p>
       </div>
-      <AssetImportForm importTicket={importTicket} />
+      <AssetImportForm importGrant={importGrant} />
     </div>
   );
 }

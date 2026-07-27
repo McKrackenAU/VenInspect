@@ -70,22 +70,6 @@ function isAssetImportPath(pathname: string): boolean {
   );
 }
 
-/** Page-minted HMAC ticket — lets import proceed even if Cookie was stripped. */
-async function hasValidImportTicket(request: NextRequest): Promise<boolean> {
-  if (!isAssetImportPath(request.nextUrl.pathname)) return false;
-  const ticket =
-    request.headers.get("x-veninspect-import-ticket") ||
-    request.nextUrl.searchParams.get("ticket") ||
-    "";
-  if (!ticket.trim()) return false;
-  const payload = await verifySession(ticket.trim(), sessionSecret());
-  return Boolean(
-    payload &&
-      payload.role === "ADMIN" &&
-      payload.name.startsWith("asset-import:"),
-  );
-}
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -98,6 +82,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Asset import auth is enforced in the route handler (short grant / ticket /
+  // session). Do not gate here — large uploads often lose Cookie headers, and
+  // Edge middleware cannot read DATA_DIR grants.
+  if (isAssetImportPath(pathname)) {
+    return NextResponse.next();
+  }
+
   const token = readSessionTokenFromRequest(request);
   const session = token ? await verifySession(token, sessionSecret()) : null;
   const admin = isAdminSession(session);
@@ -105,7 +96,6 @@ export async function middleware(request: NextRequest) {
   const isServerAction =
     request.headers.has("Next-Action") ||
     request.headers.has("next-action");
-  const importTicketOk = await hasValidImportTicket(request);
 
   // Bare host / IP with no session → login (clean URL, no ?next=/)
   if (!session && (pathname === "/" || pathname === "")) {
@@ -134,11 +124,6 @@ export async function middleware(request: NextRequest) {
       url.search = "";
       return NextResponse.redirect(url);
     }
-    return NextResponse.next();
-  }
-
-  // Asset import may authenticate solely via page-minted ticket (Cookie optional).
-  if (!session && importTicketOk) {
     return NextResponse.next();
   }
 
