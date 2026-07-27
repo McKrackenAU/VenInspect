@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
 import { parseAssetWorkbook } from "@/lib/asset-import";
+import { requireAdminFromRequest } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,17 +12,18 @@ export const dynamic = "force-dynamic";
  * Prefer this over the server action — large Excel uploads are more reliable.
  */
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user || user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const auth = await requireAdminFromRequest(req);
+  if (auth.error) return auth.error;
 
   let formData: FormData;
   try {
     formData = await req.formData();
   } catch {
     return NextResponse.json(
-      { error: "Could not read upload. Try a smaller file or CSV." },
+      {
+        error:
+          "Could not read upload. File may be too large for the server — try CSV or a smaller workbook.",
+      },
       { status: 413 },
     );
   }
@@ -34,6 +35,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "Choose an Excel (.xlsx) or CSV file" },
       { status: 400 },
+    );
+  }
+
+  // Soft guard — huge Asset Vision dumps should still work; warn via errors
+  if (file.size > 25 * 1024 * 1024) {
+    return NextResponse.json(
+      { error: "File too large (max 25 MB). Split the workbook or use CSV." },
+      { status: 413 },
     );
   }
 

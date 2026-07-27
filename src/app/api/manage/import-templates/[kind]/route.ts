@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   ASSET_AUDIT_TEMPLATE_HEADERS,
   ASSET_COMPONENTS_TEMPLATE_HEADERS,
@@ -6,7 +6,7 @@ import {
   csvFromHeaders,
   xlsxBufferFromHeaders,
 } from "@/lib/import-templates";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminFromRequest } from "@/lib/request-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,10 +66,11 @@ const TEMPLATES: Record<
 };
 
 export async function GET(
-  req: Request,
+  req: NextRequest,
   context: { params: Promise<{ kind: string }> },
 ) {
-  await requireAdmin();
+  const auth = await requireAdminFromRequest(req);
+  if (auth.error) return auth.error;
   const { kind } = await context.params;
   const def = TEMPLATES[kind];
   if (!def) {

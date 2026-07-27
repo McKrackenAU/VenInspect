@@ -25,35 +25,70 @@ export function AssetImportForm() {
           e.preventDefault();
           setError(null);
           setResult(null);
-          const fd = new FormData(e.currentTarget);
+          const form = e.currentTarget;
+          const fd = new FormData(form);
           startTransition(async () => {
             try {
               const res = await fetch("/api/manage/asset-import", {
                 method: "POST",
                 body: fd,
+                credentials: "same-origin",
+                // Let the browser set multipart boundary — do not set Content-Type
               });
-              const body = (await res.json().catch(() => null)) as {
+              const text = await res.text();
+              type ImportBody = {
                 error?: string;
                 created?: number;
                 updated?: number;
                 skipped?: number;
                 total?: number;
                 errors?: string[];
-              } | null;
+              };
+              let body: ImportBody | null = null;
+              try {
+                body = text ? (JSON.parse(text) as ImportBody) : null;
+              } catch {
+                body = null;
+              }
+              const errMsg = body?.error;
+
               if (!res.ok) {
+                if (res.status === 401) {
+                  throw new Error(
+                    errMsg ||
+                      "Not signed in. Refresh the page and sign in again, then retry the import.",
+                  );
+                }
+                if (res.status === 403) {
+                  throw new Error(
+                    errMsg ||
+                      "Admin access required. Sign in with an admin account and retry.",
+                  );
+                }
+                if (res.status === 413) {
+                  throw new Error(
+                    errMsg ||
+                      "File too large for the server. Try CSV or a smaller workbook.",
+                  );
+                }
                 throw new Error(
-                  body?.error ||
-                    (res.status === 413
-                      ? "File too large for the server"
+                  errMsg ||
+                    (text && !text.startsWith("<")
+                      ? text.slice(0, 200)
                       : `Import failed (${res.status})`),
                 );
               }
+
+              if (!body) {
+                throw new Error("Unexpected response from server (not JSON).");
+              }
+
               setResult({
-                created: body?.created ?? 0,
-                updated: body?.updated ?? 0,
-                skipped: body?.skipped ?? 0,
-                total: body?.total ?? 0,
-                errors: body?.errors ?? [],
+                created: body.created ?? 0,
+                updated: body.updated ?? 0,
+                skipped: body.skipped ?? 0,
+                total: body.total ?? 0,
+                errors: body.errors ?? [],
               });
             } catch (err) {
               setError(err instanceof Error ? err.message : "Import failed");

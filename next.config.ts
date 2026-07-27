@@ -7,11 +7,13 @@ const nextConfig: NextConfig = {
     "@prisma/client",
     "@prisma/adapter-libsql",
   ],
-  // Phone camera photos are often 3–12 MB; default server-action limit is ~1 MB.
+  // Phone camera photos / Excel registry imports can be several MB.
   experimental: {
     serverActions: {
       bodySizeLimit: "20mb",
     },
+    // Next 16 proxies/clones bodies through middleware — raise with uploads.
+    proxyClientMaxBodySize: "20mb",
   },
 };
 

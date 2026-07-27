@@ -68,11 +68,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Admin portal pages
   if (pathname.startsWith("/manage") && session.role !== "ADMIN") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
     return NextResponse.redirect(url);
+  }
+
+  // Admin APIs — return JSON 403 (not an HTML redirect) so fetch() clients
+  // can show a clear message instead of following a redirect to "/".
+  if (pathname.startsWith("/api/manage") && session.role !== "ADMIN") {
+    return NextResponse.json(
+      { error: "Admin access required." },
+      { status: 403 },
+    );
   }
 
   return NextResponse.next();
