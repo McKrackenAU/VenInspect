@@ -47,7 +47,7 @@ export async function POST(
     inspectionId: id,
     userId: user.id,
   });
-  startClientExportBuild(job.id, { ...user }, id, {
+  const building = startClientExportBuild(job.id, { ...user }, id, {
     severities: Array.isArray(body.severities)
       ? body.severities.map(String)
       : null,
@@ -55,12 +55,24 @@ export async function POST(
       ? body.photoOrder.map(String)
       : null,
   });
+  await Promise.race([
+    building,
+    new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+  ]);
+  const latest = readClientExportJob(job.id) ?? job;
 
   return NextResponse.json({
     ok: true,
-    jobId: job.id,
-    token: job.token,
-    status: "pending" as const,
+    jobId: latest.id,
+    token: latest.token,
+    status: latest.status,
+    filename: latest.filename,
+    error: latest.error,
+    ready: latest.status === "ready",
+    downloadUrl:
+      latest.status === "ready" && latest.token
+        ? clientExportFileUrl(latest)
+        : null,
   });
 }
 

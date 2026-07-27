@@ -5,16 +5,19 @@ import {
 } from "@/lib/client-export-assemble";
 
 /**
- * Kick off ZIP build without holding the HTTP response open (Cloudflare timeout).
- * Safe on the long-lived Node/LXC process.
+ * Start ZIP build without relying on setImmediate (unreliable after the
+ * HTTP response finishes in some Next.js deployments).
+ * Returns the in-flight promise so callers can optionally wait a beat.
  */
 export function startClientExportBuild(
   jobId: string,
   user: AuthUser,
   inspectionId: string,
   opts: ClientExportOpts,
-) {
-  setImmediate(() => {
-    void runClientExportJob(jobId, user, inspectionId, opts);
-  });
+): Promise<void> {
+  // Floating promise on the long-lived Node process — do not use setImmediate.
+  const running = runClientExportJob(jobId, user, inspectionId, opts);
+  // Prevent unhandled rejection
+  void running.catch(() => {});
+  return running;
 }
