@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import type { AuthUser } from "@/lib/auth";
 import { getCurrentUser } from "@/lib/auth";
 import { canViewInspection } from "@/lib/inspection-access";
 import { absolutePhotoPath, sanitizePathSegment } from "@/lib/paths";
@@ -24,10 +25,19 @@ import {
   rewritePhotoRegister,
 } from "@/lib/photo-register";
 import { formatDotPhotoName } from "@/lib/dot-photo-register";
+import {
+  createClientExportJob,
+  jobZipPath,
+  readClientExportJob,
+  updateClientExportJob,
+  writeClientExportZip,
+} from "@/lib/client-export-job";
 import * as XLSX from "xlsx";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** Allow long ZIP builds (many photos + PDF) on the Node server. */
+export const maxDuration = 300;
 
 /** Minimal ZIP (store only) for client export packs. */
 function crc32(buf: Buffer): number {
@@ -109,18 +119,16 @@ type ExportOpts = {
   photoOrder?: string[] | null;
 };
 
-async function buildClientExportZip(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> },
+async function assembleClientExport(
+  user: AuthUser,
+  inspectionId: string,
   opts: ExportOpts = {},
-) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  }
-  const { id } = await context.params;
+): Promise<
+  | { zip: Buffer; filename: string }
+  | { error: string; status: number }
+> {
   const inspection = await prisma.inspection.findUnique({
-    where: { id },
+    where: { id: inspectionId },
     include: {
       asset: true,
       createdBy: true,
@@ -135,18 +143,17 @@ async function buildClientExportZip(
     },
   });
   if (!inspection) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return { error: "Not found", status: 404 };
   }
   // Admins always export; inspectors use normal view rules (incl. own drafts)
   if (user.role !== "ADMIN" && !canViewInspection(user, inspection)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return { error: "Forbidden", status: 403 };
   }
 
   const exportCfg = getExportConfig();
-  const severityParam =
-    opts.severities?.length
-      ? opts.severities.join(",")
-      : req.nextUrl.searchParams.get("severities");
+  const severityParam = opts.severities?.length
+    ? opts.severities.join(",")
+    : null;
   const severityFilter = severityParam
     ? severityParam
         .split(",")
@@ -225,10 +232,9 @@ async function buildClientExportZip(
     },
   );
 
-  const orderParam =
-    opts.photoOrder?.length
-      ? opts.photoOrder.join("|")
-      : req.nextUrl.searchParams.get("photoOrder");
+  const orderParam = opts.photoOrder?.length
+    ? opts.photoOrder.join("|")
+    : null;
   const preferredOrder = orderParam
     ? orderParam.split("|").filter(Boolean)
     : mergeExportPhotoOrder(formPayload.exportPhotoOrder, filteredPool);
@@ -371,10 +377,10 @@ async function buildClientExportZip(
   }
 
   if (zipFiles.length === 0) {
-    return NextResponse.json(
-      { error: "Export configurator excluded all pack contents" },
-      { status: 400 },
-    );
+    return {
+      error: "Export configurator excluded all pack contents",
+      status: 400,
+    };
   }
 
   const nested = zipFiles.map((f) => ({
@@ -383,35 +389,186 @@ async function buildClientExportZip(
   }));
   const zip = zipStore(nested);
 
-  return new NextResponse(new Uint8Array(zip), {
-    headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${root}.zip"`,
-      "Cache-Control": "no-store",
-    },
-  });
+  return {
+    zip,
+    filename: `${root}.zip`,
+  };
 }
 
-export async function GET(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> },
+async function runExportJob(
+  jobId: string,
+  user: AuthUser,
+  inspectionId: string,
+  opts: ExportOpts,
 ) {
-  return buildClientExportZip(req, context);
+  try {
+    const result = await assembleClientExport(user, inspectionId, opts);
+    if ("error" in result) {
+      updateClientExportJob(jobId, {
+        status: "error",
+        error: result.error,
+      });
+      return;
+    }
+    writeClientExportZip(jobId, result.zip);
+    updateClientExportJob(jobId, {
+      status: "ready",
+      filename: result.filename,
+      error: null,
+    });
+  } catch (e) {
+    updateClientExportJob(jobId, {
+      status: "error",
+      error: e instanceof Error ? e.message : "Export failed",
+    });
+  }
 }
 
-/** POST JSON body avoids proxy 403s from very long photoOrder query strings. */
+/** Start a background export job — returns small JSON (Cloudflare-friendly). */
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+  const { id } = await context.params;
+  const inspection = await prisma.inspection.findUnique({
+    where: { id },
+    select: { id: true, createdById: true, status: true },
+  });
+  if (!inspection) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (user.role !== "ADMIN" && !canViewInspection(user, inspection)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   let body: { severities?: string[]; photoOrder?: string[] } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
     body = {};
   }
-  return buildClientExportZip(req, context, {
-    severities: Array.isArray(body.severities) ? body.severities.map(String) : null,
-    photoOrder: Array.isArray(body.photoOrder) ? body.photoOrder.map(String) : null,
+
+  const job = createClientExportJob({
+    inspectionId: id,
+    userId: user.id,
   });
+  const opts: ExportOpts = {
+    severities: Array.isArray(body.severities)
+      ? body.severities.map(String)
+      : null,
+    photoOrder: Array.isArray(body.photoOrder)
+      ? body.photoOrder.map(String)
+      : null,
+  };
+
+  // Snapshot user for the background worker — cookie/async context is gone
+  // after this response returns (and Cloudflare must not wait on the ZIP).
+  const exportUser = { ...user };
+  setImmediate(() => {
+    void runExportJob(job.id, exportUser, id, opts);
+  });
+
+  return NextResponse.json({
+    ok: true,
+    jobId: job.id,
+    status: "pending" as const,
+  });
+}
+
+/**
+ * Job status (`?job=`) or ZIP download (`?job=&download=1`).
+ * Legacy bare GET starts a default-options job (poll + download).
+ */
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+  const { id } = await context.params;
+  const jobId = req.nextUrl.searchParams.get("job");
+  const wantDownload = req.nextUrl.searchParams.get("download") === "1";
+
+  if (jobId) {
+    const job = readClientExportJob(jobId);
+    if (!job || job.inspectionId !== id) {
+      return NextResponse.json(
+        { error: "Export job not found" },
+        { status: 404 },
+      );
+    }
+    if (job.userId !== user.id && user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (wantDownload) {
+      if (job.status !== "ready") {
+        return NextResponse.json(
+          {
+            status: job.status,
+            error: job.error,
+            ready: false,
+          },
+          { status: job.status === "error" ? 500 : 202 },
+        );
+      }
+      try {
+        const zipPath = jobZipPath(job.id);
+        const data = await fs.readFile(zipPath);
+        const filename = job.filename || "client-export.zip";
+        return new NextResponse(new Uint8Array(data), {
+          headers: {
+            "Content-Type": "application/zip",
+            "Content-Disposition": `attachment; filename="${filename}"`,
+            "Cache-Control": "no-store",
+            "Content-Length": String(data.length),
+          },
+        });
+      } catch {
+        return NextResponse.json(
+          { error: "Export file missing — try again" },
+          { status: 404 },
+        );
+      }
+    }
+    return NextResponse.json({
+      ok: true,
+      jobId: job.id,
+      status: job.status,
+      filename: job.filename,
+      error: job.error,
+      ready: job.status === "ready",
+    });
+  }
+
+  // Legacy: kick off a default job so old GET links keep working via poll.
+  const inspection = await prisma.inspection.findUnique({
+    where: { id },
+    select: { id: true, createdById: true, status: true },
+  });
+  if (!inspection) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (user.role !== "ADMIN" && !canViewInspection(user, inspection)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const job = createClientExportJob({ inspectionId: id, userId: user.id });
+  const exportUser = { ...user };
+  setImmediate(() => {
+    void runExportJob(job.id, exportUser, id, {});
+  });
+  return NextResponse.json(
+    {
+      ok: true,
+      jobId: job.id,
+      status: "pending" as const,
+      message: "Export started — poll ?job= and download with &download=1",
+    },
+    { status: 202 },
+  );
 }

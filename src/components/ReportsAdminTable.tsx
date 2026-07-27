@@ -119,7 +119,69 @@ export function ReportsAdminTable({ rows }: { rows: ReportAdminRow[] }) {
     setExportBusy(true);
     try {
       for (const row of live) {
-        const res = await fetch(row.exportHref, { cache: "no-store" });
+        const startRes = await fetch(
+          `/api/inspections/${row.id}/client-export`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: "{}",
+          },
+        );
+        if (!startRes.ok) {
+          const body = (await startRes.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          const ct = startRes.headers.get("content-type") || "";
+          if (ct.includes("text/html") || startRes.status === 403) {
+            throw new Error(
+              `Export blocked for ${row.titleLabel} (proxy/WAF or permissions). Try again shortly.`,
+            );
+          }
+          throw new Error(
+            body?.error || `Export failed for ${row.titleLabel}`,
+          );
+        }
+        const started = (await startRes.json()) as { jobId?: string };
+        if (!started.jobId) {
+          throw new Error(`Export failed for ${row.titleLabel}`);
+        }
+        const deadline = Date.now() + 5 * 60 * 1000;
+        let filename = `${row.assetNumber}_${row.id.slice(-6)}_ClientExport.zip`;
+        for (;;) {
+          if (Date.now() > deadline) {
+            throw new Error(`Export timed out for ${row.titleLabel}`);
+          }
+          await new Promise((r) => setTimeout(r, 900));
+          const statusRes = await fetch(
+            `/api/inspections/${row.id}/client-export?job=${encodeURIComponent(started.jobId)}`,
+            { cache: "no-store" },
+          );
+          const status = (await statusRes.json().catch(() => null)) as {
+            status?: string;
+            ready?: boolean;
+            filename?: string | null;
+            error?: string | null;
+          } | null;
+          if (!statusRes.ok) {
+            throw new Error(
+              status?.error || `Export failed for ${row.titleLabel}`,
+            );
+          }
+          if (status?.status === "error") {
+            throw new Error(
+              status.error || `Export failed for ${row.titleLabel}`,
+            );
+          }
+          if (status?.ready || status?.status === "ready") {
+            if (status.filename) filename = status.filename;
+            break;
+          }
+        }
+        const res = await fetch(
+          `/api/inspections/${row.id}/client-export?job=${encodeURIComponent(started.jobId)}&download=1`,
+          { cache: "no-store" },
+        );
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as {
             error?: string;
@@ -132,7 +194,7 @@ export function ReportsAdminTable({ rows }: { rows: ReportAdminRow[] }) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `${row.assetNumber}_${row.id.slice(-6)}_ClientExport.zip`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         a.remove();
