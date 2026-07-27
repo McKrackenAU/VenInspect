@@ -119,34 +119,38 @@ export function ReportsAdminTable({ rows }: { rows: ReportAdminRow[] }) {
     setExportBusy(true);
     try {
       for (const row of live) {
-        const startRes = await fetch(
-          `/api/inspections/${row.id}/client-export`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            cache: "no-store",
-            body: "{}",
-          },
-        );
+        const fd = new FormData();
+        fd.set("inspectionId", row.id);
+        const startRes = await fetch("/api/exports/start", {
+          method: "POST",
+          cache: "no-store",
+          body: fd,
+        });
+        const startText = await startRes.text();
         if (!startRes.ok) {
-          const body = (await startRes.json().catch(() => null)) as {
-            error?: string;
-          } | null;
-          const ct = startRes.headers.get("content-type") || "";
-          if (ct.includes("text/html") || startRes.status === 403) {
+          if (/^\s*</.test(startText) || startRes.status === 403) {
             throw new Error(
-              `Export blocked for ${row.titleLabel} (proxy/WAF or permissions). Try again shortly.`,
+              `Export blocked for ${row.titleLabel} (proxy/WAF). Try again shortly.`,
             );
           }
-          throw new Error(
-            body?.error || `Export failed for ${row.titleLabel}`,
-          );
+          let msg = `Export failed for ${row.titleLabel}`;
+          try {
+            const body = JSON.parse(startText) as { error?: string };
+            if (body.error) msg = body.error;
+          } catch {
+            /* keep */
+          }
+          throw new Error(msg);
         }
-        const started = (await startRes.json()) as { jobId?: string };
+        const started = JSON.parse(startText) as {
+          jobId?: string;
+          token?: string;
+        };
         if (!started.jobId) {
           throw new Error(`Export failed for ${row.titleLabel}`);
         }
         const deadline = Date.now() + 5 * 60 * 1000;
+        let downloadUrl: string | null = null;
         let filename = `${row.assetNumber}_${row.id.slice(-6)}_ClientExport.zip`;
         for (;;) {
           if (Date.now() > deadline) {
@@ -154,7 +158,7 @@ export function ReportsAdminTable({ rows }: { rows: ReportAdminRow[] }) {
           }
           await new Promise((r) => setTimeout(r, 900));
           const statusRes = await fetch(
-            `/api/inspections/${row.id}/client-export?job=${encodeURIComponent(started.jobId)}`,
+            `/api/exports/start?job=${encodeURIComponent(started.jobId)}`,
             { cache: "no-store" },
           );
           const status = (await statusRes.json().catch(() => null)) as {
@@ -162,6 +166,8 @@ export function ReportsAdminTable({ rows }: { rows: ReportAdminRow[] }) {
             ready?: boolean;
             filename?: string | null;
             error?: string | null;
+            downloadUrl?: string | null;
+            token?: string;
           } | null;
           if (!statusRes.ok) {
             throw new Error(
@@ -175,31 +181,24 @@ export function ReportsAdminTable({ rows }: { rows: ReportAdminRow[] }) {
           }
           if (status?.ready || status?.status === "ready") {
             if (status.filename) filename = status.filename;
+            downloadUrl =
+              status.downloadUrl ||
+              (status.token
+                ? `/api/exports/file/${started.jobId}?token=${encodeURIComponent(status.token)}&name=${encodeURIComponent(filename)}`
+                : null);
             break;
           }
         }
-        const res = await fetch(
-          `/api/inspections/${row.id}/client-export?job=${encodeURIComponent(started.jobId)}&download=1`,
-          { cache: "no-store" },
-        );
-        if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as {
-            error?: string;
-          } | null;
-          throw new Error(
-            body?.error || `Export failed for ${row.titleLabel}`,
-          );
+        if (!downloadUrl) {
+          throw new Error(`No download link for ${row.titleLabel}`);
         }
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
+        a.href = downloadUrl;
         a.download = filename;
+        a.rel = "noopener";
         document.body.appendChild(a);
         a.click();
         a.remove();
-        URL.revokeObjectURL(url);
-        // Brief pause so browsers don’t drop parallel downloads
         await new Promise((r) => setTimeout(r, 400));
       }
       setMessage(`Downloaded ${live.length} client export ZIP(s).`);

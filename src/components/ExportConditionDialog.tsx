@@ -246,38 +246,28 @@ export function useExportDownload() {
       const res = await fetch(url, { cache: "no-store", ...init });
       const contentType = res.headers.get("content-type") || "";
       if (!res.ok) {
-        if (
-          contentType.includes("text/html") ||
-          res.status === 403 ||
-          res.status === 429 ||
-          res.status === 524
-        ) {
-          const text = await res.text().catch(() => "");
-          if (
-            /cloudflare|cf-ray|attention required|rate limited|just a moment/i.test(
-              text,
-            ) ||
-            contentType.includes("text/html")
-          ) {
-            throw new Error(
-              res.status === 429
-                ? "Cloudflare rate-limited this download — wait a minute and try again."
-                : "Cloudflare blocked this download (proxy/WAF). Try again, or use the LAN/Gitea URL if this keeps happening.",
-            );
-          }
-          try {
-            const body = JSON.parse(text) as { error?: string };
-            throw new Error(body?.error || `Export failed (${res.status})`);
-          } catch (e) {
-            if (e instanceof Error && !e.message.startsWith("Export failed") && !e.message.includes("Cloudflare") && !e.message.includes("Unexpected"))
-              throw e;
-            throw new Error(`Export failed (${res.status})`);
-          }
+        const text = await res.text().catch(() => "");
+        const isHtml = /^\s*</.test(text);
+        const looksLikeCloudflare =
+          isHtml &&
+          /cloudflare|cf-ray|attention required|rate limited|just a moment/i.test(
+            text,
+          );
+        if (looksLikeCloudflare || (isHtml && (res.status === 403 || res.status === 429 || res.status === 524))) {
+          throw new Error(
+            res.status === 429
+              ? "Cloudflare rate-limited this download — wait a minute and try again."
+              : "Cloudflare blocked this download (proxy/WAF). Try again, or use the LAN URL if this keeps happening.",
+          );
         }
-        const body = (await res.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        throw new Error(body?.error || `Export failed (${res.status})`);
+        try {
+          const body = JSON.parse(text) as { error?: string };
+          throw new Error(body?.error || `Export failed (${res.status})`);
+        } catch (e) {
+          if (e instanceof Error && e.message && !e.message.startsWith("Unexpected"))
+            throw e;
+          throw new Error(`Export failed (${res.status})`);
+        }
       }
       const blob = await res.blob();
       const cd = res.headers.get("Content-Disposition") || "";
@@ -301,8 +291,9 @@ export function useExportDownload() {
   }
 
   /**
-   * Client export via background job: POST starts build (small JSON), poll until
-   * ready, then GET the ZIP. Avoids Cloudflare 403/timeout on large ZIP POSTs.
+   * Client export via background job + token download URL.
+   * Final ZIP is opened with a normal browser navigation (not fetch) so
+   * Cloudflare is less likely to WAF-block the large file.
    */
   async function downloadClientExportPack(
     inspectionId: string,
@@ -312,29 +303,55 @@ export function useExportDownload() {
     setBusy(true);
     setError(null);
     try {
-      const startRes = await fetch(
-        `/api/inspections/${inspectionId}/client-export`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          cache: "no-store",
-          body: JSON.stringify(body ?? {}),
-        },
-      );
-      const startType = startRes.headers.get("content-type") || "";
+      // Prefer FormData start (same pattern as asset import — WAF-friendlier)
+      const fd = new FormData();
+      fd.set("inspectionId", inspectionId);
+      if (body?.severities?.length) {
+        fd.set("severities", body.severities.join(","));
+      }
+      if (body?.photoOrder?.length) {
+        fd.set("photoOrder", body.photoOrder.join("|"));
+      }
+
+      let startRes = await fetch("/api/exports/start", {
+        method: "POST",
+        cache: "no-store",
+        body: fd,
+      });
+
+      // Fallback to legacy JSON route if the new path is unavailable
+      if (startRes.status === 404) {
+        startRes = await fetch(
+          `/api/inspections/${inspectionId}/client-export`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify(body ?? {}),
+          },
+        );
+      }
+
+      const startText = await startRes.text();
+      const startIsHtml = /^\s*</.test(startText);
       if (!startRes.ok) {
-        if (startType.includes("text/html")) {
+        if (startIsHtml || /cloudflare|cf-ray|just a moment/i.test(startText)) {
           throw new Error(
-            "Cloudflare blocked starting the export. Wait a moment and try again.",
+            "Cloudflare blocked starting the export. Wait a minute and try again — or use the LAN address if you have one.",
           );
         }
-        const errBody = (await startRes.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        throw new Error(errBody?.error || `Export failed (${startRes.status})`);
+        let errMsg = `Export failed (${startRes.status})`;
+        try {
+          const errBody = JSON.parse(startText) as { error?: string };
+          if (errBody.error) errMsg = errBody.error;
+        } catch {
+          /* keep */
+        }
+        throw new Error(errMsg);
       }
-      const started = (await startRes.json()) as {
+      const started = JSON.parse(startText) as {
         jobId?: string;
+        token?: string;
         error?: string;
       };
       if (!started.jobId) {
@@ -342,71 +359,100 @@ export function useExportDownload() {
       }
 
       const jobId = started.jobId;
+      let token = started.token ?? "";
       const deadline = Date.now() + 5 * 60 * 1000;
+      let downloadUrl: string | null = null;
       let filename = fallbackName;
+
       for (;;) {
         if (Date.now() > deadline) {
           throw new Error("Export timed out — try again with fewer photos");
         }
         await new Promise((r) => setTimeout(r, 900));
         const statusRes = await fetch(
-          `/api/inspections/${inspectionId}/client-export?job=${encodeURIComponent(jobId)}`,
+          `/api/exports/start?job=${encodeURIComponent(jobId)}`,
           { cache: "no-store" },
         );
-        const statusType = statusRes.headers.get("content-type") || "";
-        if (!statusRes.ok && statusType.includes("text/html")) {
-          throw new Error(
-            "Cloudflare blocked the export status check. Try again shortly.",
+        const statusText = await statusRes.text();
+        if (!statusRes.ok && /^\s*</.test(statusText)) {
+          // Fall back to legacy status endpoint
+          const legacy = await fetch(
+            `/api/inspections/${inspectionId}/client-export?job=${encodeURIComponent(jobId)}`,
+            { cache: "no-store" },
           );
+          const legacyText = await legacy.text();
+          if (!legacy.ok && /^\s*</.test(legacyText)) {
+            throw new Error(
+              "Cloudflare blocked the export status check. Try again shortly.",
+            );
+          }
+          const status = JSON.parse(legacyText) as {
+            status?: string;
+            ready?: boolean;
+            filename?: string | null;
+            error?: string | null;
+            token?: string;
+            downloadUrl?: string | null;
+          };
+          if (!legacy.ok) {
+            throw new Error(status?.error || `Export failed (${legacy.status})`);
+          }
+          if (status.status === "error") {
+            throw new Error(status.error || "Export failed");
+          }
+          if (status.ready || status.status === "ready") {
+            if (status.filename) filename = status.filename;
+            if (status.token) token = status.token;
+            downloadUrl =
+              status.downloadUrl ||
+              (token
+                ? `/api/exports/file/${jobId}?token=${encodeURIComponent(token)}&name=${encodeURIComponent(filename)}`
+                : null);
+            break;
+          }
+          continue;
         }
-        const status = (await statusRes.json().catch(() => null)) as {
+        const status = JSON.parse(statusText) as {
           status?: string;
           ready?: boolean;
           filename?: string | null;
           error?: string | null;
-        } | null;
+          token?: string;
+          downloadUrl?: string | null;
+        };
         if (!statusRes.ok) {
           throw new Error(
             status?.error || `Export failed (${statusRes.status})`,
           );
         }
-        if (status?.status === "error") {
+        if (status.status === "error") {
           throw new Error(status.error || "Export failed");
         }
-        if (status?.ready || status?.status === "ready") {
+        if (status.ready || status.status === "ready") {
           if (status.filename) filename = status.filename;
+          if (status.token) token = status.token;
+          downloadUrl =
+            status.downloadUrl ||
+            (token
+              ? `/api/exports/file/${jobId}?token=${encodeURIComponent(token)}&name=${encodeURIComponent(filename)}`
+              : null);
           break;
         }
       }
 
-      const dlRes = await fetch(
-        `/api/inspections/${inspectionId}/client-export?job=${encodeURIComponent(jobId)}&download=1`,
-        { cache: "no-store" },
-      );
-      const dlType = dlRes.headers.get("content-type") || "";
-      if (!dlRes.ok) {
-        if (dlType.includes("text/html")) {
-          throw new Error(
-            "Cloudflare blocked the ZIP download. Try again shortly.",
-          );
-        }
-        const errBody = (await dlRes.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        throw new Error(errBody?.error || `Export failed (${dlRes.status})`);
+      if (!downloadUrl) {
+        throw new Error("Export ready but no download link was returned");
       }
-      const blob = await dlRes.blob();
-      const cd = dlRes.headers.get("Content-Disposition") || "";
-      const match = /filename="([^"]+)"/.exec(cd);
-      const name = match?.[1] || filename;
-      const objectUrl = URL.createObjectURL(blob);
+
+      // Browser navigation download — not fetch(). Large ZIP via XHR is what
+      // Cloudflare was blocking.
       const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = name;
+      a.href = downloadUrl;
+      a.download = filename;
+      a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(objectUrl);
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed");

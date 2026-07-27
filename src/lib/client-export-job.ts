@@ -1,6 +1,7 @@
 /**
- * Client-export jobs: build ZIP on disk, download via short-lived job id.
- * Avoids Cloudflare/WAF 403s on long POSTs that return large application/zip bodies.
+ * Client-export jobs: build ZIP on disk, download via short-lived job + token.
+ * Token download bypasses session/middleware so Cloudflare can serve the file
+ * as a normal browser navigation (fetch() of large ZIPs often gets WAF 403).
  */
 
 import fs from "node:fs";
@@ -10,11 +11,14 @@ import { getDataDir } from "@/lib/paths";
 
 const JOB_TTL_MS = 60 * 60 * 1000; // 1 hour
 const JOB_ID_RE = /^[a-f0-9]{32}$/;
+const TOKEN_RE = /^[a-f0-9]{32}$/;
 
 export type ClientExportJobStatus = "pending" | "ready" | "error";
 
 export type ClientExportJob = {
   id: string;
+  /** Opaque download secret — required for /api/exports/file */
+  token: string;
   inspectionId: string;
   userId: string;
   status: ClientExportJobStatus;
@@ -80,8 +84,10 @@ export function createClientExportJob(input: {
   pruneExpiredJobs();
   fs.mkdirSync(jobsDir(), { recursive: true });
   const id = crypto.randomBytes(16).toString("hex");
+  const token = crypto.randomBytes(16).toString("hex");
   const job: ClientExportJob = {
     id,
+    token,
     inspectionId: input.inspectionId,
     userId: input.userId,
     status: "pending",
@@ -116,10 +122,25 @@ export function readClientExportJob(
       }
       return null;
     }
+    // Older jobs (pre-token) — treat as invalid for token downloads
+    if (!job.token || !TOKEN_RE.test(job.token)) {
+      return { ...job, token: job.token || "" };
+    }
     return job;
   } catch {
     return null;
   }
+}
+
+export function verifyClientExportDownload(
+  jobId: string | null | undefined,
+  token: string | null | undefined,
+): ClientExportJob | null {
+  const job = readClientExportJob(jobId);
+  if (!job || job.status !== "ready") return null;
+  const t = (token ?? "").trim().toLowerCase();
+  if (!TOKEN_RE.test(t) || !job.token || t !== job.token) return null;
+  return job;
 }
 
 export function updateClientExportJob(
@@ -138,4 +159,14 @@ export function updateClientExportJob(
 export function writeClientExportZip(id: string, zip: Buffer) {
   fs.mkdirSync(jobsDir(), { recursive: true });
   fs.writeFileSync(jobZipPath(id), zip);
+}
+
+export function clientExportFileUrl(job: {
+  id: string;
+  token: string;
+  filename?: string | null;
+}) {
+  const q = new URLSearchParams({ token: job.token });
+  if (job.filename) q.set("name", job.filename);
+  return `/api/exports/file/${job.id}?${q.toString()}`;
 }
