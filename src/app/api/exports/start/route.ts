@@ -73,16 +73,36 @@ export async function POST(req: NextRequest) {
     userId: user.id,
   });
 
-  startClientExportBuild(job.id, { ...user }, inspectionId, {
+  const building = startClientExportBuild(job.id, { ...user }, inspectionId, {
     severities,
     photoOrder,
   });
 
+  // Wait briefly so small packs can return ready+downloadUrl in one round-trip.
+  // Large packs keep building in the background after this returns.
+  await Promise.race([
+    building,
+    new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+  ]);
+
+  const latest = readClientExportJob(job.id) ?? job;
+
   return NextResponse.json({
     ok: true,
-    jobId: job.id,
-    token: job.token,
-    status: "pending" as const,
+    jobId: latest.id,
+    token: latest.token,
+    status: latest.status,
+    filename: latest.filename,
+    error: latest.error,
+    ready: latest.status === "ready",
+    downloadUrl:
+      latest.status === "ready" && latest.token
+        ? `/api/exports/file/${latest.id}?token=${encodeURIComponent(latest.token)}${
+            latest.filename
+              ? `&name=${encodeURIComponent(latest.filename)}`
+              : ""
+          }`
+        : null,
   });
 }
 

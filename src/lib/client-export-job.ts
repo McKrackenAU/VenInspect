@@ -158,7 +158,11 @@ export function updateClientExportJob(
 
 export function writeClientExportZip(id: string, zip: Buffer) {
   fs.mkdirSync(jobsDir(), { recursive: true });
-  fs.writeFileSync(jobZipPath(id), zip);
+  const finalPath = jobZipPath(id);
+  const tmpPath = `${finalPath}.tmp`;
+  fs.writeFileSync(tmpPath, zip);
+  // Atomic replace so a download never sees a half-written file
+  fs.renameSync(tmpPath, finalPath);
 }
 
 export function clientExportFileUrl(job: {

@@ -192,13 +192,30 @@ export function ReportsAdminTable({ rows }: { rows: ReportAdminRow[] }) {
         if (!downloadUrl) {
           throw new Error(`No download link for ${row.titleLabel}`);
         }
+        const dlRes = await fetch(downloadUrl, {
+          cache: "no-store",
+          credentials: "omit",
+        });
+        if (!dlRes.ok) {
+          const errText = await dlRes.text().catch(() => "");
+          let msg = `Download failed for ${row.titleLabel}`;
+          try {
+            const body = JSON.parse(errText) as { error?: string };
+            if (body.error) msg = body.error;
+          } catch {
+            /* keep */
+          }
+          throw new Error(msg);
+        }
+        const blob = await dlRes.blob();
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = filename;
-        a.rel = "noopener";
+        a.href = url;
+        a.download = filename.endsWith(".zip") ? filename : `${filename}.zip`;
         document.body.appendChild(a);
         a.click();
         a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
         await new Promise((r) => setTimeout(r, 400));
       }
       setMessage(`Downloaded ${live.length} client export ZIP(s).`);

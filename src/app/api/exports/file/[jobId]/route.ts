@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import { Readable } from "node:stream";
 import { NextRequest, NextResponse } from "next/server";
 import {
   jobZipPath,
@@ -9,10 +8,19 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function contentDisposition(filename: string) {
+  const ascii = filename
+    .replace(/[^\x20-\x7E]+/g, "_")
+    .replace(/["\\]/g, "_")
+    .slice(0, 150) || "client-export.zip";
+  const encoded = encodeURIComponent(filename).replace(/['()]/g, escape);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 /**
  * Token-authenticated ZIP download (no session cookie required).
- * Intended for browser navigation / <a download> — Cloudflare often blocks
- * fetch() of large application/zip responses from authenticated API routes.
+ * Returns the full buffer (not a stream) — Chrome reports
+ * "file wasn't available on site" when streamed downloads abort.
  */
 export async function GET(
   req: NextRequest,
@@ -23,33 +31,41 @@ export async function GET(
   const job = verifyClientExportDownload(jobId, token);
   if (!job) {
     return NextResponse.json(
-      { error: "Export not found or link expired" },
+      { error: "Export not found or link expired. Build the pack again." },
       { status: 404 },
     );
   }
 
   const zipPath = jobZipPath(job.id);
-  if (!fs.existsSync(zipPath)) {
+  let data: Buffer;
+  try {
+    data = fs.readFileSync(zipPath);
+  } catch {
     return NextResponse.json(
-      { error: "Export file missing — try again" },
+      { error: "Export file missing on server — build the pack again." },
+      { status: 404 },
+    );
+  }
+  if (!data.length) {
+    return NextResponse.json(
+      { error: "Export file was empty — build the pack again." },
       { status: 404 },
     );
   }
 
   const filename =
-    (req.nextUrl.searchParams.get("name") || job.filename || "client-export.zip")
+    (req.nextUrl.searchParams.get("name") ||
+      job.filename ||
+      "client-export.zip")
       .replace(/[/\\?%*:|"<>]/g, "_")
-      .slice(0, 180);
-  const stat = fs.statSync(zipPath);
-  const stream = fs.createReadStream(zipPath);
-  const webStream = Readable.toWeb(stream) as unknown as ReadableStream;
+      .slice(0, 180) || "client-export.zip";
 
-  return new NextResponse(webStream, {
+  return new NextResponse(new Uint8Array(data), {
+    status: 200,
     headers: {
-      // octet-stream + attachment is less likely to trip ZIP-specific WAF rules
       "Content-Type": "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Content-Length": String(stat.size),
+      "Content-Disposition": contentDisposition(filename),
+      "Content-Length": String(data.length),
       "Cache-Control": "no-store, private",
       "X-Content-Type-Options": "nosniff",
     },
