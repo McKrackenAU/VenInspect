@@ -68,7 +68,22 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     }
     return null;
   }
-  return toAuthUser(user);
+  // Prefer DB role, but honour an admin session if the cookie still says ADMIN
+  // (covers role promotion / brief DB lag without forcing a re-login).
+  const role: "ADMIN" | "INSPECTOR" =
+    isAdminRole(user.role, user.username) ||
+    isAdminRole(session.role, session.username)
+      ? "ADMIN"
+      : "INSPECTOR";
+  return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    name: user.name,
+    role,
+    level1Qualified: user.level1Qualified,
+    level2Qualified: user.level2Qualified,
+  };
 }
 
 export async function requireUser(): Promise<AuthUser> {

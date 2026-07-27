@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import type { AuthUser } from "@/lib/auth";
 import { isAdminRole, isRootUsername, normalizeRole } from "@/lib/roles";
@@ -29,6 +30,19 @@ export function readSessionToken(req: NextRequest): string | null {
   return null;
 }
 
+async function readSessionTokenWithFallback(
+  req: NextRequest,
+): Promise<string | null> {
+  const fromReq = readSessionToken(req);
+  if (fromReq) return fromReq;
+  try {
+    const jar = await cookies();
+    return jar.get(SESSION_COOKIE)?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function toAuthUser(
   user: {
     id: string;
@@ -41,11 +55,10 @@ function toAuthUser(
   },
   session?: SessionPayload | null,
 ): AuthUser {
-  const role: "ADMIN" | "INSPECTOR" = isAdminRole(user.role, user.username) ||
+  const role: "ADMIN" | "INSPECTOR" =
+    isAdminRole(user.role, user.username) ||
     isAdminRole(session?.role, session?.username)
-    ? "ADMIN"
-    : normalizeRole(user.role) === "INSPECTOR"
-      ? "INSPECTOR"
+      ? "ADMIN"
       : "INSPECTOR";
 
   return {
@@ -66,14 +79,13 @@ function toAuthUser(
 export async function getUserFromRequest(
   req: NextRequest,
 ): Promise<AuthUser | null> {
-  const token = readSessionToken(req);
+  const token = await readSessionTokenWithFallback(req);
   if (!token) return null;
   const session = await verifySession(token, sessionSecret());
   if (!session) return null;
 
   const user = await prisma.user.findUnique({ where: { id: session.sub } });
   if (!user) {
-    // Session valid but user row missing — still allow root/admin session for ops
     if (isAdminRole(session.role, session.username)) {
       return {
         id: session.sub,
@@ -97,7 +109,7 @@ export async function requireAdminFromRequest(
   | { user: AuthUser; error?: undefined }
   | { user?: undefined; error: Response }
 > {
-  const token = readSessionToken(req);
+  const token = await readSessionTokenWithFallback(req);
   if (!token) {
     return {
       error: Response.json(
@@ -118,18 +130,27 @@ export async function requireAdminFromRequest(
   }
 
   const user = await prisma.user.findUnique({ where: { id: session.sub } });
+
+  // Prefer live DB role — session cookie can lag after a role promotion.
   const admin =
-    isAdminRole(session.role, session.username) ||
     (user ? isAdminRole(user.role, user.username) : false) ||
+    isAdminRole(session.role, session.username) ||
     isRootUsername(session.username) ||
-    isRootUsername(user?.username);
+    isRootUsername(user?.username) ||
+    normalizeRole(user?.role) === "ADMIN" ||
+    normalizeRole(session.role) === "ADMIN";
 
   if (!admin) {
     return {
       error: Response.json(
         {
           error:
-            "Admin access required. Sign out and sign back in with an admin account (role must be Admin).",
+            "Admin access required. Your signed-in role is not Admin — open Manage → Users, set Role=Admin on your account, then sign out and back in.",
+          debug: {
+            sessionRole: session.role ?? null,
+            dbRole: user?.role ?? null,
+            username: user?.username ?? session.username ?? null,
+          },
         },
         { status: 403 },
       ),

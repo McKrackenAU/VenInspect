@@ -63,27 +63,37 @@ export function AppNav({ userName, isAdmin, isRoot }: Props) {
         <div className="flex flex-wrap items-center gap-2">
           {isAdmin && !isRoot ? (
             <div
-              className="inline-flex rounded-lg border border-[color:var(--ventia-border)] p-0.5 text-xs font-semibold"
+              className="inline-flex rounded-lg border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-0.5 text-xs font-semibold"
               role="group"
               aria-label="Portal"
             >
               <Link
                 href="/"
-                className={`rounded-md px-3 py-1.5 ${
+                className={
                   !isManage
-                    ? "bg-[color:var(--btn-primary-bg)] font-semibold text-[color:var(--btn-primary-fg)]"
-                    : "text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
-                }`}
+                    ? "rounded-md px-3 py-1.5 font-semibold"
+                    : "rounded-md px-3 py-1.5 text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
+                }
+                style={
+                  !isManage
+                    ? { backgroundColor: "#004825", color: "#ffffff" }
+                    : undefined
+                }
               >
                 User
               </Link>
               <Link
                 href="/manage"
-                className={`rounded-md px-3 py-1.5 ${
+                className={
                   isManage
-                    ? "bg-[color:var(--btn-primary-bg)] font-semibold text-[color:var(--btn-primary-fg)]"
-                    : "text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
-                }`}
+                    ? "rounded-md px-3 py-1.5 font-semibold"
+                    : "rounded-md px-3 py-1.5 text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
+                }
+                style={
+                  isManage
+                    ? { backgroundColor: "#004825", color: "#ffffff" }
+                    : undefined
+                }
               >
                 Admin
               </Link>

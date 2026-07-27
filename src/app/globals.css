@@ -216,23 +216,18 @@ html.dark select option:hover {
 }
 
 /*
- * Many controls use Tailwind: bg-[color:var(--ventia-green)] text-white.
- * In dark mode --ventia-green becomes a bright accent, so white-on-bright
- * (and some light-mode cascades) become unreadable. Force brand fill + white
- * label whenever that green fill utility is present.
- * Match on the unique prefix — a trailing "]" would end the attribute selector.
+ * Tailwind fills that use bg-[color:var(--ventia-green)] + text-white become
+ * unreadable when --ventia-green is the bright dark-mode accent.
+ * Match the exact token ending `var(--ventia-green)]` — NOT `green-tint`,
+ * which previously false-matched and painted inactive nav chips dark green
+ * with the wrong label color.
  */
-[class*="bg-[color:var(--ventia-green)"] {
-  background-color: var(--btn-primary-bg) !important;
-  color: var(--btn-primary-fg) !important;
-}
-
-[class*="bg-[color:var(--ventia-blue)"] {
-  background-color: #0077c8 !important;
+[class*="var(--ventia-green)]"] {
+  background-color: #004825 !important;
   color: #ffffff !important;
 }
 
-html.dark [class*="bg-[color:var(--ventia-blue)"] {
+[class*="var(--ventia-blue)]"] {
   background-color: #0077c8 !important;
   color: #ffffff !important;
 }

@@ -1093,7 +1093,12 @@ export async function importAssetsFromFile(formData: FormData): Promise<
   try {
     const user = await requireUser();
     const { isAdminRole } = await import("@/lib/roles");
-    if (!isAdminRole(user.role, user.username)) {
+    const { getSession } = await import("@/lib/auth");
+    const session = await getSession();
+    const admin =
+      isAdminRole(user.role, user.username) ||
+      isAdminRole(session?.role, session?.username);
+    if (!admin) {
       return {
         ok: false,
         error:

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { importAssetsFromFile } from "@/lib/actions";
 import {
   StyledFileInput,
   TemplateDownloadButtons,
@@ -43,53 +44,81 @@ export function AssetImportForm() {
           const fd = new FormData(form);
           startTransition(async () => {
             try {
-              // Prefer the API route for multipart uploads — server actions
-              // often surface "An unexpected response was received from the server."
-              // when the flight payload is interrupted by proxies/body limits.
-              const res = await fetch("/api/manage/asset-import", {
-                method: "POST",
-                body: fd,
-                credentials: "same-origin",
-              });
-              const text = await res.text();
+              // 1) Server action — same cookie jar as the Manage page (most reliable
+              //    for admin session). 2) API fallback for large multipart quirks.
               let body: (ImportOk | ImportErr) | null = null;
+
               try {
-                body = text ? (JSON.parse(text) as ImportOk | ImportErr) : null;
-              } catch {
+                const actionRes = await importAssetsFromFile(fd);
+                if (
+                  actionRes &&
+                  typeof actionRes === "object" &&
+                  "ok" in actionRes
+                ) {
+                  body = actionRes as ImportOk | ImportErr;
+                }
+              } catch (actionErr) {
+                if (
+                  typeof actionErr === "object" &&
+                  actionErr &&
+                  "digest" in actionErr &&
+                  String(
+                    (actionErr as { digest?: string }).digest,
+                  ).startsWith("NEXT_REDIRECT")
+                ) {
+                  throw actionErr;
+                }
+                // Fall through to API
                 body = null;
               }
 
-              if (!res.ok) {
-                const msg =
-                  (body && "error" in body && body.error) ||
-                  (text && !text.startsWith("<")
-                    ? text.slice(0, 240)
-                    : null);
-                if (res.status === 401) {
-                  throw new Error(
-                    msg ||
-                      "Not signed in. Refresh and sign in again, then retry.",
-                  );
+              if (!body) {
+                const res = await fetch("/api/manage/asset-import", {
+                  method: "POST",
+                  body: fd,
+                  credentials: "include",
+                });
+                const text = await res.text();
+                try {
+                  body = text ? (JSON.parse(text) as ImportOk | ImportErr) : null;
+                } catch {
+                  body = null;
                 }
-                if (res.status === 403) {
-                  throw new Error(
-                    msg ||
-                      "Admin access required. Sign out and sign back in with an admin account.",
-                  );
+                if (!res.ok) {
+                  const msg =
+                    (body && "error" in body && body.error) ||
+                    (text && !text.startsWith("<")
+                      ? text.slice(0, 240)
+                      : null);
+                  if (res.status === 401) {
+                    throw new Error(
+                      msg ||
+                        "Not signed in. Refresh and sign in again, then retry.",
+                    );
+                  }
+                  if (res.status === 403) {
+                    throw new Error(
+                      msg ||
+                        "Admin access required. Sign out and sign back in with your admin account.",
+                    );
+                  }
+                  if (res.status === 413) {
+                    throw new Error(
+                      msg ||
+                        "File too large for the server. Try CSV or a smaller workbook.",
+                    );
+                  }
+                  throw new Error(msg || `Import failed (${res.status})`);
                 }
-                if (res.status === 413) {
-                  throw new Error(
-                    msg ||
-                      "File too large for the server. Try CSV or a smaller workbook.",
-                  );
-                }
-                throw new Error(msg || `Import failed (${res.status})`);
               }
 
-              if (!body || !("ok" in body) || body.ok !== true) {
+              if (!body || !("ok" in body)) {
+                throw new Error("Import failed — empty response from server.");
+              }
+              if (body.ok !== true) {
                 throw new Error(
-                  (body && "error" in body && body.error) ||
-                    "Import failed — empty response from server.",
+                  ("error" in body && body.error) ||
+                    "Admin access required. Sign out and sign back in with your admin account.",
                 );
               }
 
@@ -101,6 +130,16 @@ export function AssetImportForm() {
                 errors: body.errors ?? [],
               });
             } catch (err) {
+              if (
+                typeof err === "object" &&
+                err &&
+                "digest" in err &&
+                String((err as { digest?: string }).digest).startsWith(
+                  "NEXT_REDIRECT",
+                )
+              ) {
+                throw err;
+              }
               setError(err instanceof Error ? err.message : "Import failed");
             }
           });
@@ -149,6 +188,7 @@ export function AssetImportForm() {
           type="submit"
           disabled={pending}
           className="btn-primary-inline w-full sm:w-auto"
+          style={{ backgroundColor: "#004825", color: "#ffffff" }}
         >
           {pending ? "Importing…" : "Import assets"}
         </button>
