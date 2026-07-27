@@ -25,6 +25,14 @@ function isRootAllowedPath(pathname: string): boolean {
   if (pathname.startsWith("/api/assets")) return true;
   if (pathname.startsWith("/api/uploads")) return true;
   if (pathname.startsWith("/api/admin")) return true;
+  // Manage → Reports bulk client export / PDF (APIs live under /api/inspections)
+  if (
+    /^\/api\/inspections\/[^/]+\/(client-export|pdf|export-photos)\/?$/.test(
+      pathname,
+    )
+  ) {
+    return true;
+  }
   return false;
 }
 

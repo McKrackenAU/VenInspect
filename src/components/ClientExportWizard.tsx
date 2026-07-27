@@ -40,7 +40,7 @@ export function ClientExportWizard({
   const [photoOrder, setPhotoOrder] = useState<string[]>([]);
   const [assetNumber, setAssetNumber] = useState("");
   const [loadingPhotos, setLoadingPhotos] = useState(true);
-  const { busy, error, setError, downloadBlob } = useExportDownload();
+  const { busy, error, setError, downloadClientExportPack } = useExportDownload();
 
   useEffect(() => {
     let cancelled = false;
@@ -157,18 +157,10 @@ export function ClientExportWizard({
     } catch {
       /* still try export */
     }
-    await downloadBlob(
-      `/api/inspections/${inspectionId}/client-export`,
-      "client-export.zip",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          severities: selected,
-          photoOrder: orderForPack,
-        }),
-      },
-    );
+    await downloadClientExportPack(inspectionId, "client-export.zip", {
+      severities: selected,
+      photoOrder: orderForPack,
+    });
   }
 
   return (
@@ -354,6 +346,12 @@ export function ClientExportWizard({
           {busy ? "Building pack…" : "Build Client Export"}
         </button>
       </div>
+      {busy ? (
+        <p className="text-right text-xs text-[color:var(--ventia-muted)]">
+          Building on the server, then downloading the ZIP… large packs can take
+          a minute.
+        </p>
+      ) : null}
     </div>
   );
 }
