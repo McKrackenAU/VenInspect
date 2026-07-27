@@ -82,12 +82,31 @@ export function AppNav({ userName, isAdmin }: Props) {
           ) : null}
 
           {userName ? (
-            <span className="hidden text-xs text-[color:var(--ventia-muted)] sm:inline">
+            <Link
+              href="/account"
+              className={`hidden rounded-lg px-2 py-1.5 text-xs sm:inline ${
+                pathname === "/account" || pathname.startsWith("/account/")
+                  ? "font-semibold text-[color:var(--ventia-green)]"
+                  : "text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
+              }`}
+              title="Account & password"
+            >
               {userName}
-            </span>
+            </Link>
           ) : null}
 
           <ThemeToggle />
+
+          <Link
+            href="/account"
+            className={`rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs font-medium hover:bg-[color:var(--ventia-green-tint)] ${
+              pathname === "/account" || pathname.startsWith("/account/")
+                ? "border-[color:var(--ventia-green)] font-semibold text-[color:var(--ventia-green)]"
+                : "text-[color:var(--ventia-muted)]"
+            }`}
+          >
+            Account
+          </Link>
 
           <form action={logoutAction}>
             <button

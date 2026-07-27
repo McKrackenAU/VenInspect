@@ -86,6 +86,15 @@ export default async function LoginPage({ searchParams }: Props) {
             Sign in
           </button>
         </form>
+
+        <p className="mt-5 text-center text-xs text-[color:var(--ventia-muted)]">
+          Forgot your password? After you sign in, open{" "}
+          <span className="font-medium text-[color:var(--ventia-ink)]">
+            Account
+          </span>{" "}
+          to change it — or ask an administrator to reset it under Manage →
+          Users.
+        </p>
       </div>
     </div>
   );

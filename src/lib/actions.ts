@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { hashPassword, requireAdmin, requireUser } from "@/lib/auth";
 import { verifyPassword } from "@/lib/passwords";
+import { validateNewPassword } from "@/lib/password-policy";
 import { canApproveLevel2 } from "@/lib/report-people";
 import { canEditInspection } from "@/lib/inspection-access";
 import { nextDefectCode } from "@/lib/inspection";
@@ -982,9 +983,9 @@ export async function createUser(formData: FormData) {
     throw new Error("First and last name are required");
   }
   if (!name || !email) throw new Error("Name and email required");
-  if (!password || password.length < 4) {
-    throw new Error("Password required (min 4 characters)");
-  }
+  if (!password) throw new Error("Password required");
+  const passwordError = validateNewPassword(password);
+  if (passwordError) throw new Error(passwordError);
 
   await prisma.user.create({
     data: {
@@ -1041,7 +1042,13 @@ export async function updateUserQualifications(formData: FormData) {
       level2Qualified,
       registrationNumber,
       allowPasswordLogin: true,
-      ...(password.length >= 4 ? { passwordHash: hashPassword(password) } : {}),
+      ...(password
+        ? (() => {
+            const err = validateNewPassword(password);
+            if (err) throw new Error(err);
+            return { passwordHash: hashPassword(password) };
+          })()
+        : {}),
     },
   });
 
