@@ -235,8 +235,9 @@ export async function submitInspection(formData: FormData) {
   });
 
   if (status === "PENDING_APPROVAL" && !restore) {
+    const { excludeRootUserWhere } = await import("@/lib/roles");
     const level2Users = await prisma.user.findMany({
-      where: { level2Qualified: true },
+      where: { level2Qualified: true, AND: [excludeRootUserWhere] },
     });
     await prisma.notification.createMany({
       data: level2Users.map((u) => ({
@@ -984,6 +985,10 @@ export async function createUser(formData: FormData) {
   }
   if (!name || !email) throw new Error("Name and email required");
   if (!password) throw new Error("Password required");
+  const { isRootUsername } = await import("@/lib/roles");
+  if (isRootUsername(username) || email === "root@veninspect.local") {
+    throw new Error("The root username is reserved for the system admin account");
+  }
   const passwordError = validateNewPassword(password);
   if (passwordError) throw new Error(passwordError);
 
@@ -1027,6 +1032,27 @@ export async function updateUserQualifications(formData: FormData) {
   if (!firstName || !lastName) throw new Error("First and last name are required");
   if (!email) throw new Error("Email required");
 
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) throw new Error("User not found");
+
+  const { isRootUsername } = await import("@/lib/roles");
+  const targetIsRoot = isRootUsername(existing.username);
+  if (targetIsRoot) {
+    if (password) {
+      throw new Error(
+        "Root password cannot be changed in the app. Update it on the server.",
+      );
+    }
+    if (username !== "root") {
+      throw new Error("The root username cannot be changed");
+    }
+    if (role !== "ADMIN") {
+      throw new Error("The root account must remain Admin");
+    }
+  } else if (isRootUsername(username) || email === "root@veninspect.local") {
+    throw new Error("The root username is reserved for the system admin account");
+  }
+
   const name = `${firstName} ${lastName}`.trim();
 
   await prisma.user.update({
@@ -1035,14 +1061,14 @@ export async function updateUserQualifications(formData: FormData) {
       firstName,
       lastName,
       name,
-      email,
-      username,
-      role,
+      email: targetIsRoot ? existing.email : email,
+      username: targetIsRoot ? "root" : username,
+      role: targetIsRoot ? "ADMIN" : role,
       level1Qualified,
       level2Qualified,
       registrationNumber,
       allowPasswordLogin: true,
-      ...(password
+      ...(password && !targetIsRoot
         ? (() => {
             const err = validateNewPassword(password);
             if (err) throw new Error(err);
@@ -1056,79 +1082,57 @@ export async function updateUserQualifications(formData: FormData) {
   revalidatePath("/manage/users");
 }
 
-/** @deprecated Prefer POST /api/manage/asset-import for large workbooks. */
-export async function importAssetsFromFile(formData: FormData) {
-  await requireAdmin();
-  const file = formData.get("file");
-  const mode = String(formData.get("mode") ?? "upsert"); // upsert | skip
-
-  if (!(file instanceof File) || file.size === 0) {
-    throw new Error("Choose an Excel (.xlsx) or CSV file");
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { parseAssetWorkbook } = await import("@/lib/asset-import");
-  const { rows, errors } = parseAssetWorkbook(buffer);
-
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
-  const rowErrors = [...errors];
-
-  for (const row of rows) {
-    try {
-      const existing = await prisma.asset.findUnique({
-        where: { assetNumber: row.assetNumber },
-      });
-
-      if (existing && mode === "skip") {
-        skipped += 1;
-        continue;
-      }
-
-      const data = {
-        assetVisionId: row.assetVisionId,
-        name: row.name,
-        type: row.type,
-        roadName: row.roadName || row.parentAssetName || "Unknown Road",
-        location: row.location,
-        latitude: row.latitude,
-        longitude: row.longitude,
-        parentDirection: row.parentDirection,
-        parentChainage: row.parentChainage,
-        chainageFrom: row.chainageFrom,
-        chainageTo: row.chainageTo,
-        parentAssetCode: row.parentAssetCode,
-        parentAssetName: row.parentAssetName,
-        classification: row.classification,
-        subClassification: row.subClassification,
-        notes: row.notes,
+/**
+ * Asset registry import (server action — uses the same session cookies as the
+ * page, avoiding middleware/fetch edge cases that returned false 403s).
+ */
+export async function importAssetsFromFile(formData: FormData): Promise<
+  | { ok: true; created: number; updated: number; skipped: number; total: number; errors: string[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await requireUser();
+    const { isAdminRole } = await import("@/lib/roles");
+    if (!isAdminRole(user.role, user.username)) {
+      return {
+        ok: false,
+        error:
+          "Admin access required. Your account role is not Admin — ask another admin to set Role=Admin under Manage → Users, then sign out and back in.",
       };
-
-      if (existing) {
-        await prisma.asset.update({
-          where: { assetNumber: row.assetNumber },
-          data,
-        });
-        updated += 1;
-      } else {
-        await prisma.asset.create({
-          data: { assetNumber: row.assetNumber, ...data },
-        });
-        created += 1;
-      }
-    } catch (e) {
-      rowErrors.push(
-        `${row.assetNumber}: ${e instanceof Error ? e.message : "row failed"}`,
-      );
     }
+
+    const file = formData.get("file");
+    const mode = String(formData.get("mode") ?? "upsert");
+
+    if (!(file instanceof File) || file.size === 0) {
+      return { ok: false, error: "Choose an Excel (.xlsx) or CSV file" };
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      return {
+        ok: false,
+        error: "File too large (max 25 MB). Split the workbook or use CSV.",
+      };
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const { runAssetImport } = await import("@/lib/asset-import-run");
+    const result = await runAssetImport(buffer, mode);
+    return { ok: true, ...result };
+  } catch (e) {
+    // Next.js redirect() throws; don't mask it as an import failure
+    if (
+      typeof e === "object" &&
+      e &&
+      "digest" in e &&
+      String((e as { digest?: string }).digest).startsWith("NEXT_REDIRECT")
+    ) {
+      throw e;
+    }
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Import failed",
+    };
   }
-
-  revalidatePath("/manage/assets");
-  revalidatePath("/assets");
-  revalidatePath("/");
-
-  return { created, updated, skipped, errors: rowErrors, total: rows.length };
 }
 
 export async function upsertAssetManual(formData: FormData) {
@@ -1761,6 +1765,18 @@ export async function deleteAssetDocumentAction(formData: FormData) {
   revalidatePath(`/manage/assets/${doc.assetId}`);
 }
 
+async function assertAssignableUserId(userId: string | null) {
+  if (!userId) return;
+  const assignee = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { username: true },
+  });
+  const { isRootUsername } = await import("@/lib/roles");
+  if (isRootUsername(assignee?.username)) {
+    throw new Error("Cannot assign work to the root system account");
+  }
+}
+
 export async function createAuditAssignmentAction(formData: FormData) {
   await requireAdmin();
   const actor = await requireUser();
@@ -1773,6 +1789,7 @@ export async function createAuditAssignmentAction(formData: FormData) {
   const assignedToId = String(formData.get("assignedToId") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
   if (!assetId || !dueDateRaw) throw new Error("Asset and due date required");
+  await assertAssignableUserId(assignedToId);
   const dueDate = new Date(dueDateRaw + "T12:00:00");
   await prisma.auditAssignment.create({
     data: {
@@ -1806,6 +1823,7 @@ export async function updateAuditAssignmentAction(formData: FormData) {
   const assignedToId = String(formData.get("assignedToId") ?? "").trim() || null;
   const dueDateRaw = String(formData.get("dueDate") ?? "").trim();
   if (!id) throw new Error("Assignment id required");
+  await assertAssignableUserId(assignedToId);
   await prisma.auditAssignment.update({
     where: { id },
     data: {

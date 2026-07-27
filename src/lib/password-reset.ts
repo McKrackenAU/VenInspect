@@ -8,6 +8,7 @@ import {
   publicAbsoluteUrl,
   sendMail,
 } from "@/lib/mail";
+import { isRootUsername } from "@/lib/roles";
 
 const RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -41,7 +42,12 @@ export async function requestPasswordReset(login: string): Promise<{
   const user = await prisma.user.findFirst({
     where: { OR: [{ email: key }, { username: key }] },
   });
-  if (!user?.passwordHash || user.allowPasswordLogin === false) {
+  // Root password cannot be reset through the platform.
+  if (
+    !user?.passwordHash ||
+    user.allowPasswordLogin === false ||
+    isRootUsername(user.username)
+  ) {
     return generic;
   }
   if (!user.email || user.email.endsWith("@veninspect.local")) {
@@ -145,6 +151,12 @@ export async function resetPasswordWithToken(opts: {
   }
   if (row.user.allowPasswordLogin === false) {
     return { ok: false, error: "Password login is disabled for this account." };
+  }
+  if (isRootUsername(row.user.username)) {
+    return {
+      ok: false,
+      error: "The root system account password cannot be reset here.",
+    };
   }
 
   await prisma.$transaction([

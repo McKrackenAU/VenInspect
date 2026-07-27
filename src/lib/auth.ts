@@ -10,6 +10,8 @@ import {
   type SessionPayload,
 } from "@/lib/session-token";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
+import { isAdminRole, isRootUsername } from "@/lib/roles";
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -19,6 +21,26 @@ export type AuthUser = {
   level1Qualified: boolean;
   level2Qualified: boolean;
 };
+
+function toAuthUser(user: {
+  id: string;
+  email: string;
+  username: string | null;
+  name: string;
+  role: string;
+  level1Qualified: boolean;
+  level2Qualified: boolean;
+}): AuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    name: user.name,
+    role: isAdminRole(user.role, user.username) ? "ADMIN" : "INSPECTOR",
+    level1Qualified: user.level1Qualified,
+    level2Qualified: user.level2Qualified,
+  };
+}
 
 export async function getSession(): Promise<SessionPayload | null> {
   const jar = await cookies();
@@ -31,16 +53,22 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const session = await getSession();
   if (!session) return null;
   const user = await prisma.user.findUnique({ where: { id: session.sub } });
-  if (!user) return null;
-  return {
-    id: user.id,
-    email: user.email,
-    username: user.username,
-    name: user.name,
-    role: user.role,
-    level1Qualified: user.level1Qualified,
-    level2Qualified: user.level2Qualified,
-  };
+  if (!user) {
+    // Valid session for root/admin even if the row is briefly missing
+    if (isAdminRole(session.role, session.username)) {
+      return {
+        id: session.sub,
+        email: "",
+        username: session.username,
+        name: session.name,
+        role: "ADMIN",
+        level1Qualified: true,
+        level2Qualified: true,
+      };
+    }
+    return null;
+  }
+  return toAuthUser(user);
 }
 
 export async function requireUser(): Promise<AuthUser> {
@@ -51,7 +79,7 @@ export async function requireUser(): Promise<AuthUser> {
 
 export async function requireAdmin(): Promise<AuthUser> {
   const user = await requireUser();
-  if (user.role !== "ADMIN") redirect("/");
+  if (!isAdminRole(user.role, user.username)) redirect("/");
   return user;
 }
 
@@ -61,10 +89,13 @@ export async function createSessionCookie(user: {
   name: string;
   username: string | null;
 }) {
+  const role: "ADMIN" | "INSPECTOR" = isAdminRole(user.role, user.username)
+    ? "ADMIN"
+    : "INSPECTOR";
   const token = await signSession(
     {
       sub: user.id,
-      role: user.role,
+      role,
       name: user.name,
       username: user.username,
     },
@@ -101,15 +132,7 @@ export async function authenticateLogin(
   if (user.allowPasswordLogin === false) return null;
   if (!verifyPassword(password, user.passwordHash)) return null;
 
-  return {
-    id: user.id,
-    email: user.email,
-    username: user.username,
-    name: user.name,
-    role: user.role,
-    level1Qualified: user.level1Qualified,
-    level2Qualified: user.level2Qualified,
-  };
+  return toAuthUser(user);
 }
 
-export { hashPassword };
+export { hashPassword, isRootUsername };

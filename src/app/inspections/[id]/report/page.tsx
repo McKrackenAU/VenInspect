@@ -56,7 +56,10 @@ export default async function InspectionReportPage({
   const exportCfg = getExportConfig();
 
   const reviewCandidates = await prisma.user.findMany({
-    where: { id: { not: inspection.createdById } },
+    where: {
+      id: { not: inspection.createdById },
+      OR: [{ username: null }, { username: { not: "root" } }],
+    },
     orderBy: { name: "asc" },
     select: { id: true, name: true, level2Qualified: true },
   });

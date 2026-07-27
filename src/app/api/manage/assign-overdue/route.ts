@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { isAdminRole, isRootUsername } from "@/lib/roles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Assign / reassign an overdue asset inspection from the live dashboard. */
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
-  if (!user || user.role !== "ADMIN") {
+  if (!user || !isAdminRole(user.role, user.username)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -43,6 +44,17 @@ export async function POST(req: NextRequest) {
   if (!assetId || !assignedToId) {
     return NextResponse.json(
       { error: "Asset and inspector required" },
+      { status: 400 },
+    );
+  }
+
+  const assignee = await prisma.user.findUnique({
+    where: { id: assignedToId },
+    select: { username: true },
+  });
+  if (!assignee || isRootUsername(assignee.username)) {
+    return NextResponse.json(
+      { error: "Cannot assign work to the root system account" },
       { status: 400 },
     );
   }

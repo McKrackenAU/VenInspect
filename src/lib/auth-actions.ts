@@ -15,6 +15,7 @@ import {
   requestPasswordReset,
   resetPasswordWithToken,
 } from "@/lib/password-reset";
+import { isAdminRole, isRootUsername } from "@/lib/roles";
 
 export async function loginAction(formData: FormData) {
   const login = String(formData.get("login") ?? "");
@@ -28,10 +29,15 @@ export async function loginAction(formData: FormData) {
 
   await createSessionCookie(user);
 
-  if (user.role === "ADMIN" && next.startsWith("/manage")) {
+  // Root is a system account for the admin panel only.
+  if (isRootUsername(user.username)) {
+    redirect("/manage");
+  }
+
+  if (isAdminRole(user.role, user.username) && next.startsWith("/manage")) {
     redirect(next);
   }
-  if (next.startsWith("/manage") && user.role !== "ADMIN") {
+  if (next.startsWith("/manage") && !isAdminRole(user.role, user.username)) {
     redirect("/");
   }
   redirect(next.startsWith("/") ? next : "/");
@@ -53,6 +59,13 @@ export async function changePasswordAction(
   const user = await getCurrentUser();
   if (!user) {
     return { ok: false, error: "Sign in again to change your password." };
+  }
+  if (isRootUsername(user.username)) {
+    return {
+      ok: false,
+      error:
+        "The root system account password cannot be changed in the app. Update it on the server.",
+    };
   }
 
   const currentPassword = String(formData.get("currentPassword") ?? "");
@@ -82,6 +95,13 @@ export async function changePasswordAction(
     return {
       ok: false,
       error: "Password login is not enabled for this account. Ask an admin.",
+    };
+  }
+  if (isRootUsername(row.username)) {
+    return {
+      ok: false,
+      error:
+        "The root system account password cannot be changed in the app. Update it on the server.",
     };
   }
 

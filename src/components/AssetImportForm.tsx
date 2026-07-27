@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { importAssetsFromFile } from "@/lib/actions";
 import {
   StyledFileInput,
   TemplateDownloadButtons,
@@ -25,70 +26,20 @@ export function AssetImportForm() {
           e.preventDefault();
           setError(null);
           setResult(null);
-          const form = e.currentTarget;
-          const fd = new FormData(form);
+          const fd = new FormData(e.currentTarget);
           startTransition(async () => {
             try {
-              const res = await fetch("/api/manage/asset-import", {
-                method: "POST",
-                body: fd,
-                credentials: "same-origin",
-                // Let the browser set multipart boundary — do not set Content-Type
-              });
-              const text = await res.text();
-              type ImportBody = {
-                error?: string;
-                created?: number;
-                updated?: number;
-                skipped?: number;
-                total?: number;
-                errors?: string[];
-              };
-              let body: ImportBody | null = null;
-              try {
-                body = text ? (JSON.parse(text) as ImportBody) : null;
-              } catch {
-                body = null;
-              }
-              const errMsg = body?.error;
-
+              // Server action uses the page session (most reliable for admins).
+              const res = await importAssetsFromFile(fd);
               if (!res.ok) {
-                if (res.status === 401) {
-                  throw new Error(
-                    errMsg ||
-                      "Not signed in. Refresh the page and sign in again, then retry the import.",
-                  );
-                }
-                if (res.status === 403) {
-                  throw new Error(
-                    errMsg ||
-                      "Admin access required. Sign in with an admin account and retry.",
-                  );
-                }
-                if (res.status === 413) {
-                  throw new Error(
-                    errMsg ||
-                      "File too large for the server. Try CSV or a smaller workbook.",
-                  );
-                }
-                throw new Error(
-                  errMsg ||
-                    (text && !text.startsWith("<")
-                      ? text.slice(0, 200)
-                      : `Import failed (${res.status})`),
-                );
+                throw new Error(res.error);
               }
-
-              if (!body) {
-                throw new Error("Unexpected response from server (not JSON).");
-              }
-
               setResult({
-                created: body.created ?? 0,
-                updated: body.updated ?? 0,
-                skipped: body.skipped ?? 0,
-                total: body.total ?? 0,
-                errors: body.errors ?? [],
+                created: res.created,
+                updated: res.updated,
+                skipped: res.skipped,
+                total: res.total,
+                errors: res.errors,
               });
             } catch (err) {
               setError(err instanceof Error ? err.message : "Import failed");

@@ -111,7 +111,10 @@ export async function loadAdminDashboard(
       include: { assignedTo: true },
     }),
     prisma.user.findMany({
-      where: { role: { in: ["INSPECTOR", "ADMIN"] } },
+      where: {
+        role: { in: ["INSPECTOR", "ADMIN"] },
+        OR: [{ username: null }, { username: { not: "root" } }],
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

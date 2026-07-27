@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isAdminSession, isRootUsername } from "@/lib/roles";
 import {
   SESSION_COOKIE,
   sessionSecret,
@@ -17,10 +18,28 @@ const PUBLIC_PREFIXES = [
   "/favicon",
 ];
 
+/** Paths root may use outside /manage (APIs used by admin UI). */
+function isRootAllowedPath(pathname: string): boolean {
+  if (pathname.startsWith("/manage")) return true;
+  if (pathname.startsWith("/api/manage")) return true;
+  if (pathname.startsWith("/api/assets")) return true;
+  if (pathname.startsWith("/api/uploads")) return true;
+  if (pathname.startsWith("/api/admin")) return true;
+  return false;
+}
+
 function isPublic(pathname: string): boolean {
   if (pathname === "/login") return true;
   return PUBLIC_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
+function isAdminApiPath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/api/manage") ||
+    pathname.startsWith("/api/assets/import") ||
+    pathname.startsWith("/api/assets/registry-import")
   );
 }
 
@@ -38,6 +57,8 @@ export async function middleware(request: NextRequest) {
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySession(token, sessionSecret()) : null;
+  const admin = isAdminSession(session);
+  const root = isRootUsername(session?.username);
 
   // Bare host / IP with no session → login (clean URL, no ?next=/)
   if (!session && (pathname === "/" || pathname === "")) {
@@ -48,16 +69,21 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isPublic(pathname)) {
-    // Already signed in → leave login / forgot-password
     if (
       session &&
       (pathname === "/login" || pathname === "/forgot-password")
     ) {
       const next = request.nextUrl.searchParams.get("next");
       const dest =
-        next && next.startsWith("/") && !next.startsWith("/login") ? next : "/";
+        next && next.startsWith("/") && !next.startsWith("/login")
+          ? next
+          : root
+            ? "/manage"
+            : "/";
+      const safeDest =
+        root && !dest.startsWith("/manage") ? "/manage" : dest;
       const url = request.nextUrl.clone();
-      url.pathname = dest;
+      url.pathname = safeDest;
       url.search = "";
       return NextResponse.redirect(url);
     }
@@ -65,6 +91,12 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!session) {
+    if (isAdminApiPath(pathname)) {
+      return NextResponse.json(
+        { error: "Not signed in. Refresh the page and sign in again." },
+        { status: 401 },
+      );
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
@@ -74,20 +106,35 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // System root: admin panel only (hidden from field portal)
+  if (root && !isRootAllowedPath(pathname)) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: "Root account is limited to the admin portal." },
+        { status: 403 },
+      );
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = "/manage";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   // Admin portal pages
-  if (pathname.startsWith("/manage") && session.role !== "ADMIN") {
+  if (pathname.startsWith("/manage") && !admin) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
     return NextResponse.redirect(url);
   }
 
-  // Admin APIs — return JSON 403 (not an HTML redirect) so fetch() clients
-  // can show a clear message instead of following a redirect to "/".
-  if (pathname.startsWith("/api/manage") && session.role !== "ADMIN") {
+  // Admin APIs: require a session here, but do NOT gate on session.role.
+  // Route handlers re-check against the live DB role (avoids false 403s when
+  // the signed cookie role is stale or multipart edge parsing is flaky).
+  if (isAdminApiPath(pathname) && !session) {
     return NextResponse.json(
-      { error: "Admin access required." },
-      { status: 403 },
+      { error: "Not signed in. Refresh the page and sign in again." },
+      { status: 401 },
     );
   }
 

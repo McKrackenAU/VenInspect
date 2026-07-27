@@ -14,6 +14,7 @@ import {
 import { getDateTimePrefs } from "@/lib/date-time";
 import Link from "next/link";
 import { requireAdmin, getCurrentUser } from "@/lib/auth";
+import { isRootUsername } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function ManageSystemPage({ searchParams }: Props) {
   const nearmapKey = getNearmapApiKey();
   const mapProvider = getMapProvider();
   const dt = getDateTimePrefs();
-  const isRoot = user?.username === "root";
+  const isRoot = isRootUsername(user?.username);
 
   return (
     <div className="space-y-8">

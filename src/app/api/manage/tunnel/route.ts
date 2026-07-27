@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { readStorageSettings, writeStorageSettings } from "@/lib/paths";
+import { isAdminRole, isRootUsername } from "@/lib/roles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function PUT(req: NextRequest) {
   const user = await getCurrentUser();
-  if (!user || user.role !== "ADMIN" || user.username !== "root") {
+  if (!user || !isAdminRole(user.role, user.username) || !isRootUsername(user.username)) {
     return NextResponse.json({ error: "Root only" }, { status: 403 });
   }
   let body: {

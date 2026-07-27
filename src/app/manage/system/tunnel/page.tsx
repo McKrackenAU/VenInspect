@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser, requireAdmin } from "@/lib/auth";
 import { readStorageSettings } from "@/lib/paths";
+import { isRootUsername } from "@/lib/roles";
 import { TunnelConfigForm } from "@/components/TunnelConfigForm";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function TunnelPage() {
   await requireAdmin();
   const user = await getCurrentUser();
-  if (user?.username !== "root") {
+  if (!isRootUsername(user?.username)) {
     redirect("/manage/system");
   }
   const settings = readStorageSettings();

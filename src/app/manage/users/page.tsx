@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { createUser } from "@/lib/actions";
 import { requireAdmin } from "@/lib/auth";
+import { isRootUsername } from "@/lib/roles";
 import Link from "next/link";
 import { UserQualificationsForm } from "@/components/UserQualificationsForm";
 
@@ -17,9 +18,10 @@ export default async function ManageUsersPage() {
           Users & qualifications
         </h1>
         <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
-          Create logins for field and office staff. Default admin is{" "}
-          <code className="font-mono text-xs">root</code> /{" "}
-          <code className="font-mono text-xs">calvin</code>.
+          Create logins for field and office staff. The{" "}
+          <code className="font-mono text-xs">root</code> account is a locked
+          system admin for the Manage portal only — it cannot be assigned work
+          and its password is not changeable in the app.
         </p>
       </div>
 
@@ -94,6 +96,7 @@ export default async function ManageUsersPage() {
         <h2 className="text-lg font-medium">Directory</h2>
         <ul className="space-y-3">
           {users.map((u) => {
+            const root = isRootUsername(u.username);
             const showUsername =
               Boolean(u.username) &&
               u.username!.toLowerCase() !== u.email.toLowerCase();
@@ -102,7 +105,14 @@ export default async function ManageUsersPage() {
               key={u.id}
               className="rounded-xl border border-[color:var(--ventia-border)] bg-[color:var(--panel)] p-4 shadow-sm"
             >
-              <p className="font-medium">{u.name}</p>
+              <p className="font-medium">
+                {u.name}
+                {root ? (
+                  <span className="ml-2 text-xs font-semibold text-[color:var(--ventia-muted)]">
+                    System account
+                  </span>
+                ) : null}
+              </p>
               <p className="text-sm text-[color:var(--ventia-muted)]">
                 {showUsername ? (
                   <>
@@ -122,16 +132,26 @@ export default async function ManageUsersPage() {
                 Role: {u.role}
                 {u.level1Qualified ? " · L1" : ""}
                 {u.level2Qualified ? " · L2" : ""}
+                {root ? " · Admin panel only · not assignable" : ""}
               </p>
-              <p className="mt-1">
-                <Link
-                  href={`/manage/users/${u.id}`}
-                  className="text-xs font-semibold text-[color:var(--ventia-blue)] hover:underline"
-                >
-                  View inspection history →
-                </Link>
-              </p>
-              <UserQualificationsForm user={u} />
+              {!root ? (
+                <>
+                  <p className="mt-1">
+                    <Link
+                      href={`/manage/users/${u.id}`}
+                      className="text-xs font-semibold text-[color:var(--ventia-blue)] hover:underline"
+                    >
+                      View inspection history →
+                    </Link>
+                  </p>
+                  <UserQualificationsForm user={u} />
+                </>
+              ) : (
+                <p className="mt-2 text-xs text-[color:var(--ventia-muted)]">
+                  Password and role are locked. Change the password only via
+                  server tooling if needed.
+                </p>
+              )}
             </li>
             );
           })}

@@ -19,9 +19,11 @@ const userLinks = [
 type Props = {
   userName?: string | null;
   isAdmin?: boolean;
+  /** Root system account — admin portal only */
+  isRoot?: boolean;
 };
 
-export function AppNav({ userName, isAdmin }: Props) {
+export function AppNav({ userName, isAdmin, isRoot }: Props) {
   const pathname = usePathname();
   if (
     pathname === "/login" ||
@@ -59,7 +61,7 @@ export function AppNav({ userName, isAdmin }: Props) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isAdmin ? (
+          {isAdmin && !isRoot ? (
             <div
               className="inline-flex rounded-lg border border-[color:var(--ventia-border)] p-0.5 text-xs font-semibold"
               role="group"
@@ -89,31 +91,39 @@ export function AppNav({ userName, isAdmin }: Props) {
           ) : null}
 
           {userName ? (
-            <Link
-              href="/account"
-              className={`hidden rounded-lg px-2 py-1.5 text-xs sm:inline ${
-                pathname === "/account" || pathname.startsWith("/account/")
-                  ? "font-semibold text-[color:var(--ventia-green)]"
-                  : "text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
-              }`}
-              title="Account & password"
-            >
-              {userName}
-            </Link>
+            isRoot ? (
+              <span className="hidden rounded-lg px-2 py-1.5 text-xs text-[color:var(--ventia-muted)] sm:inline">
+                {userName}
+              </span>
+            ) : (
+              <Link
+                href="/account"
+                className={`hidden rounded-lg px-2 py-1.5 text-xs sm:inline ${
+                  pathname === "/account" || pathname.startsWith("/account/")
+                    ? "font-semibold text-[color:var(--ventia-green)]"
+                    : "text-[color:var(--ventia-muted)] hover:bg-[color:var(--ventia-green-tint)]"
+                }`}
+                title="Account & password"
+              >
+                {userName}
+              </Link>
+            )
           ) : null}
 
           <ThemeToggle />
 
-          <Link
-            href="/account"
-            className={`rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs font-medium hover:bg-[color:var(--ventia-green-tint)] ${
-              pathname === "/account" || pathname.startsWith("/account/")
-                ? "border-[color:var(--ventia-green)] font-semibold text-[color:var(--ventia-green)]"
-                : "text-[color:var(--ventia-muted)]"
-            }`}
-          >
-            Account
-          </Link>
+          {!isRoot ? (
+            <Link
+              href="/account"
+              className={`rounded-lg border border-[color:var(--ventia-border)] px-3 py-1.5 text-xs font-medium hover:bg-[color:var(--ventia-green-tint)] ${
+                pathname === "/account" || pathname.startsWith("/account/")
+                  ? "border-[color:var(--ventia-green)] font-semibold text-[color:var(--ventia-green)]"
+                  : "text-[color:var(--ventia-muted)]"
+              }`}
+            >
+              Account
+            </Link>
+          ) : null}
 
           <form action={logoutAction}>
             <button

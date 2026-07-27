@@ -30,6 +30,7 @@ export default async function ManageSchedulePage() {
       orderBy: [{ roadName: "asc" }, { assetNumber: "asc" }],
     }),
     prisma.user.findMany({
+      where: { OR: [{ username: null }, { username: { not: "root" } }] },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
