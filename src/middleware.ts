@@ -59,6 +59,9 @@ export async function middleware(request: NextRequest) {
   const session = token ? await verifySession(token, sessionSecret()) : null;
   const admin = isAdminSession(session);
   const root = isRootUsername(session?.username);
+  const isServerAction =
+    request.headers.has("Next-Action") ||
+    request.headers.has("next-action");
 
   // Bare host / IP with no session → login (clean URL, no ?next=/)
   if (!session && (pathname === "/" || pathname === "")) {
@@ -91,7 +94,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!session) {
-    if (isAdminApiPath(pathname)) {
+    if (isAdminApiPath(pathname) || isServerAction) {
       return NextResponse.json(
         { error: "Not signed in. Refresh the page and sign in again." },
         { status: 401 },
@@ -108,7 +111,7 @@ export async function middleware(request: NextRequest) {
 
   // System root: admin panel only (hidden from field portal)
   if (root && !isRootAllowedPath(pathname)) {
-    if (pathname.startsWith("/api/")) {
+    if (pathname.startsWith("/api/") || isServerAction) {
       return NextResponse.json(
         { error: "Root account is limited to the admin portal." },
         { status: 403 },
@@ -120,8 +123,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Admin portal pages
+  // Admin portal pages — never HTML-redirect server actions (breaks the
+  // action protocol with "unexpected response from the server").
   if (pathname.startsWith("/manage") && !admin) {
+    if (isServerAction) {
+      return NextResponse.json(
+        { error: "Admin access required." },
+        { status: 403 },
+      );
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";

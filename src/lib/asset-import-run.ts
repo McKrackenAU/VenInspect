@@ -10,7 +10,7 @@ export type AssetImportResult = {
   errors: string[];
 };
 
-/** Shared upsert loop for server action + API route. */
+/** Shared upsert loop for API import (bulk-friendly). */
 export async function runAssetImport(
   buffer: Buffer,
   mode: string,
@@ -22,13 +22,22 @@ export async function runAssetImport(
   let skipped = 0;
   const rowErrors = [...errors];
 
+  // Prefetch existing codes once — much faster for ~200+ row imports.
+  const codes = rows.map((r) => r.assetNumber);
+  const existingRows =
+    codes.length > 0
+      ? await prisma.asset.findMany({
+          where: { assetNumber: { in: codes } },
+          select: { assetNumber: true },
+        })
+      : [];
+  const existingSet = new Set(existingRows.map((r) => r.assetNumber));
+
   for (const row of rows) {
     try {
-      const existing = await prisma.asset.findUnique({
-        where: { assetNumber: row.assetNumber },
-      });
+      const exists = existingSet.has(row.assetNumber);
 
-      if (existing && mode === "skip") {
+      if (exists && mode === "skip") {
         skipped += 1;
         continue;
       }
@@ -52,7 +61,7 @@ export async function runAssetImport(
         notes: row.notes,
       };
 
-      if (existing) {
+      if (exists) {
         await prisma.asset.update({
           where: { assetNumber: row.assetNumber },
           data,
@@ -62,6 +71,7 @@ export async function runAssetImport(
         await prisma.asset.create({
           data: { assetNumber: row.assetNumber, ...data },
         });
+        existingSet.add(row.assetNumber);
         created += 1;
       }
     } catch (e) {

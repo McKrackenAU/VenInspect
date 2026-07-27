@@ -1,14 +1,28 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { importAssetsFromFile } from "@/lib/actions";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   StyledFileInput,
   TemplateDownloadButtons,
 } from "@/components/StyledFileInput";
 
+type ImportOk = {
+  ok: true;
+  created: number;
+  updated: number;
+  skipped: number;
+  total: number;
+  errors: string[];
+};
+
+type ImportErr = {
+  ok?: false;
+  error?: string;
+};
+
 export function AssetImportForm() {
   const [pending, startTransition] = useTransition();
+  const [sessionReady, setSessionReady] = useState(false);
   const [result, setResult] = useState<{
     created: number;
     updated: number;
@@ -18,15 +32,23 @@ export function AssetImportForm() {
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Heal stale session role (DB Admin + cookie Inspector) before import.
-  useEffect(() => {
-    void fetch("/api/manage/session-sync", {
-      method: "POST",
-      credentials: "include",
-    }).catch(() => {
+  const syncSession = useCallback(async () => {
+    try {
+      await fetch("/api/manage/session-sync", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
+    } catch {
       /* non-fatal */
-    });
+    } finally {
+      setSessionReady(true);
+    }
   }, []);
+
+  useEffect(() => {
+    void syncSession();
+  }, [syncSession]);
 
   return (
     <div className="space-y-4">
@@ -36,45 +58,65 @@ export function AssetImportForm() {
           e.preventDefault();
           setError(null);
           setResult(null);
-          const fd = new FormData(e.currentTarget);
+          const form = e.currentTarget;
+          const fd = new FormData(form);
           startTransition(async () => {
             try {
-              // Server action shares the Manage page cookie jar (avoids false
-              // admin 403s from multipart fetch / stale session role).
-              const res = await importAssetsFromFile(fd);
-              if (!res.ok) {
-                throw new Error(res.error);
+              // Ensure cookie role matches DB before multipart auth.
+              await syncSession();
+
+              const res = await fetch("/api/manage/asset-import", {
+                method: "POST",
+                body: fd,
+                credentials: "include",
+                cache: "no-store",
+              });
+
+              const text = await res.text();
+              let body: (ImportOk | ImportErr) | null = null;
+              try {
+                body = text ? (JSON.parse(text) as ImportOk | ImportErr) : null;
+              } catch {
+                body = null;
               }
+
+              if (!res.ok) {
+                const msg =
+                  (body && "error" in body && body.error) ||
+                  (text && !text.startsWith("<")
+                    ? text.slice(0, 300)
+                    : null);
+                if (res.status === 401) {
+                  throw new Error(
+                    msg ||
+                      "Not signed in. Refresh, sign in again, then retry the import.",
+                  );
+                }
+                if (res.status === 403) {
+                  throw new Error(
+                    msg ||
+                      "Admin access required. In Manage → Users, confirm Role=Admin on your account, then sign out and back in.",
+                  );
+                }
+                throw new Error(msg || `Import failed (HTTP ${res.status})`);
+              }
+
+              if (!body || body.ok !== true) {
+                throw new Error(
+                  (body && "error" in body && body.error) ||
+                    "Import failed — empty response from server.",
+                );
+              }
+
               setResult({
-                created: res.created,
-                updated: res.updated,
-                skipped: res.skipped,
-                total: res.total,
-                errors: res.errors,
+                created: body.created,
+                updated: body.updated,
+                skipped: body.skipped,
+                total: body.total,
+                errors: body.errors ?? [],
               });
             } catch (err) {
-              if (
-                typeof err === "object" &&
-                err &&
-                "digest" in err &&
-                String((err as { digest?: string }).digest).startsWith(
-                  "NEXT_REDIRECT",
-                )
-              ) {
-                throw err;
-              }
-              const message =
-                err instanceof Error ? err.message : "Import failed";
-              // Next sometimes wraps action failures as this generic string
-              if (
-                message === "An unexpected response was received from the server."
-              ) {
-                setError(
-                  "Import failed (session/upload). Sign out, sign back in, then try again — or use a smaller CSV.",
-                );
-              } else {
-                setError(message);
-              }
+              setError(err instanceof Error ? err.message : "Import failed");
             }
           });
         }}
@@ -95,7 +137,7 @@ export function AssetImportForm() {
             required
             accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             label="Choose import file"
-            hint="Match the template column headers (includes AV ID, chainage from/to)"
+            hint="Bulk import is supported (hundreds of assets). Match the template headers."
           />
         </div>
 
@@ -120,10 +162,14 @@ export function AssetImportForm() {
 
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || !sessionReady}
           className="btn-primary-inline w-full sm:w-auto"
         >
-          {pending ? "Importing…" : "Import assets"}
+          {pending
+            ? "Importing…"
+            : !sessionReady
+              ? "Preparing…"
+              : "Import assets"}
         </button>
 
         {error ? (

@@ -10,10 +10,10 @@ const nextConfig: NextConfig = {
   // Phone camera photos / Excel registry imports can be several MB.
   experimental: {
     serverActions: {
-      bodySizeLimit: "20mb",
+      bodySizeLimit: "40mb",
     },
     // Next 16 proxies/clones bodies through middleware — raise with uploads.
-    proxyClientMaxBodySize: "20mb",
+    proxyClientMaxBodySize: "40mb",
   },
 };
 
