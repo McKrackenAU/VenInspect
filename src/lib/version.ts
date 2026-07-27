@@ -140,16 +140,21 @@ export type RemoteRelease = {
   prerelease: boolean;
 };
 
+/** How many prior releases to show in Manage → System version picker. */
+export const REMOTE_RELEASE_PICKER_LIMIT = 5;
+
 function releasesApiUrl(channel: UpdateChannel): string | null {
   if (channel === "github") {
-    return "https://api.github.com/repos/McKrackenAU/VenInspect/releases?per_page=30";
+    return `https://api.github.com/repos/McKrackenAU/VenInspect/releases?per_page=${REMOTE_RELEASE_PICKER_LIMIT}`;
   }
   const base =
     process.env.GITEA_API_BASE?.trim() ||
     process.env.GITEA_RAW_BASE?.trim()?.replace(/\/raw\/branch\/main\/?$/, "") ||
     "http://192.168.13.9:3000/McKraken/VenInspect";
   // Gitea API: /api/v1/repos/{owner}/{repo}/releases
-  if (base.includes("/api/v1/")) return `${base.replace(/\/$/, "")}/releases?limit=30`;
+  if (base.includes("/api/v1/")) {
+    return `${base.replace(/\/$/, "")}/releases?limit=${REMOTE_RELEASE_PICKER_LIMIT}`;
+  }
   try {
     const u = new URL(base.includes("://") ? base : `http://${base}`);
     const parts = u.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
@@ -157,17 +162,17 @@ function releasesApiUrl(channel: UpdateChannel): string | null {
     if (parts.length >= 2) {
       const owner = parts[0];
       const repo = parts[1];
-      return `${u.origin}/api/v1/repos/${owner}/${repo}/releases?limit=30`;
+      return `${u.origin}/api/v1/repos/${owner}/${repo}/releases?limit=${REMOTE_RELEASE_PICKER_LIMIT}`;
     }
   } catch {
     /* fall through */
   }
-  return "http://192.168.13.9:3000/api/v1/repos/McKraken/VenInspect/releases?limit=30";
+  return `http://192.168.13.9:3000/api/v1/repos/McKraken/VenInspect/releases?limit=${REMOTE_RELEASE_PICKER_LIMIT}`;
 }
 
 function tagsApiUrl(channel: UpdateChannel): string | null {
   if (channel === "github") {
-    return "https://api.github.com/repos/McKrackenAU/VenInspect/tags?per_page=30";
+    return `https://api.github.com/repos/McKrackenAU/VenInspect/tags?per_page=${REMOTE_RELEASE_PICKER_LIMIT}`;
   }
   return null;
 }
@@ -249,7 +254,10 @@ export async function listRemoteReleases(
         { cache: "no-store", headers, signal: AbortSignal.timeout(15000) },
       );
       if (res.ok) {
-        const releases = parseReleasesJson(await res.text());
+        const releases = parseReleasesJson(await res.text()).slice(
+          0,
+          REMOTE_RELEASE_PICKER_LIMIT,
+        );
         if (releases.length > 0) {
           return { releases, repoLabel: urls.repoLabel };
         }
@@ -268,7 +276,10 @@ export async function listRemoteReleases(
         signal: AbortSignal.timeout(15000),
       });
       if (res.ok) {
-        const releases = parseTagsJson(await res.text());
+        const releases = parseTagsJson(await res.text()).slice(
+          0,
+          REMOTE_RELEASE_PICKER_LIMIT,
+        );
         if (releases.length > 0) {
           return { releases, repoLabel: urls.repoLabel };
         }

@@ -323,7 +323,7 @@ export function SystemUpdatePanel({
           {loadingReleases
             ? "Loading releases…"
             : releases.length > 0
-              ? `${releases.length} releases from ${channel === "github" ? "GitHub" : "Gitea"}. Pick an older build to undo a bad push.`
+              ? `Last ${releases.length} release${releases.length === 1 ? "" : "s"} from ${channel === "github" ? "GitHub" : "Gitea"}. Pick an older build to undo a bad push.`
               : "Could not load release list yet — you can still install latest."}
         </span>
       </label>
