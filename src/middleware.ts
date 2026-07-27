@@ -33,6 +33,7 @@ function isRootAllowedPath(pathname: string): boolean {
   ) {
     return true;
   }
+  if (pathname.startsWith("/api/exports/")) return true;
   return false;
 }
 
@@ -78,6 +79,11 @@ function isAssetImportPath(pathname: string): boolean {
   );
 }
 
+/** Token ZIP downloads — auth is the job token, not the session cookie. */
+function isClientExportFilePath(pathname: string): boolean {
+  return /^\/api\/exports\/file\/[a-f0-9]{32}\/?$/.test(pathname);
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -94,6 +100,12 @@ export async function middleware(request: NextRequest) {
   // session). Do not gate here — large uploads often lose Cookie headers, and
   // Edge middleware cannot read DATA_DIR grants.
   if (isAssetImportPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Client-export ZIP download uses a one-time job token in the query string.
+  // Bypass session gate so browser navigation / <a download> works through Cloudflare.
+  if (isClientExportFilePath(pathname)) {
     return NextResponse.next();
   }
 
