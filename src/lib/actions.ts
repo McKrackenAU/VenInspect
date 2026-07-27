@@ -1084,45 +1084,23 @@ export async function updateUserQualifications(formData: FormData) {
 
 /**
  * Asset registry import (server action).
- * Auth: page-minted grant in FormData (preferred) OR live session/DB admin.
- * Grant travels in the body so Cookie / query stripping cannot block import.
+ * Manage layout already requires admin — do not re-check role here.
+ * Only require the short grant minted when the Import page rendered.
  */
 export async function importAssetsFromFile(formData: FormData): Promise<
   | { ok: true; created: number; updated: number; skipped: number; total: number; errors: string[] }
   | { ok: false; error: string }
 > {
   try {
-    const { getCurrentUser, getSession, createSessionCookie } = await import(
-      "@/lib/auth"
-    );
-    const { isAdminRole } = await import("@/lib/roles");
     const { verifyAssetImportGrant } = await import("@/lib/import-grant");
 
     const grantId = String(formData.get("importGrant") ?? "").trim();
-    const grantOk = Boolean(verifyAssetImportGrant(grantId));
-
-    const user = await getCurrentUser();
-    const session = await getSession();
-    const cookieAdmin = Boolean(
-      (user && isAdminRole(user.role, user.username)) ||
-        (session && isAdminRole(session.role, session.username)),
-    );
-
-    if (!grantOk && !cookieAdmin) {
+    if (!verifyAssetImportGrant(grantId)) {
       return {
         ok: false,
-        error: user
-          ? "Admin access required. Your account role is not Admin in the database — Manage → Users → set Role=Admin, then sign out and back in."
-          : "Not signed in (and import grant missing/expired). Open Import again, then retry.",
+        error:
+          "Import session expired. Open Manage → Assets → Import again, then retry the upload.",
       };
-    }
-
-    if (user && session && session.role !== "ADMIN" && user.role === "ADMIN") {
-      try {
-        await createSessionCookie(user);
-      } catch {
-        /* non-fatal */
-      }
     }
 
     const file = formData.get("file");

@@ -53,19 +53,7 @@ export function AssetImportForm({
                 errors: outcome.errors ?? [],
               });
             } catch (err) {
-              const msg =
-                err instanceof Error ? err.message : "Import failed";
-              // Next flight / middleware noise → plain guidance
-              if (
-                /unexpected response|admin access required\.?$/i.test(msg) &&
-                msg.length < 40
-              ) {
-                setError(
-                  "Admin access required (session blocked the upload). Confirm Role=Admin under Manage → Users, sign out and back in, open Import again, then retry.",
-                );
-              } else {
-                setError(msg);
-              }
+              setError(err instanceof Error ? err.message : "Import failed");
             }
           });
         }}
