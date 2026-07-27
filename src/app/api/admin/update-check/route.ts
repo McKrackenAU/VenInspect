@@ -15,17 +15,25 @@ export const dynamic = "force-dynamic";
 
 async function fetchText(url: string): Promise<string | null> {
   try {
-    const headers: HeadersInit = { "User-Agent": "VenInspect-UpdateCheck" };
-    // GitHub Contents API returns base64 JSON unless we ask for raw
-    if (url.includes("api.github.com")) {
+    const headers: HeadersInit = {
+      "User-Agent": "VenInspect-UpdateCheck",
+      "Cache-Control": "no-cache",
+    };
+    // Contents API: ask for raw file bytes. Releases/tags endpoints stay JSON.
+    if (url.includes("api.github.com") && url.includes("/contents/")) {
       headers.Accept = "application/vnd.github.raw";
     }
-    const res = await fetch(url, {
+    // Bust CDN caches on raw.githubusercontent.com (often lags behind main)
+    const bust = url.includes("?")
+      ? `${url}&_=${Date.now()}`
+      : `${url}?_=${Date.now()}`;
+    const res = await fetch(bust, {
       cache: "no-store",
       headers,
       signal: AbortSignal.timeout(15000),
     });
     if (!res.ok) return null;
+    // tags list must stay JSON — don't use raw accept for that URL
     return await res.text();
   } catch {
     return null;

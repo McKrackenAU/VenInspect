@@ -53,13 +53,15 @@ export function remoteVersionUrls(channel: UpdateChannel): {
     return {
       packageJson:
         "https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/package.json",
+      // Prefer Releases API first — raw.githubusercontent.com can CDN-cache VERSION
+      // for minutes/hours after a push, which hides brand-new tags from the updater.
       versionFile:
-        "https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/VERSION",
-      versionFileFallbacks: [
-        "https://github.com/McKrackenAU/VenInspect/raw/main/VERSION",
-        "https://api.github.com/repos/McKrackenAU/VenInspect/contents/VERSION?ref=main",
-        // GitHub Releases “Latest” (shown on the repo Releases page)
         "https://api.github.com/repos/McKrackenAU/VenInspect/releases/latest",
+      versionFileFallbacks: [
+        "https://api.github.com/repos/McKrackenAU/VenInspect/tags",
+        "https://api.github.com/repos/McKrackenAU/VenInspect/contents/VERSION?ref=main",
+        "https://github.com/McKrackenAU/VenInspect/raw/main/VERSION",
+        "https://raw.githubusercontent.com/McKrackenAU/VenInspect/main/VERSION",
       ],
       repoLabel: "GitHub (McKrackenAU/VenInspect)",
     };
@@ -77,13 +79,22 @@ export function remoteVersionUrls(channel: UpdateChannel): {
 export function parseRemoteVersion(text: string): string | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
-  if (trimmed.startsWith("{")) {
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
     try {
-      const json = JSON.parse(trimmed) as {
-        version?: string;
-        tag_name?: string;
-        name?: string;
-      };
+      const json = JSON.parse(trimmed) as
+        | {
+            version?: string;
+            tag_name?: string;
+            name?: string;
+          }
+        | Array<{ name?: string; tag_name?: string }>;
+
+      // GitHub /tags list — take the first (newest) tag
+      if (Array.isArray(json)) {
+        const tag = (json[0]?.name || json[0]?.tag_name || "").replace(/^v/i, "");
+        return tag || null;
+      }
+
       // package.json → version; GitHub release → tag_name
       const fromPkg = json.version?.replace(/^v/i, "");
       if (fromPkg) return fromPkg;
