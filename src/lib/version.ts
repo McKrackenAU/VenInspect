@@ -1,21 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
 
-/** App semver — keep VERSION and package.json in sync. */
+/** App semver — package.json is canonical; keep VERSION in sync for deploy scripts. */
 export function getAppVersion(): string {
-  try {
-    const fromFile = fs
-      .readFileSync(path.join(process.cwd(), "VERSION"), "utf8")
-      .trim();
-    if (fromFile) return fromFile.replace(/^v/i, "");
-  } catch {
-    /* fall through */
-  }
   try {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
     ) as { version?: string };
     if (pkg.version) return pkg.version.replace(/^v/i, "");
+  } catch {
+    /* fall through */
+  }
+  try {
+    const fromFile = fs
+      .readFileSync(path.join(process.cwd(), "VERSION"), "utf8")
+      .trim();
+    if (fromFile) return fromFile.replace(/^v/i, "");
   } catch {
     /* fall through */
   }
