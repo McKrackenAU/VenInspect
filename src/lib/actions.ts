@@ -1210,6 +1210,10 @@ export async function updateAssetDetails(formData: FormData) {
   const subClassification =
     String(formData.get("subClassification") ?? "").trim().toUpperCase().replace(/\s+/g, "_") ||
     null;
+  const parentAssetName =
+    String(formData.get("parentAssetName") ?? "").trim() || null;
+  const parentAssetCode =
+    String(formData.get("parentAssetCode") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
   const latitudeRaw = String(formData.get("latitude") ?? "").trim();
   const longitudeRaw = String(formData.get("longitude") ?? "").trim();
@@ -1276,6 +1280,8 @@ export async function updateAssetDetails(formData: FormData) {
       location,
       classification,
       subClassification,
+      parentAssetName,
+      parentAssetCode,
       notes,
       latitude: Number.isFinite(latitude) ? latitude : null,
       longitude: Number.isFinite(longitude) ? longitude : null,

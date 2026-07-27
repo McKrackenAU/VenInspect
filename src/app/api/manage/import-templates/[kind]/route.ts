@@ -27,10 +27,12 @@ const TEMPLATES: Record<
     sheet: "Assets",
     csvSample: [
       [
-        "SN0001",
-        "AV-10001",
+        "SN1730",
+        "AV-5571-01",
         "Example Ped Underpass",
-        "EXAMPLE RD",
+        "Anderson Road",
+        "Anderson Road",
+        "5571",
         "BRIDGE",
         "PED_UNDERPASS",
         "Over creek",

@@ -4,7 +4,9 @@ import PDFDocument from "pdfkit";
 import sharp from "sharp";
 import {
   formatAssetType,
+  formatAssetRoadHeadline,
   formatLevel,
+  formatRoadWithParentCode,
   formatStatus,
 } from "@/lib/inspection";
 import { absolutePhotoPath } from "@/lib/paths";
@@ -42,6 +44,8 @@ export type ReportPdfAsset = {
   longitude: number | null;
   classification: string | null;
   subClassification?: string | null;
+  parentAssetCode?: string | null;
+  parentAssetName?: string | null;
   parentChainage: number | null;
   chainageFrom?: number | null;
   chainageTo?: number | null;
@@ -255,7 +259,11 @@ export async function buildInspectionPdf(
       .font("Helvetica-Bold")
       .fontSize(12)
       .text(
-        `${input.asset.assetNumber}  ${input.asset.roadName.toUpperCase()}`,
+        formatAssetRoadHeadline({
+          assetNumber: input.asset.assetNumber,
+          roadName: input.asset.roadName,
+          parentAssetCode: input.asset.parentAssetCode,
+        }),
         MARGIN,
         doc.y + 4,
         { width: CONTENT_W },
@@ -285,8 +293,19 @@ export async function buildInspectionPdf(
     doc.y += 10;
 
     metaRow([
-      ["Road / location", [input.asset.roadName, input.asset.location].filter(Boolean).join(" — ")],
-      ["Asset type", formatAssetType(input.asset.type)],
+      [
+        "Road / location",
+        [
+          formatRoadWithParentCode(
+            input.asset.roadName,
+            input.asset.parentAssetCode,
+          ),
+          input.asset.location,
+        ]
+          .filter(Boolean)
+          .join(" — "),
+      ],
+      ["Asset type", formatAssetType(input.asset.type, input.asset.subClassification)],
       ["Inspected", formatAppPattern(input.inspectedAt, "dd/MM/yyyy HH:mm")],
       ["Inspector", input.inspectorName],
       ...(input.inspectorDetail

@@ -175,3 +175,37 @@ export function formatAssetType(
   const sub = assetSubClassLabel(subClassification);
   return sub ? `${base} · ${sub}` : base;
 }
+
+/**
+ * Road label with parent road asset code, e.g. "Anderson Road - 5571".
+ * Used on reports and asset headlines.
+ */
+export function formatRoadWithParentCode(
+  roadName: string | null | undefined,
+  parentAssetCode?: string | null,
+): string {
+  const road = (roadName ?? "").trim() || "Unknown Road";
+  const code = (parentAssetCode ?? "").trim();
+  if (!code) return road;
+  const lower = road.toLowerCase();
+  if (
+    lower.endsWith(` - ${code.toLowerCase()}`) ||
+    lower.endsWith(`-${code.toLowerCase()}`)
+  ) {
+    return road;
+  }
+  return `${road} - ${code}`;
+}
+
+/** Report / map-style headline: "SN1730  ANDERSON ROAD - 5571" */
+export function formatAssetRoadHeadline(asset: {
+  assetNumber: string;
+  roadName: string;
+  parentAssetCode?: string | null;
+}): string {
+  const road = formatRoadWithParentCode(
+    asset.roadName,
+    asset.parentAssetCode,
+  ).toUpperCase();
+  return `${asset.assetNumber}  ${road}`;
+}

@@ -41,8 +41,8 @@ export default async function ManageAssetImportPage() {
         </h1>
         <p className="mt-1 text-sm text-[color:var(--ventia-muted)]">
           Management only. Upload an Asset Vision bridge/culvert export or a CSV
-          with Code, Name, and optional Latitude/Longitude columns. Bulk imports
-          of hundreds of assets are supported.
+          with Code, AV ID, Name, Road Name, Parent Asset Name, Parent Asset Code,
+          and optional coordinates. Bulk imports of hundreds of assets are supported.
         </p>
       </div>
       {grantError ? (

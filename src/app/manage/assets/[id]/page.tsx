@@ -305,6 +305,31 @@ export default async function ManageAssetEditPage({
           </label>
           <label className="block space-y-1 text-sm">
             <span className="font-medium text-[color:var(--ventia-muted)]">
+              Parent asset name (road)
+            </span>
+            <input
+              name="parentAssetName"
+              defaultValue={asset.parentAssetName ?? ""}
+              placeholder="e.g. Anderson Road"
+              className="field-input w-full"
+            />
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium text-[color:var(--ventia-muted)]">
+              Parent asset code
+            </span>
+            <input
+              name="parentAssetCode"
+              defaultValue={asset.parentAssetCode ?? ""}
+              placeholder="e.g. 5571"
+              className="field-input w-full font-mono"
+            />
+            <span className="mt-1 block text-xs text-[color:var(--ventia-muted)]">
+              Shown on reports as road name — code (e.g. Anderson Road - 5571).
+            </span>
+          </label>
+          <label className="block space-y-1 text-sm">
+            <span className="font-medium text-[color:var(--ventia-muted)]">
               Chainage from (m)
             </span>
             <input

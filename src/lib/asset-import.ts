@@ -26,9 +26,12 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "asset id",
     "assetvisionid",
     "asset vision id",
+    "assetvision id",
     "avid",
     "av id",
     "av_id",
+    "av-id",
+    "asset_vision_id",
   ],
   assetNumber: ["code", "asset number", "assetnumber", "serial", "sn"],
   name: ["name", "asset name", "description"],
@@ -53,8 +56,29 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "end chainage",
     "chainage end",
   ],
-  parentAssetCode: ["parent asset code"],
-  parentAssetName: ["parent asset name"],
+  parentAssetCode: [
+    "parent asset code",
+    "parentassetcode",
+    "parent code",
+    "road asset code",
+    "road code",
+    "parent road code",
+  ],
+  parentAssetName: [
+    "parent asset name",
+    "parentassetname",
+    "parent name",
+    "parent road name",
+    "road asset name",
+  ],
+  /** Combined "Anderson Road-5571" or "Anderson Road - 5571" */
+  roadAssetCode: [
+    "road asset",
+    "roadasset",
+    "parentasset",
+    "parent asset",
+    "road asset id",
+  ],
   classification: ["classification"],
   subClassification: [
     "sub classification",
@@ -121,6 +145,22 @@ function asNumber(v: unknown) {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Split "Anderson Road-5571" / "Anderson Road - 5571" into name + code. */
+export function parseRoadAssetCode(raw: string | null | undefined): {
+  name: string | null;
+  code: string | null;
+} {
+  const s = (raw ?? "").trim();
+  if (!s) return { name: null, code: null };
+  const m = s.match(/^(.+?)\s*[-–—]\s*([A-Za-z0-9]+)\s*$/);
+  if (m) {
+    return { name: m[1]!.trim() || null, code: m[2]!.trim() || null };
+  }
+  // Bare numeric / alphanumeric code only
+  if (/^[A-Za-z0-9]+$/.test(s)) return { name: null, code: s };
+  return { name: s, code: null };
+}
+
 /** Parse Asset Vision-style or simple CSV/XLSX buffers into asset rows. */
 export function parseAssetWorkbook(buffer: ArrayBuffer | Buffer): {
   rows: ImportedAssetRow[];
@@ -146,7 +186,7 @@ export function parseAssetWorkbook(buffer: ArrayBuffer | Buffer): {
     return {
       rows: [],
       errors: [
-        'Could not find a header row with a Code / Asset Number column. Expected columns like "Code", "AV ID", "Name", "Road Name".',
+        'Could not find a header row with a Code / Asset Number column. Expected columns like "Code", "AV ID", "Name", "Road Name", "Parent Asset Name", "Parent Asset Code".',
       ],
     };
   }
@@ -173,7 +213,21 @@ export function parseAssetWorkbook(buffer: ArrayBuffer | Buffer): {
       assetNumber;
     const typeExplicit = asString(cell(r, col.type));
     const type = inferAssetType(name, typeExplicit);
-    const parentAssetName = asString(cell(r, col.parentAssetName));
+
+    const combinedRoad = parseRoadAssetCode(asString(cell(r, col.roadAssetCode)));
+    let parentAssetName = asString(cell(r, col.parentAssetName));
+    let parentAssetCode = asString(cell(r, col.parentAssetCode));
+    if (!parentAssetName && combinedRoad.name) parentAssetName = combinedRoad.name;
+    if (!parentAssetCode && combinedRoad.code) parentAssetCode = combinedRoad.code;
+    // Parent Asset Code cell sometimes holds "Anderson Road-5571"
+    if (parentAssetCode && parentAssetCode.includes("-") && !parentAssetName) {
+      const split = parseRoadAssetCode(parentAssetCode);
+      if (split.name && split.code) {
+        parentAssetName = split.name;
+        parentAssetCode = split.code;
+      }
+    }
+
     const roadName =
       asString(cell(r, col.roadName)) ??
       parentAssetName ??
@@ -207,7 +261,7 @@ export function parseAssetWorkbook(buffer: ArrayBuffer | Buffer): {
       parentChainage: parentChainage ?? chainageFrom,
       chainageFrom,
       chainageTo,
-      parentAssetCode: asString(cell(r, col.parentAssetCode)),
+      parentAssetCode,
       parentAssetName,
       classification: asString(cell(r, col.classification)),
       subClassification,

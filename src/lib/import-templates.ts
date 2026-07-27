@@ -7,6 +7,8 @@ export const ASSET_REGISTRY_TEMPLATE_HEADERS = [
   "AV ID",
   "Name",
   "Road Name",
+  "Parent Asset Name",
+  "Parent Asset Code",
   "Type",
   "Sub Classification",
   "Location",

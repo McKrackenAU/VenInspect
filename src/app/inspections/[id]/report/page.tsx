@@ -4,7 +4,7 @@ import { formatAppDate } from "@/lib/date-time";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { canViewInspection } from "@/lib/inspection-access";
-import { formatLevel, formatStatus } from "@/lib/inspection";
+import { formatLevel, formatRoadWithParentCode, formatStatus } from "@/lib/inspection";
 import { severityLabel, getSeverityOptions } from "@/lib/severities";
 import { getExportConfig } from "@/lib/export-config";
 import { ExportPdfButton } from "@/components/ExportPdfButton";
@@ -144,14 +144,22 @@ export default async function InspectionReportPage({
                 VenInspect · Inspection Report
               </p>
               <h1 className="mt-2 text-2xl font-bold tracking-tight text-[color:var(--ventia-green)]">
-                {inspection.asset.assetNumber} — {inspection.asset.name}
+                {inspection.asset.assetNumber} —{" "}
+                {formatRoadWithParentCode(
+                  inspection.asset.roadName,
+                  inspection.asset.parentAssetCode,
+                )}
               </h1>
             </div>
             <VentiaPrintLogo />
           </div>
           <p className="mt-1 text-sm text-slate-600">
-            {inspection.asset.type} · {inspection.asset.roadName} ·{" "}
-            {inspection.asset.location ?? "—"}
+            {inspection.asset.type} ·{" "}
+            {formatRoadWithParentCode(
+              inspection.asset.roadName,
+              inspection.asset.parentAssetCode,
+            )}{" "}
+            · {inspection.asset.location ?? "—"}
           </p>
         </header>
 
