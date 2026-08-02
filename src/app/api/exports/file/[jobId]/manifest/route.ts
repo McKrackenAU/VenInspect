@@ -8,9 +8,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Legacy single-response download.
- * For packs larger than one chunk, redirect clients to the manifest so they
- * use the chunked protocol (Cloudflare-safe). Tiny packs still stream whole.
+ * Download manifest for chunked transfer (≤10 MiB chunks).
+ * Auth = job token (middleware-bypassed).
  */
 export async function GET(
   req: NextRequest,
@@ -25,7 +24,6 @@ export async function GET(
       { status: 404 },
     );
   }
-
   const manifest = buildExportManifest(job);
   if (!manifest) {
     return NextResponse.json(
@@ -33,18 +31,9 @@ export async function GET(
       { status: 404 },
     );
   }
-
-  // Always prefer chunked protocol — even for single-chunk files — so one
-  // client path is tested and Cloudflare never sees a surprise large body.
-  const manifestUrl = `/api/exports/file/${job.id}/manifest?token=${encodeURIComponent(job.token)}`;
-  return NextResponse.json(
-    {
-      useChunks: true,
-      manifestUrl,
-      ...manifest,
+  return NextResponse.json(manifest, {
+    headers: {
+      "Cache-Control": "no-store, private",
     },
-    {
-      headers: { "Cache-Control": "no-store, private" },
-    },
-  );
+  });
 }

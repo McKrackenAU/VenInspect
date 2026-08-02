@@ -1,13 +1,18 @@
 /**
  * Client-export jobs: build ZIP on disk, download via short-lived job + token.
- * Token download bypasses session/middleware so Cloudflare can serve the file
- * as a normal browser navigation (fetch() of large ZIPs often gets WAF 403).
+ * Large files are served as ≤10 MiB chunks (Cloudflare-safe).
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { getDataDir } from "@/lib/paths";
+import {
+  EXPORT_CHUNK_SIZE,
+  planExportChunks,
+  type ExportChunkInfo,
+  type ExportDownloadManifest,
+} from "@/lib/export-chunks";
 
 const JOB_TTL_MS = 60 * 60 * 1000; // 1 hour
 const JOB_ID_RE = /^[a-f0-9]{32}$/;
@@ -26,6 +31,12 @@ export type ClientExportJob = {
   error: string | null;
   createdAt: number;
   exp: number;
+  /** Set when ZIP is ready */
+  size?: number | null;
+  sha256?: string | null;
+  chunkSize?: number | null;
+  chunkCount?: number | null;
+  chunkDigests?: string[] | null;
 };
 
 function jobsDir() {
@@ -122,7 +133,6 @@ export function readClientExportJob(
       }
       return null;
     }
-    // Older jobs (pre-token) — treat as invalid for token downloads
     if (!job.token || !TOKEN_RE.test(job.token)) {
       return { ...job, token: job.token || "" };
     }
@@ -146,7 +156,18 @@ export function verifyClientExportDownload(
 export function updateClientExportJob(
   id: string,
   patch: Partial<
-    Pick<ClientExportJob, "status" | "filename" | "error" | "exp">
+    Pick<
+      ClientExportJob,
+      | "status"
+      | "filename"
+      | "error"
+      | "exp"
+      | "size"
+      | "sha256"
+      | "chunkSize"
+      | "chunkCount"
+      | "chunkDigests"
+    >
   >,
 ): ClientExportJob | null {
   const current = readClientExportJob(id);
@@ -156,13 +177,132 @@ export function updateClientExportJob(
   return next;
 }
 
-export function writeClientExportZip(id: string, zip: Buffer) {
+export type WrittenExportZip = {
+  size: number;
+  sha256: string;
+  chunkSize: number;
+  chunkCount: number;
+  chunkDigests: string[];
+};
+
+/** Write ZIP atomically and return chunk digests for the download manifest. */
+export function writeClientExportZip(
+  id: string,
+  zip: Buffer,
+  chunkSize: number = EXPORT_CHUNK_SIZE,
+): WrittenExportZip {
   fs.mkdirSync(jobsDir(), { recursive: true });
   const finalPath = jobZipPath(id);
   const tmpPath = `${finalPath}.tmp`;
   fs.writeFileSync(tmpPath, zip);
-  // Atomic replace so a download never sees a half-written file
+
+  const plan = planExportChunks(zip.length, chunkSize);
+  const chunkDigests = plan.map(({ offset, length }) =>
+    crypto
+      .createHash("sha256")
+      .update(zip.subarray(offset, offset + length))
+      .digest("hex"),
+  );
+  const sha256 = crypto.createHash("sha256").update(zip).digest("hex");
+
   fs.renameSync(tmpPath, finalPath);
+
+  return {
+    size: zip.length,
+    sha256,
+    chunkSize,
+    chunkCount: plan.length,
+    chunkDigests,
+  };
+}
+
+export function buildExportManifest(job: ClientExportJob): ExportDownloadManifest | null {
+  if (job.status !== "ready") return null;
+  const zipPath = jobZipPath(job.id);
+  if (!fs.existsSync(zipPath)) return null;
+
+  const size =
+    typeof job.size === "number" && job.size >= 0
+      ? job.size
+      : fs.statSync(zipPath).size;
+  const chunkSize = job.chunkSize || EXPORT_CHUNK_SIZE;
+  const plan = planExportChunks(size, chunkSize);
+
+  // Recompute digests if missing (older jobs) — still correct, just slower once.
+  let digests = job.chunkDigests;
+  let sha256 = job.sha256;
+  if (!digests?.length || digests.length !== plan.length || !sha256) {
+    const fd = fs.openSync(zipPath, "r");
+    try {
+      digests = [];
+      const whole = crypto.createHash("sha256");
+      for (const { offset, length } of plan) {
+        const buf = Buffer.alloc(length);
+        fs.readSync(fd, buf, 0, length, offset);
+        digests.push(crypto.createHash("sha256").update(buf).digest("hex"));
+        whole.update(buf);
+      }
+      sha256 = whole.digest("hex");
+    } finally {
+      fs.closeSync(fd);
+    }
+    updateClientExportJob(job.id, {
+      size,
+      sha256,
+      chunkSize,
+      chunkCount: plan.length,
+      chunkDigests: digests,
+    });
+  }
+
+  const chunks: ExportChunkInfo[] = plan.map((p, index) => ({
+    index,
+    offset: p.offset,
+    length: p.length,
+    sha256: digests![index]!,
+  }));
+
+  return {
+    ok: true,
+    protocol: "veninspect-chunks-v1",
+    jobId: job.id,
+    filename: job.filename || "client-export.zip",
+    size,
+    chunkSize,
+    chunkCount: chunks.length,
+    sha256: sha256!,
+    chunks,
+  };
+}
+
+/** Read one chunk from the on-disk ZIP (does not load the whole file). */
+export function readExportChunk(
+  job: ClientExportJob,
+  index: number,
+): { data: Buffer; sha256: string; offset: number; length: number } | null {
+  const manifest = buildExportManifest(job);
+  if (!manifest) return null;
+  const meta = manifest.chunks[index];
+  if (!meta) return null;
+  const zipPath = jobZipPath(job.id);
+  const fd = fs.openSync(zipPath, "r");
+  try {
+    const data = Buffer.alloc(meta.length);
+    const n = fs.readSync(fd, data, 0, meta.length, meta.offset);
+    if (n !== meta.length) return null;
+    const sha256 = crypto.createHash("sha256").update(data).digest("hex");
+    if (sha256 !== meta.sha256) return null;
+    return { data, sha256, offset: meta.offset, length: meta.length };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+export function clientExportManifestUrl(job: {
+  id: string;
+  token: string;
+}) {
+  return `/api/exports/file/${job.id}/manifest?token=${encodeURIComponent(job.token)}`;
 }
 
 export function clientExportFileUrl(job: {
@@ -170,7 +310,6 @@ export function clientExportFileUrl(job: {
   token: string;
   filename?: string | null;
 }) {
-  const q = new URLSearchParams({ token: job.token });
-  if (job.filename) q.set("name", job.filename);
-  return `/api/exports/file/${job.id}?${q.toString()}`;
+  // Prefer manifest-based chunked download; keep this helper for status JSON compat.
+  return clientExportManifestUrl(job);
 }

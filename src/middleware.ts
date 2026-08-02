@@ -81,7 +81,14 @@ function isAssetImportPath(pathname: string): boolean {
 
 /** Token ZIP downloads — auth is the job token, not the session cookie. */
 function isClientExportFilePath(pathname: string): boolean {
-  return /^\/api\/exports\/file\/[a-f0-9]{32}\/?$/.test(pathname);
+  // /api/exports/file/{32hex}
+  // /api/exports/file/{32hex}/manifest
+  // /api/exports/file/{32hex}/chunk/{n}
+  return (
+    /^\/api\/exports\/file\/[a-f0-9]{32}\/?$/.test(pathname) ||
+    /^\/api\/exports\/file\/[a-f0-9]{32}\/manifest\/?$/.test(pathname) ||
+    /^\/api\/exports\/file\/[a-f0-9]{32}\/chunk\/\d+\/?$/.test(pathname)
+  );
 }
 
 export async function middleware(request: NextRequest) {
