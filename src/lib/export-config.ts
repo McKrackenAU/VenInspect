@@ -5,6 +5,8 @@ import { DEFAULT_SEVERITIES } from "@/lib/severities";
 export type ExportConfig = {
   /** Include full report PDF in Client Export ZIP */
   includePdf: boolean;
+  /** Include WRU/DoT-shaped Report.xlsx in Client Export ZIP */
+  includeExcel: boolean;
   /** Include defect photo folders */
   includePhotos: boolean;
   /** Include Photo_Index.xlsx */
@@ -21,6 +23,7 @@ export type ExportConfig = {
 
 export const DEFAULT_EXPORT_CONFIG: ExportConfig = {
   includePdf: true,
+  includeExcel: true,
   includePhotos: true,
   includePhotoIndex: true,
   includeComparisonPhotos: true,
@@ -38,6 +41,7 @@ export function getExportConfig(): ExportConfig {
     : DEFAULT_EXPORT_CONFIG.defaultConditionStates;
   return {
     includePdf: raw.includePdf !== false,
+    includeExcel: raw.includeExcel !== false,
     includePhotos: raw.includePhotos !== false,
     includePhotoIndex: raw.includePhotoIndex !== false,
     includeComparisonPhotos: raw.includeComparisonPhotos !== false,
@@ -50,6 +54,7 @@ export function getExportConfig(): ExportConfig {
 export function saveExportConfig(config: ExportConfig) {
   const cleaned: ExportConfig = {
     includePdf: Boolean(config.includePdf),
+    includeExcel: Boolean(config.includeExcel),
     includePhotos: Boolean(config.includePhotos),
     includePhotoIndex: Boolean(config.includePhotoIndex),
     includeComparisonPhotos: Boolean(config.includeComparisonPhotos),

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
-import { absolutePhotoPath } from "@/lib/paths";
 import { nextDefectCode } from "@/lib/inspection";
+import { resolveExistingPhotoPath } from "@/lib/photo-resolve";
 import fs from "node:fs/promises";
 
 export const MAX_DEFECT_PHOTOS = 100;
@@ -186,7 +186,8 @@ export async function breakoutDefectPhotos(opts: {
 /** Delete photo file if present (best-effort). */
 export async function tryUnlinkPhoto(rel: string) {
   try {
-    await fs.unlink(absolutePhotoPath(rel));
+    const abs = resolveExistingPhotoPath(rel);
+    if (abs) await fs.unlink(abs);
   } catch {
     /* ignore */
   }

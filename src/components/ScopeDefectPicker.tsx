@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ExportReportMenu } from "@/components/ExportReportMenu";
 import { VentiaPrintLogo } from "@/components/BrandMark";
+import { photoPublicUrl } from "@/lib/photo-url";
 
 export type ScopeDefect = {
   id: string;
@@ -16,10 +17,6 @@ export type ScopeDefect = {
   photoPath: string | null;
   comparisonPhotoPath: string | null;
 };
-
-function photoUrl(path: string) {
-  return `/api/uploads/${path.split(/[/\\]/).map(encodeURIComponent).join("/")}`;
-}
 
 export function ScopeDefectPicker({
   inspectionId,
@@ -192,7 +189,7 @@ export function ScopeDefectPicker({
                       </figcaption>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={photoUrl(d.comparisonPhotoPath)}
+                        src={photoPublicUrl(d.comparisonPhotoPath)}
                         alt="Prior"
                         className="mt-1 max-h-44 rounded border border-[color:var(--ventia-border)] object-contain"
                       />
@@ -205,7 +202,7 @@ export function ScopeDefectPicker({
                       </figcaption>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={photoUrl(d.photoPath)}
+                        src={photoPublicUrl(d.photoPath)}
                         alt={d.defectCode}
                         className="mt-1 max-h-44 rounded border border-[color:var(--ventia-border)] object-contain"
                       />

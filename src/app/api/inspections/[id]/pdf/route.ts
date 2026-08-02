@@ -10,6 +10,7 @@ import {
 import { getExportConfig } from "@/lib/export-config";
 import { defectMatchesConditionStates } from "@/lib/severities";
 import { formatPersonCredential } from "@/lib/report-people";
+import { primaryDefectPhotoPath } from "@/lib/photo-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +30,10 @@ export async function GET(
       approvedBy: true,
       reviewedBy: true,
       categories: { orderBy: [{ category: "asc" }, { subcategory: "asc" }] },
-      defects: { orderBy: { defectCode: "asc" } },
+      defects: {
+        orderBy: { defectCode: "asc" },
+        include: { photos: { orderBy: { sortOrder: "asc" } } },
+      },
     },
   });
 
@@ -102,7 +106,10 @@ export async function GET(
     reviewedAt: inspection.reviewedAt,
     asset: inspection.asset,
     categories: scopeIds ? [] : inspection.categories,
-    defects,
+    defects: defects.map((d) => ({
+      ...d,
+      photoPath: primaryDefectPhotoPath(d),
+    })),
     template: scopeIds ? null : getTemplateForLevel(inspection.level),
     formPayload: scopeIds ? null : parseFormPayload(inspection.formPayload),
     scopeOnly: Boolean(scopeIds),

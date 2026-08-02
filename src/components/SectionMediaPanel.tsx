@@ -7,13 +7,7 @@ import {
   GalleryFileButton,
   PhoneCameraFileButton,
 } from "@/components/CameraCapture";
-
-function uploadUrl(path: string) {
-  return `/api/uploads/${path
-    .split(/[/\\]/)
-    .map(encodeURIComponent)
-    .join("/")}`;
-}
+import { photoPublicUrl } from "@/lib/photo-url";
 
 export function SectionMediaPanel({
   inspectionId,
@@ -216,7 +210,7 @@ export function SectionMediaPanel({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={uploadUrl(item.path)}
+                src={photoPublicUrl(item.path)}
                 alt={item.caption || "Form photo"}
                 className="aspect-video w-full object-cover"
               />

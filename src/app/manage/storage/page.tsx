@@ -1,5 +1,6 @@
 import { describeStorage } from "@/lib/paths";
 import { PhotoStoragePicker } from "@/components/PhotoStoragePicker";
+import { PhotoHealthPanel } from "@/components/PhotoHealthPanel";
 import { requireAdmin } from "@/lib/auth";
 import Link from "next/link";
 
@@ -65,6 +66,8 @@ export default async function ManageStoragePage({ searchParams }: Props) {
           flashSaved={sp.photoSaved === "1"}
         />
       </section>
+
+      <PhotoHealthPanel />
     </div>
   );
 }

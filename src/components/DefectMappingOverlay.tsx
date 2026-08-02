@@ -2,12 +2,9 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { photoPublicUrl } from "@/lib/photo-url";
 
 type Pin = { defectId: string; x: number; y: number; label?: string };
-
-function photoUrl(path: string) {
-  return `/api/uploads/${path.split(/[/\\]/).map(encodeURIComponent).join("/")}`;
-}
 
 export function DefectMappingOverlay({
   inspectionId,
@@ -70,7 +67,7 @@ export function DefectMappingOverlay({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
-          src={photoUrl(overlay.imagePath)}
+          src={photoPublicUrl(overlay.imagePath)}
           alt={overlay.label || "Defect map"}
           className="max-h-[28rem] max-w-full"
           onClick={(e) => {

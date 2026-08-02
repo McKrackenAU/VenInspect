@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { carryForwardDefect } from "@/lib/actions";
 import type { SeverityOption } from "@/lib/severities";
 import type { DefectComponentOption } from "@/components/DefectAddForm";
+import { photoPublicUrl } from "@/lib/photo-url";
 
 export type PriorDefect = {
   id: string;
@@ -18,10 +19,6 @@ export type PriorDefect = {
   category?: string | null;
   subcategory?: string | null;
 };
-
-function photoUrl(path: string) {
-  return `/api/uploads/${path.split(/[/\\]/).map(encodeURIComponent).join("/")}`;
-}
 
 export function CarryForwardDefects({
   inspectionId,
@@ -106,7 +103,7 @@ export function CarryForwardDefects({
                 {d.photoPath ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={photoUrl(d.photoPath)}
+                    src={photoPublicUrl(d.photoPath)}
                     alt={d.defectCode}
                     className="h-16 w-20 rounded object-cover"
                   />

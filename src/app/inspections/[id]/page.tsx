@@ -30,12 +30,12 @@ import {
 } from "@/lib/inspection-templates";
 import { getSeverityOptions, severityLabel } from "@/lib/severities";
 import { parseAssetComponents } from "@/lib/asset-profile";
+import {
+  photoPublicUrl,
+  primaryDefectPhotoPath,
+} from "@/lib/photo-url";
 
 export const dynamic = "force-dynamic";
-
-function photoUrl(path: string) {
-  return `/api/uploads/${path.split(/[/\\]/).map(encodeURIComponent).join("/")}`;
-}
 
 export default async function InspectionPage({
   params,
@@ -128,7 +128,7 @@ export default async function InspectionPage({
           {inspection.defects.map((d) => (
             <li key={d.id} className="card px-4 py-3">
               <div className="flex flex-wrap gap-4">
-                {d.photoPath || d.comparisonPhotoPath ? (
+                {primaryDefectPhotoPath(d) || d.comparisonPhotoPath ? (
                   <div className="flex gap-2">
                     {d.comparisonPhotoPath ? (
                       <div>
@@ -137,13 +137,13 @@ export default async function InspectionPage({
                         </p>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={photoUrl(d.comparisonPhotoPath)}
+                          src={photoPublicUrl(d.comparisonPhotoPath)}
                           alt="Prior"
                           className="h-24 w-28 rounded-md object-cover"
                         />
                       </div>
                     ) : null}
-                    {d.photoPath ? (
+                    {primaryDefectPhotoPath(d) ? (
                       <div>
                         {d.comparisonPhotoPath ? (
                           <p className="mb-1 text-[0.65rem] uppercase text-[color:var(--ventia-muted)]">
@@ -152,7 +152,7 @@ export default async function InspectionPage({
                         ) : null}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={photoUrl(d.photoPath)}
+                          src={photoPublicUrl(primaryDefectPhotoPath(d)!)}
                           alt={d.defectCode}
                           className="h-24 w-28 rounded-md object-cover"
                         />
@@ -248,14 +248,15 @@ export default async function InspectionPage({
           Defect photos are on the Defects page. Client Export opens a page to set
           photo order, then builds the ZIP with DoT-style names.
         </p>
-        {inspection.defects.filter((d) => d.photoPath).length === 0 ? (
+        {inspection.defects.filter((d) => primaryDefectPhotoPath(d)).length ===
+        0 ? (
           <p className="text-sm text-[color:var(--ventia-muted)]">
             No defect photos yet.
           </p>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
             {inspection.defects
-              .filter((d) => d.photoPath)
+              .filter((d) => primaryDefectPhotoPath(d))
               .map((d) => (
                 <li key={d.id} className="card p-3">
                   <p className="font-mono text-xs font-semibold text-[color:var(--ventia-green)]">
@@ -263,7 +264,7 @@ export default async function InspectionPage({
                   </p>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={photoUrl(d.photoPath!)}
+                    src={photoPublicUrl(primaryDefectPhotoPath(d)!)}
                     alt={d.defectCode}
                     className="mt-2 max-h-40 w-full rounded object-contain"
                   />

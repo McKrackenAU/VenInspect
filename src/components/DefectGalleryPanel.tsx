@@ -5,6 +5,7 @@ import { useState } from "react";
 import {
   GalleryFileButton,
 } from "@/components/CameraCapture";
+import { photoPublicUrl } from "@/lib/photo-url";
 
 type Photo = {
   id: string;
@@ -15,10 +16,6 @@ type Photo = {
 };
 
 type TaskType = { id: string; code: string; label: string };
-
-function photoUrl(path: string) {
-  return `/api/uploads/${path.split(/[/\\]/).map(encodeURIComponent).join("/")}`;
-}
 
 export function DefectGalleryPanel({
   inspectionId,
@@ -206,7 +203,7 @@ export function DefectGalleryPanel({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={photoUrl(p.path)}
+              src={photoPublicUrl(p.path)}
               alt={p.caption || defect.defectCode}
               className="aspect-video w-full object-cover"
             />

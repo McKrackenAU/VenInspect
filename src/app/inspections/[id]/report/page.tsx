@@ -19,12 +19,12 @@ import {
 } from "@/lib/inspection-templates";
 import { fieldFilled, formatFormFieldDisplayValue } from "@/lib/inspection-template-types";
 import { reopenInspectionForEdit } from "@/lib/actions";
+import {
+  photoPublicUrl,
+  primaryDefectPhotoPath,
+} from "@/lib/photo-url";
 
 export const dynamic = "force-dynamic";
-
-function photoUrl(path: string) {
-  return `/api/uploads/${path.split(/[/\\]/).map(encodeURIComponent).join("/")}`;
-}
 
 export default async function InspectionReportPage({
   params,
@@ -42,7 +42,10 @@ export default async function InspectionReportPage({
       reviewedBy: true,
       reviewRequestedFrom: true,
       categories: { orderBy: [{ category: "asc" }, { subcategory: "asc" }] },
-      defects: { orderBy: { defectCode: "asc" } },
+      defects: {
+        orderBy: { defectCode: "asc" },
+        include: { photos: { orderBy: { sortOrder: "asc" } } },
+      },
       permitChecks: { orderBy: { label: "asc" } },
     },
   });
@@ -372,13 +375,13 @@ export default async function InspectionReportPage({
                         </p>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={photoUrl(d.comparisonPhotoPath)}
+                          src={photoPublicUrl(d.comparisonPhotoPath)}
                           alt="Prior"
                           className="mt-1 max-h-40 rounded border object-contain"
                         />
                       </div>
                     ) : null}
-                    {d.photoPath ? (
+                    {primaryDefectPhotoPath(d) ? (
                       <div>
                         {d.comparisonPhotoPath ? (
                           <p className="text-[0.65rem] uppercase text-[color:var(--ventia-muted)]">
@@ -387,7 +390,7 @@ export default async function InspectionReportPage({
                         ) : null}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={photoUrl(d.photoPath)}
+                          src={photoPublicUrl(primaryDefectPhotoPath(d)!)}
                           alt={d.defectCode}
                           className="mt-1 max-h-40 rounded border object-contain"
                         />

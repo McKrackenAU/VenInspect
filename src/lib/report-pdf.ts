@@ -9,7 +9,8 @@ import {
   formatRoadWithParentCode,
   formatStatus,
 } from "@/lib/inspection";
-import { absolutePhotoPath } from "@/lib/paths";
+import { resolveExistingPhotoPath } from "@/lib/photo-resolve";
+import { primaryDefectPhotoPath } from "@/lib/photo-url";
 import { severityLabel } from "@/lib/severities";
 import { formatAppPattern } from "@/lib/date-time";
 import type {
@@ -67,6 +68,7 @@ export type ReportPdfDefect = {
   subcategory: string | null;
   photoPath: string | null;
   comparisonPhotoPath: string | null;
+  photos?: { path: string }[];
 };
 
 export type ReportPdfInput = {
@@ -105,8 +107,8 @@ function brandLogoPath() {
 async function loadJpeg(relativePath: string | null): Promise<Buffer | null> {
   if (!relativePath) return null;
   try {
-    const abs = absolutePhotoPath(relativePath);
-    if (!fs.existsSync(abs)) return null;
+    const abs = resolveExistingPhotoPath(relativePath);
+    if (!abs) return null;
     return await sharp(abs)
       .rotate()
       .jpeg({ quality: 82, mozjpeg: true })
@@ -126,7 +128,7 @@ export async function buildInspectionPdf(
   const defectPhotos = await Promise.all(
     input.defects.map(async (d) => ({
       id: d.defectCode,
-      current: await loadJpeg(d.photoPath),
+      current: await loadJpeg(primaryDefectPhotoPath(d)),
       prior: await loadJpeg(d.comparisonPhotoPath),
     })),
   );

@@ -5,9 +5,12 @@ import path from "node:path";
 import { prisma } from "@/lib/db";
 import type { AuthUser } from "@/lib/auth";
 import { canViewInspection } from "@/lib/inspection-access";
-import { absolutePhotoPath, sanitizePathSegment } from "@/lib/paths";
+import { sanitizePathSegment } from "@/lib/paths";
+import { resolveExistingPhotoPath } from "@/lib/photo-resolve";
+import { primaryDefectPhotoPath } from "@/lib/photo-url";
 import { getTemplateForLevel, parseFormPayload } from "@/lib/inspection-templates";
 import { buildInspectionPdf } from "@/lib/report-pdf";
+import { buildInspectionExcel } from "@/lib/report-excel";
 import { getExportConfig } from "@/lib/export-config";
 import { defectMatchesConditionStates } from "@/lib/severities";
 import { formatPersonCredential } from "@/lib/report-people";
@@ -160,6 +163,11 @@ export async function assembleClientExport(
   const formPayload = parseFormPayload(inspection.formPayload);
   const zipFiles: { name: string; data: Buffer }[] = [];
 
+  const reportDefects = defects.map((d) => ({
+    ...d,
+    photoPath: primaryDefectPhotoPath(d),
+  }));
+
   if (exportCfg.includePdf) {
     const pdf = await buildInspectionPdf({
       inspectionId: inspection.id,
@@ -187,13 +195,48 @@ export async function assembleClientExport(
       reviewedAt: inspection.reviewedAt,
       asset: inspection.asset,
       categories: inspection.categories,
-      defects,
+      defects: reportDefects,
       formPayload,
       template,
       generatedByName: user.name,
       includeFormPhotos: exportCfg.includeFormPhotos,
     });
     zipFiles.push({ name: "Report.pdf", data: pdf });
+  }
+
+  if (exportCfg.includeExcel) {
+    const xlsxReport = buildInspectionExcel({
+      inspectionId: inspection.id,
+      level: inspection.level,
+      status: inspection.status,
+      inspectedAt: inspection.inspectedAt,
+      submittedAt: inspection.submittedAt,
+      approvedAt: inspection.approvedAt,
+      generalComments: inspection.generalComments,
+      titleLabel: inspection.titleLabel,
+      inspectorName: inspection.createdBy.name,
+      inspectorDetail: formatPersonCredential(inspection.createdBy),
+      approverName: inspection.approvedBy?.name ?? null,
+      approverDetail: inspection.approvedBy
+        ? formatPersonCredential(inspection.approvedBy)
+        : null,
+      reviewerName:
+        inspection.reviewStatus === "COMPLETED" && inspection.reviewedBy
+          ? inspection.reviewedBy.name
+          : null,
+      reviewerDetail:
+        inspection.reviewStatus === "COMPLETED" && inspection.reviewedBy
+          ? formatPersonCredential(inspection.reviewedBy)
+          : null,
+      reviewedAt: inspection.reviewedAt,
+      asset: inspection.asset,
+      categories: inspection.categories,
+      defects: reportDefects,
+      formPayload,
+      template,
+      generatedByName: user.name,
+    });
+    zipFiles.push({ name: "Report.xlsx", data: xlsxReport });
   }
 
   const indexRows: Record<string, string | number>[] = [];
@@ -261,10 +304,14 @@ export async function assembleClientExport(
     ]),
   );
 
+  let missingPhotoCount = 0;
   for (const p of filteredPool) {
     try {
-      const abs = absolutePhotoPath(p.path);
-      await fs.access(abs);
+      const abs = resolveExistingPhotoPath(p.path);
+      if (!abs) {
+        missingPhotoCount += 1;
+        continue;
+      }
       const base = path.basename(p.path);
       const isGeneral = p.group === "general";
       const folder = isGeneral
@@ -294,7 +341,7 @@ export async function assembleClientExport(
         },
       });
     } catch {
-      /* missing file */
+      missingPhotoCount += 1;
     }
   }
 
@@ -354,10 +401,14 @@ export async function assembleClientExport(
         : [
             {
               Folder: "",
-              Note: "No photos for selected condition states",
+              Note:
+                missingPhotoCount > 0
+                  ? `No photos packed (${missingPhotoCount} linked path(s) missing on disk)`
+                  : "No photos for selected condition states",
               "Asset number": inspection.asset.assetNumber,
               Inspection: inspection.titleLabel,
               "Condition states": severityFilter.join(", "),
+              "Missing on disk": missingPhotoCount,
             },
           ],
     );

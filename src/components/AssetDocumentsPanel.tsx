@@ -6,6 +6,7 @@ import {
 } from "@/lib/actions";
 import type { DocumentTagOption } from "@/lib/document-tags";
 import { StyledFileInput } from "@/components/StyledFileInput";
+import { photoPublicUrl } from "@/lib/photo-url";
 
 export type AssetDocumentListItem = {
   id: string;
@@ -18,13 +19,6 @@ export type AssetDocumentListItem = {
   createdAt: string;
   uploadedByName?: string;
 };
-
-function uploadUrl(path: string) {
-  return `/api/uploads/${path
-    .split(/[/\\]/)
-    .map(encodeURIComponent)
-    .join("/")}`;
-}
 
 function formatDate(value: string | null) {
   if (!value) return null;
@@ -146,7 +140,7 @@ export function AssetDocumentsPanel({
             >
               <div className="min-w-0 flex-1">
                 <a
-                  href={uploadUrl(document.storagePath)}
+                  href={photoPublicUrl(document.storagePath)}
                   className="font-medium text-[color:var(--ventia-blue)] hover:underline"
                   download={document.originalFilename}
                 >

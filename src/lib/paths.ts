@@ -24,6 +24,7 @@ export type StorageSettings = {
   /** Client Export / PDF pack options + default condition-state filter */
   exportConfig?: {
     includePdf?: boolean;
+    includeExcel?: boolean;
     includePhotos?: boolean;
     includePhotoIndex?: boolean;
     includeComparisonPhotos?: boolean;

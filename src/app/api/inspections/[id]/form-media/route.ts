@@ -16,7 +16,7 @@ import {
   saveCompressedInspectionPhoto,
   saveCompressedDefectPhoto,
 } from "@/lib/photos";
-import { absolutePhotoPath } from "@/lib/paths";
+import { resolveExistingPhotoPath } from "@/lib/photo-resolve";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -300,7 +300,8 @@ export async function DELETE(
 
   if (removed?.path && !removed.defectId) {
     try {
-      await fs.unlink(absolutePhotoPath(removed.path));
+      const abs = resolveExistingPhotoPath(removed.path);
+      if (abs) await fs.unlink(abs);
     } catch {
       /* ignore missing file */
     }

@@ -50,6 +50,7 @@ export function ExportConfigForm({
         {(
           [
             ["includePdf", "Include Report.pdf"],
+            ["includeExcel", "Include Report.xlsx (WRU / DoT sheet layout)"],
             ["includePhotos", "Include Photos/ folders"],
             ["includePhotoIndex", "Include Photo_Index.xlsx"],
             ["includeComparisonPhotos", "Include comparison (prior) photos"],
