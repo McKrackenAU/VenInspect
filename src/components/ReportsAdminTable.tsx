@@ -145,77 +145,75 @@ export function ReportsAdminTable({ rows }: { rows: ReportAdminRow[] }) {
         const started = JSON.parse(startText) as {
           jobId?: string;
           token?: string;
+          ready?: boolean;
+          status?: string;
+          filename?: string | null;
+          manifestUrl?: string | null;
+          downloadUrl?: string | null;
         };
         if (!started.jobId) {
           throw new Error(`Export failed for ${row.titleLabel}`);
         }
-        const deadline = Date.now() + 5 * 60 * 1000;
-        let downloadUrl: string | null = null;
-        let filename = `${row.assetNumber}_${row.id.slice(-6)}_ClientExport.zip`;
-        for (;;) {
-          if (Date.now() > deadline) {
-            throw new Error(`Export timed out for ${row.titleLabel}`);
-          }
-          await new Promise((r) => setTimeout(r, 900));
-          const statusRes = await fetch(
-            `/api/exports/start?job=${encodeURIComponent(started.jobId)}`,
-            { cache: "no-store" },
-          );
-          const status = (await statusRes.json().catch(() => null)) as {
-            status?: string;
-            ready?: boolean;
-            filename?: string | null;
-            error?: string | null;
-            downloadUrl?: string | null;
-            token?: string;
-          } | null;
-          if (!statusRes.ok) {
-            throw new Error(
-              status?.error || `Export failed for ${row.titleLabel}`,
+        let token = started.token ?? "";
+        let filename =
+          started.filename ||
+          `${row.assetNumber}_${row.id.slice(-6)}_ClientExport.zip`;
+        let manifestUrl = started.manifestUrl || started.downloadUrl || null;
+
+        if (!(started.ready || started.status === "ready") || !manifestUrl) {
+          const deadline = Date.now() + 10 * 60 * 1000;
+          for (;;) {
+            if (Date.now() > deadline) {
+              throw new Error(`Export timed out for ${row.titleLabel}`);
+            }
+            await new Promise((r) => setTimeout(r, 900));
+            const statusRes = await fetch(
+              `/api/exports/start?job=${encodeURIComponent(started.jobId)}`,
+              { cache: "no-store" },
             );
-          }
-          if (status?.status === "error") {
-            throw new Error(
-              status.error || `Export failed for ${row.titleLabel}`,
-            );
-          }
-          if (status?.ready || status?.status === "ready") {
-            if (status.filename) filename = status.filename;
-            downloadUrl =
-              status.downloadUrl ||
-              (status.token
-                ? `/api/exports/file/${started.jobId}?token=${encodeURIComponent(status.token)}&name=${encodeURIComponent(filename)}`
-                : null);
-            break;
+            const status = (await statusRes.json().catch(() => null)) as {
+              status?: string;
+              ready?: boolean;
+              filename?: string | null;
+              error?: string | null;
+              downloadUrl?: string | null;
+              manifestUrl?: string | null;
+              token?: string;
+            } | null;
+            if (!statusRes.ok) {
+              throw new Error(
+                status?.error || `Export failed for ${row.titleLabel}`,
+              );
+            }
+            if (status?.status === "error") {
+              throw new Error(
+                status.error || `Export failed for ${row.titleLabel}`,
+              );
+            }
+            if (status?.ready || status?.status === "ready") {
+              if (status.filename) filename = status.filename;
+              if (status.token) token = status.token;
+              manifestUrl =
+                status.manifestUrl ||
+                status.downloadUrl ||
+                (token
+                  ? `/api/exports/file/${started.jobId}/manifest?token=${encodeURIComponent(token)}`
+                  : null);
+              break;
+            }
           }
         }
-        if (!downloadUrl) {
+
+        if (!manifestUrl?.includes("/manifest") && token) {
+          manifestUrl = `/api/exports/file/${started.jobId}/manifest?token=${encodeURIComponent(token)}`;
+        }
+        if (!manifestUrl) {
           throw new Error(`No download link for ${row.titleLabel}`);
         }
-        const dlRes = await fetch(downloadUrl, {
-          cache: "no-store",
-          credentials: "omit",
-        });
-        if (!dlRes.ok) {
-          const errText = await dlRes.text().catch(() => "");
-          let msg = `Download failed for ${row.titleLabel}`;
-          try {
-            const body = JSON.parse(errText) as { error?: string };
-            if (body.error) msg = body.error;
-          } catch {
-            /* keep */
-          }
-          throw new Error(msg);
-        }
-        const blob = await dlRes.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename.endsWith(".zip") ? filename : `${filename}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        const { downloadExportViaChunks } = await import(
+          "@/lib/chunked-download-client"
+        );
+        await downloadExportViaChunks(manifestUrl, filename);
         await new Promise((r) => setTimeout(r, 400));
       }
       setMessage(`Downloaded ${live.length} client export ZIP(s).`);

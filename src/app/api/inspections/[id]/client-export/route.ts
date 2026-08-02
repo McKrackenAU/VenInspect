@@ -6,9 +6,11 @@ import {
   createClientExportJob,
   jobZipPath,
   readClientExportJob,
+  clientExportManifestUrl,
   clientExportFileUrl,
 } from "@/lib/client-export-job";
 import { startClientExportBuild } from "@/lib/client-export-build";
+import { EXPORT_CHUNK_SIZE } from "@/lib/export-chunks";
 import fs from "node:fs/promises";
 
 export const runtime = "nodejs";
@@ -69,6 +71,13 @@ export async function POST(
     filename: latest.filename,
     error: latest.error,
     ready: latest.status === "ready",
+    chunkSize: EXPORT_CHUNK_SIZE,
+    size: latest.size ?? null,
+    chunkCount: latest.chunkCount ?? null,
+    manifestUrl:
+      latest.status === "ready" && latest.token
+        ? clientExportManifestUrl(latest)
+        : null,
     downloadUrl:
       latest.status === "ready" && latest.token
         ? clientExportFileUrl(latest)
@@ -147,6 +156,13 @@ export async function GET(
       filename: job.filename,
       error: job.error,
       ready: job.status === "ready",
+      chunkSize: EXPORT_CHUNK_SIZE,
+      size: job.size ?? null,
+      chunkCount: job.chunkCount ?? null,
+      manifestUrl:
+        job.status === "ready" && job.token
+          ? clientExportManifestUrl(job)
+          : null,
       downloadUrl:
         job.status === "ready" && job.token
           ? clientExportFileUrl(job)

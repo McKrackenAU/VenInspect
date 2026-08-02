@@ -401,11 +401,16 @@ export async function runClientExportJob(
       });
       return;
     }
-    writeClientExportZip(jobId, result.zip);
+    const written = writeClientExportZip(jobId, result.zip);
     updateClientExportJob(jobId, {
       status: "ready",
       filename: result.filename,
       error: null,
+      size: written.size,
+      sha256: written.sha256,
+      chunkSize: written.chunkSize,
+      chunkCount: written.chunkCount,
+      chunkDigests: written.chunkDigests,
     });
   } catch (e) {
     updateClientExportJob(jobId, {

@@ -234,6 +234,7 @@ export function ExportConditionDialog({
 export function useExportDownload() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
 
   async function downloadBlob(
     url: string,
@@ -242,9 +243,9 @@ export function useExportDownload() {
   ) {
     setBusy(true);
     setError(null);
+    setProgress(null);
     try {
       const res = await fetch(url, { cache: "no-store", ...init });
-      const contentType = res.headers.get("content-type") || "";
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         const isHtml = /^\s*</.test(text);
@@ -287,13 +288,12 @@ export function useExportDownload() {
       return false;
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
   /**
-   * Client export via background job + token download.
-   * Fetches the ZIP as a blob (object URL) so Chrome does not report
-   * "file wasn't available on site" from a bare &lt;a download&gt; navigation.
+   * Client export: build job → poll → download via ≤10 MiB chunks (Cloudflare-safe).
    */
   async function downloadClientExportPack(
     inspectionId: string,
@@ -302,6 +302,7 @@ export function useExportDownload() {
   ) {
     setBusy(true);
     setError(null);
+    setProgress("Starting export…");
     try {
       const fd = new FormData();
       fd.set("inspectionId", inspectionId);
@@ -354,6 +355,7 @@ export function useExportDownload() {
         ready?: boolean;
         status?: string;
         filename?: string | null;
+        manifestUrl?: string | null;
         downloadUrl?: string | null;
       };
       if (!started.jobId) {
@@ -362,11 +364,12 @@ export function useExportDownload() {
 
       const jobId = started.jobId;
       let token = started.token ?? "";
-      let downloadUrl = started.downloadUrl ?? null;
+      let manifestUrl = started.manifestUrl ?? started.downloadUrl ?? null;
       let filename = started.filename || fallbackName;
 
-      if (!(started.ready || started.status === "ready") || !downloadUrl) {
-        const deadline = Date.now() + 5 * 60 * 1000;
+      if (!(started.ready || started.status === "ready") || !manifestUrl) {
+        setProgress("Building pack on server…");
+        const deadline = Date.now() + 10 * 60 * 1000;
         for (;;) {
           if (Date.now() > deadline) {
             throw new Error("Export timed out — try again with fewer photos");
@@ -378,43 +381,9 @@ export function useExportDownload() {
           );
           const statusText = await statusRes.text();
           if (!statusRes.ok && /^\s*</.test(statusText)) {
-            const legacy = await fetch(
-              `/api/inspections/${inspectionId}/client-export?job=${encodeURIComponent(jobId)}`,
-              { cache: "no-store" },
+            throw new Error(
+              "Cloudflare blocked the export status check. Try again shortly.",
             );
-            const legacyText = await legacy.text();
-            if (!legacy.ok && /^\s*</.test(legacyText)) {
-              throw new Error(
-                "Cloudflare blocked the export status check. Try again shortly.",
-              );
-            }
-            const status = JSON.parse(legacyText) as {
-              status?: string;
-              ready?: boolean;
-              filename?: string | null;
-              error?: string | null;
-              token?: string;
-              downloadUrl?: string | null;
-            };
-            if (!legacy.ok) {
-              throw new Error(
-                status?.error || `Export failed (${legacy.status})`,
-              );
-            }
-            if (status.status === "error") {
-              throw new Error(status.error || "Export failed");
-            }
-            if (status.ready || status.status === "ready") {
-              if (status.filename) filename = status.filename;
-              if (status.token) token = status.token;
-              downloadUrl =
-                status.downloadUrl ||
-                (token
-                  ? `/api/exports/file/${jobId}?token=${encodeURIComponent(token)}&name=${encodeURIComponent(filename)}`
-                  : null);
-              break;
-            }
-            continue;
           }
           const status = JSON.parse(statusText) as {
             status?: string;
@@ -422,6 +391,7 @@ export function useExportDownload() {
             filename?: string | null;
             error?: string | null;
             token?: string;
+            manifestUrl?: string | null;
             downloadUrl?: string | null;
           };
           if (!statusRes.ok) {
@@ -435,69 +405,55 @@ export function useExportDownload() {
           if (status.ready || status.status === "ready") {
             if (status.filename) filename = status.filename;
             if (status.token) token = status.token;
-            downloadUrl =
+            manifestUrl =
+              status.manifestUrl ||
               status.downloadUrl ||
               (token
-                ? `/api/exports/file/${jobId}?token=${encodeURIComponent(token)}&name=${encodeURIComponent(filename)}`
+                ? `/api/exports/file/${jobId}/manifest?token=${encodeURIComponent(token)}`
                 : null);
             break;
           }
         }
       }
 
-      if (!downloadUrl) {
+      if (!manifestUrl) {
         throw new Error("Export ready but no download link was returned");
       }
 
-      // Prefer blob download — avoids Chrome "file wasn't available on site"
-      // from &lt;a download href="/api/..."&gt; when the response errors/aborts.
-      const dlRes = await fetch(downloadUrl, {
-        cache: "no-store",
-        credentials: "omit",
+      // Ensure we hit the manifest endpoint (compat if downloadUrl was legacy)
+      if (!manifestUrl.includes("/manifest")) {
+        const u = new URL(manifestUrl, window.location.origin);
+        if (u.pathname.match(/\/api\/exports\/file\/[a-f0-9]{32}\/?$/)) {
+          u.pathname = u.pathname.replace(/\/?$/, "/manifest");
+          manifestUrl = `${u.pathname}?${u.searchParams.toString()}`;
+        }
+      }
+
+      const {
+        downloadExportViaChunks,
+        formatDownloadProgress,
+      } = await import("@/lib/chunked-download-client");
+
+      await downloadExportViaChunks(manifestUrl, filename, (p) => {
+        setProgress(formatDownloadProgress(p));
       });
-      const dlTextProbe = dlRes.headers.get("content-type") || "";
-      if (!dlRes.ok) {
-        const errText = await dlRes.text().catch(() => "");
-        if (/^\s*</.test(errText) || /cloudflare|cf-ray/i.test(errText)) {
-          throw new Error(
-            "Cloudflare blocked the ZIP download. Try again shortly, or use the LAN URL.",
-          );
-        }
-        let msg = `Download failed (${dlRes.status})`;
-        try {
-          const body = JSON.parse(errText) as { error?: string };
-          if (body.error) msg = body.error;
-        } catch {
-          /* keep */
-        }
-        throw new Error(msg);
-      }
-      if (dlTextProbe.includes("text/html")) {
-        throw new Error(
-          "Cloudflare blocked the ZIP download. Try again shortly, or use the LAN URL.",
-        );
-      }
-      const blob = await dlRes.blob();
-      if (!blob.size) {
-        throw new Error("Download was empty — try building the pack again");
-      }
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = filename.endsWith(".zip") ? filename : `${filename}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      // Revoke after the browser has started the download
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 4000);
+      setProgress(null);
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed");
       return false;
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
-  return { busy, error, setError, downloadBlob, downloadClientExportPack };
+  return {
+    busy,
+    error,
+    setError,
+    progress,
+    downloadBlob,
+    downloadClientExportPack,
+  };
 }

@@ -40,7 +40,8 @@ export function ClientExportWizard({
   const [photoOrder, setPhotoOrder] = useState<string[]>([]);
   const [assetNumber, setAssetNumber] = useState("");
   const [loadingPhotos, setLoadingPhotos] = useState(true);
-  const { busy, error, setError, downloadClientExportPack } = useExportDownload();
+  const { busy, error, setError, progress, downloadClientExportPack } =
+    useExportDownload();
 
   useEffect(() => {
     let cancelled = false;
@@ -343,13 +344,13 @@ export function ClientExportWizard({
           onClick={() => void runExport()}
           className="rounded-lg bg-[color:var(--ventia-green)] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
         >
-          {busy ? "Building pack…" : "Build Client Export"}
+          {busy ? progress || "Building pack…" : "Build Client Export"}
         </button>
       </div>
       {busy ? (
         <p className="text-right text-xs text-[color:var(--ventia-muted)]">
-          Building on the server, then downloading the ZIP… large packs can take
-          a minute.
+          {progress ||
+            "Building on the server, then downloading in 10 MB chunks…"}
         </p>
       ) : null}
     </div>

@@ -5,8 +5,10 @@ import { canViewInspection } from "@/lib/inspection-access";
 import {
   createClientExportJob,
   readClientExportJob,
+  clientExportManifestUrl,
 } from "@/lib/client-export-job";
 import { startClientExportBuild } from "@/lib/client-export-build";
+import { EXPORT_CHUNK_SIZE } from "@/lib/export-chunks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -86,6 +88,10 @@ export async function POST(req: NextRequest) {
   ]);
 
   const latest = readClientExportJob(job.id) ?? job;
+  const manifestUrl =
+    latest.status === "ready" && latest.token
+      ? clientExportManifestUrl(latest)
+      : null;
 
   return NextResponse.json({
     ok: true,
@@ -95,14 +101,13 @@ export async function POST(req: NextRequest) {
     filename: latest.filename,
     error: latest.error,
     ready: latest.status === "ready",
-    downloadUrl:
-      latest.status === "ready" && latest.token
-        ? `/api/exports/file/${latest.id}?token=${encodeURIComponent(latest.token)}${
-            latest.filename
-              ? `&name=${encodeURIComponent(latest.filename)}`
-              : ""
-          }`
-        : null,
+    chunkSize: EXPORT_CHUNK_SIZE,
+    size: latest.size ?? null,
+    chunkCount: latest.chunkCount ?? null,
+    sha256: latest.sha256 ?? null,
+    manifestUrl,
+    // Compat: older clients looked for downloadUrl — point them at the manifest
+    downloadUrl: manifestUrl,
   });
 }
 
@@ -128,13 +133,17 @@ export async function GET(req: NextRequest) {
     filename: job.filename,
     error: job.error,
     ready: job.status === "ready",
+    chunkSize: EXPORT_CHUNK_SIZE,
+    size: job.size ?? null,
+    chunkCount: job.chunkCount ?? null,
+    sha256: job.sha256 ?? null,
+    manifestUrl:
+      job.status === "ready" && job.token
+        ? clientExportManifestUrl(job)
+        : null,
     downloadUrl:
       job.status === "ready" && job.token
-        ? `/api/exports/file/${job.id}?token=${encodeURIComponent(job.token)}${
-            job.filename
-              ? `&name=${encodeURIComponent(job.filename)}`
-              : ""
-          }`
+        ? clientExportManifestUrl(job)
         : null,
   });
 }
