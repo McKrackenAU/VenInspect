@@ -19,6 +19,11 @@ import { format } from "date-fns";
 
 export type StorageSettings = {
   photoDir?: string;
+  /**
+   * Prior photo roots kept when PHOTO_DIR / photoDir changes.
+   * Used as read fallbacks until files are migrated to the active root.
+   */
+  previousPhotoDirs?: string[];
   /** Admin-customisable defect severity / condition-state dropdown options */
   severities?: { value: string; label: string; description?: string }[];
   /** Client Export / PDF pack options + default condition-state filter */
@@ -121,6 +126,18 @@ export function writeStorageSettings(next: StorageSettings) {
   // Only clear photoDir when the caller explicitly sets it (including empty string)
   if (Object.prototype.hasOwnProperty.call(next, "photoDir")) {
     if (!next.photoDir) delete merged.photoDir;
+  }
+  if (Object.prototype.hasOwnProperty.call(next, "previousPhotoDirs")) {
+    if (!next.previousPhotoDirs?.length) delete merged.previousPhotoDirs;
+    else {
+      merged.previousPhotoDirs = [
+        ...new Set(
+          next.previousPhotoDirs
+            .map((p) => path.resolve(String(p).trim()))
+            .filter(Boolean),
+        ),
+      ].slice(0, 12);
+    }
   }
   if (Object.prototype.hasOwnProperty.call(next, "googleMapsApiKey")) {
     if (!next.googleMapsApiKey?.trim()) delete merged.googleMapsApiKey;

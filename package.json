@@ -1,6 +1,6 @@
 {
   "name": "veninspect",
-  "version": "0.1.78",
+  "version": "0.1.79",
   "private": true,
   "scripts": {
     "dev": "next dev -p 8181",
@@ -15,6 +15,7 @@
     "db:reset": "prisma migrate reset --force",
     "smoke:chunks": "tsx scripts/smoke-chunked-export.ts",
     "smoke:photo-excel": "tsx scripts/smoke-photo-excel.ts",
+    "smoke:photo-migrate": "tsx scripts/smoke-photo-migrate.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

@@ -35,6 +35,10 @@ export function candidatePhotoRoots(): string[] {
   add(getPhotoDir());
   add(readStorageSettings().photoDir);
   add(process.env.PHOTO_DIR);
+  // Old roots remembered when the active photo path was changed
+  for (const prev of readStorageSettings().previousPhotoDirs ?? []) {
+    add(prev);
+  }
   add(path.join(getDataDir(), "photos"));
   add(path.join(getDataDir(), "uploads"));
   // Common Proxmox / NAS mounts from install docs

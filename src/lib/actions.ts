@@ -1332,7 +1332,10 @@ export async function savePhotoStoragePath(formData: FormData) {
   if (photoDir) {
     const fs = await import("node:fs");
     const path = await import("node:path");
+    const { getPhotoDir } = await import("@/lib/paths");
+    const { rememberPreviousPhotoDir } = await import("@/lib/photo-migrate");
     const resolved = path.resolve(photoDir);
+    const previousActive = path.resolve(getPhotoDir());
     try {
       fs.mkdirSync(resolved, { recursive: true });
     } catch (e) {
@@ -1355,6 +1358,10 @@ export async function savePhotoStoragePath(formData: FormData) {
       );
     }
     try {
+      // Keep serving from the old tree until migrate finishes
+      if (previousActive !== resolved) {
+        rememberPreviousPhotoDir(previousActive);
+      }
       writeStorageSettings({ photoDir: resolved });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -1364,6 +1371,10 @@ export async function savePhotoStoragePath(formData: FormData) {
     }
   } else {
     try {
+      const path = await import("node:path");
+      const { getPhotoDir } = await import("@/lib/paths");
+      const { rememberPreviousPhotoDir } = await import("@/lib/photo-migrate");
+      rememberPreviousPhotoDir(path.resolve(getPhotoDir()));
       writeStorageSettings({ photoDir: undefined });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
