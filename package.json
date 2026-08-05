@@ -1,6 +1,6 @@
 {
   "name": "veninspect",
-  "version": "0.1.79",
+  "version": "0.1.80",
   "private": true,
   "scripts": {
     "dev": "next dev -p 8181",
@@ -16,6 +16,7 @@
     "smoke:chunks": "tsx scripts/smoke-chunked-export.ts",
     "smoke:photo-excel": "tsx scripts/smoke-photo-excel.ts",
     "smoke:photo-migrate": "tsx scripts/smoke-photo-migrate.ts",
+    "sync:gitea": "bash scripts/sync-github-to-gitea.sh",
     "postinstall": "prisma generate"
   },
   "dependencies": {

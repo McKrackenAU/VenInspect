@@ -19,6 +19,89 @@ function normalizeRelative(relativePath: string): string {
   return normalized;
 }
 
+export type PhotoDirWriteProbe = {
+  photoDir: string;
+  ok: boolean;
+  error: string | null;
+};
+
+/** Probe that the active PHOTO_DIR accepts creates from this process. */
+export function probePhotoDirWritable(
+  root: string = getPhotoDir(),
+): PhotoDirWriteProbe {
+  const photoDir = path.resolve(root);
+  try {
+    fs.mkdirSync(photoDir, { recursive: true });
+  } catch (e) {
+    const code =
+      e && typeof e === "object" && "code" in e
+        ? String((e as { code?: string }).code)
+        : "";
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      photoDir,
+      ok: false,
+      error:
+        code === "EACCES" || code === "EPERM"
+          ? `No permission to create folders under ${photoDir}. On the CT: chown -R veninspect:veninspect ${photoDir} (or fix bind-mount uid/gid).`
+          : `Cannot create photo folder ${photoDir}: ${msg}`,
+    };
+  }
+  const probe = path.join(
+    photoDir,
+    `.veninspect-write-test-${process.pid}-${Date.now()}`,
+  );
+  try {
+    fs.writeFileSync(probe, "ok");
+    fs.unlinkSync(probe);
+    return { photoDir, ok: true, error: null };
+  } catch (e) {
+    const code =
+      e && typeof e === "object" && "code" in e
+        ? String((e as { code?: string }).code)
+        : "";
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      photoDir,
+      ok: false,
+      error:
+        code === "EACCES" || code === "EPERM"
+          ? `Photo storage is not writable by the app user: ${photoDir}. Fix ownership on the bind mount (chown -R veninspect:veninspect ${photoDir}) or CIFS uid/gid, then retry.`
+          : `Cannot write to photo storage ${photoDir}: ${msg}`,
+    };
+  }
+}
+
+export function assertPhotoDirWritable(root?: string) {
+  const probe = probePhotoDirWritable(root);
+  if (!probe.ok) {
+    throw new Error(probe.error || "Photo storage is not writable");
+  }
+  return probe.photoDir;
+}
+
+export function formatFsWriteError(err: unknown, absPath: string): Error {
+  const code =
+    err && typeof err === "object" && "code" in err
+      ? String((err as { code?: string }).code)
+      : "";
+  const msg = err instanceof Error ? err.message : String(err);
+  if (code === "EACCES" || code === "EPERM" || /permission denied/i.test(msg)) {
+    return new Error(
+      `No permission to save photo under ${path.dirname(absPath)}. The bind mount / PHOTO_DIR must be writable by user "veninspect". On the CT run: sudo bash /opt/veninspect/deploy/ensure-photo-dirs.sh`,
+    );
+  }
+  if (code === "ENOSPC") {
+    return new Error("Photo storage is full — free disk space on PHOTO_DIR.");
+  }
+  if (code === "EROFS") {
+    return new Error(
+      `Photo storage is read-only (${path.dirname(absPath)}). Check the bind mount options.`,
+    );
+  }
+  return err instanceof Error ? err : new Error(msg);
+}
+
 /** Roots that may contain inspection photos (ordered preference). */
 export function candidatePhotoRoots(): string[] {
   const roots: string[] = [];

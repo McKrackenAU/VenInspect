@@ -9,6 +9,10 @@ import {
   getPhotoDir,
   readStorageSettings,
 } from "@/lib/paths";
+import {
+  assertPhotoDirWritable,
+  formatFsWriteError,
+} from "@/lib/photo-resolve";
 
 /** Field photos: long edge ≤ 1280px; prefer ≤ 450 KB; hard cap 700 KB. */
 export const PHOTO_MAX_EDGE = 1280;
@@ -264,9 +268,14 @@ export async function saveCompressedDefectPhoto(opts: {
     relativePath = relativePath.replace(/\.webp$/i, ".jpg");
   }
 
+  assertPhotoDirWritable();
   const abs = absolutePhotoPath(relativePath);
-  await fs.mkdir(path.dirname(abs), { recursive: true });
-  await fs.writeFile(abs, out);
+  try {
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, out);
+  } catch (e) {
+    throw formatFsWriteError(e, abs);
+  }
   return { relativePath, bytesWritten: out.byteLength, takenAt };
 }
 
@@ -308,9 +317,14 @@ export async function saveCompressedInspectionPhoto(opts: {
   const relativePath = path
     .join(road, asset, opts.folderKey, `${stem}${ext}`)
     .replace(/\\/g, "/");
+  assertPhotoDirWritable();
   const abs = absolutePhotoPath(relativePath);
-  await fs.mkdir(path.dirname(abs), { recursive: true });
-  await fs.writeFile(abs, out);
+  try {
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, out);
+  } catch (e) {
+    throw formatFsWriteError(e, abs);
+  }
   return { relativePath, bytesWritten: out.byteLength, takenAt };
 }
 
@@ -336,9 +350,14 @@ export async function saveAssetDocumentFile(opts: {
   originalFilename: string;
 }): Promise<{ relativePath: string; bytesWritten: number }> {
   ensureDataDirs();
+  assertPhotoDirWritable();
   const relativePath = assetDocumentRelativePath(opts);
   const abs = path.join(getPhotoDir(), relativePath);
-  await fs.mkdir(path.dirname(abs), { recursive: true });
-  await fs.writeFile(abs, opts.buffer);
+  try {
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, opts.buffer);
+  } catch (e) {
+    throw formatFsWriteError(e, abs);
+  }
   return { relativePath, bytesWritten: opts.buffer.byteLength };
 }

@@ -28,7 +28,13 @@ export async function POST(
   });
   if (!inspection) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!canEditInspection(user, inspection)) {
-    return NextResponse.json({ error: "Cannot edit" }, { status: 403 });
+    return NextResponse.json(
+      {
+        error:
+          "Cannot upload photos — this report is locked. Open Edit report first (drafts and rejected reports can upload immediately).",
+      },
+      { status: 403 },
+    );
   }
 
   const defect = await prisma.defect.findFirst({

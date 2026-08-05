@@ -20,7 +20,9 @@ export async function GET(req: NextRequest) {
     ? Math.min(Math.max(1, Math.floor(limitRaw)), 5000)
     : 500;
   const summary = await scanAndHealPhotoLinks({ limit, heal });
-  return NextResponse.json({ ...summary, ok: true as const });
+  const { probePhotoDirWritable } = await import("@/lib/photo-resolve");
+  const writeProbe = probePhotoDirWritable();
+  return NextResponse.json({ ...summary, ok: true as const, writeProbe });
 }
 
 export async function POST(req: NextRequest) {
@@ -38,5 +40,7 @@ export async function POST(req: NextRequest) {
     /* empty body ok */
   }
   const summary = await scanAndHealPhotoLinks({ limit, heal: true });
-  return NextResponse.json({ ...summary, ok: true as const });
+  const { probePhotoDirWritable } = await import("@/lib/photo-resolve");
+  const writeProbe = probePhotoDirWritable();
+  return NextResponse.json({ ...summary, ok: true as const, writeProbe });
 }

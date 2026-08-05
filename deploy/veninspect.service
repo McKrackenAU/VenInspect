@@ -13,9 +13,9 @@ WorkingDirectory=/opt/veninspect
 EnvironmentFile=/etc/veninspect.env
 # Ensure Node from NodeSource is on PATH
 Environment=PATH=/usr/bin:/bin
-ExecStartPre=/bin/mkdir -p ${DATA_DIR}/photos
-# If PHOTO_DIR is set in EnvironmentFile, also ensure it exists (ignore failure if unset path)
-ExecStartPre=/bin/sh -c 'mkdir -p "${PHOTO_DIR:-$DATA_DIR/photos}"'
+# "+" = privileged pre-start so mkdir/chown on bind mounts is not left as root-only.
+# Without this, ExecStartPre mkdir runs as root and veninspect cannot upload photos.
+ExecStartPre=+/bin/sh -c 'if [ -x /opt/veninspect/deploy/ensure-photo-dirs.sh ] || [ -f /opt/veninspect/deploy/ensure-photo-dirs.sh ]; then bash /opt/veninspect/deploy/ensure-photo-dirs.sh; else mkdir -p "${DATA_DIR:-/var/lib/veninspect}/photos" "${PHOTO_DIR:-${DATA_DIR:-/var/lib/veninspect}/photos}"; chown -R veninspect:veninspect "${DATA_DIR:-/var/lib/veninspect}" "${PHOTO_DIR:-${DATA_DIR:-/var/lib/veninspect}/photos}" 2>/dev/null || true; fi'
 ExecStartPre=/usr/bin/npx prisma migrate deploy
 ExecStart=/usr/bin/npm run start
 Restart=on-failure

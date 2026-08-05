@@ -19,6 +19,16 @@ LAN / Gitea: `http://192.168.13.9:3000/McKraken/VenInspect/raw/branch/main/ct/ve
 | Remote | Where | When to use |
 |--------|--------|-------------|
 | `origin` | Gitea `http://192.168.13.9:3000/McKraken/VenInspect` | Day-to-day push/pull (dev) |
+| `github` | `https://github.com/McKrackenAU/VenInspect` | Live releases / public |
+
+After shipping tags on GitHub, sync them to Gitea from a LAN machine:
+
+```bash
+# On Proxmox host or any host that can reach both GitHub and Gitea:
+bash scripts/sync-github-to-gitea.sh
+# or with a Gitea token:
+GITEA_TOKEN=xxxxx bash scripts/sync-github-to-gitea.sh
+```
 | `github` | `https://github.com/McKrackenAU/VenInspect` | Promote to live / public |
 
 ```bash

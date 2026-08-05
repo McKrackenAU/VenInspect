@@ -202,6 +202,16 @@ fi
 
 chown -R "$APP_USER:$APP_USER" "$APP_LIVE" 2>/dev/null || true
 
+# Bind-mount photo volume must stay writable by the app user after updates
+if [[ -f "$APP_LIVE/deploy/ensure-photo-dirs.sh" ]]; then
+  chmod +x "$APP_LIVE/deploy/ensure-photo-dirs.sh" 2>/dev/null || true
+  APP_USER="$APP_USER" bash "$APP_LIVE/deploy/ensure-photo-dirs.sh" || true
+else
+  PHOTO_DIR_EFFECTIVE="${PHOTO_DIR:-$DATA_DIR/photos}"
+  mkdir -p "$PHOTO_DIR_EFFECTIVE" 2>/dev/null || true
+  chown -R "$APP_USER:$APP_USER" "$PHOTO_DIR_EFFECTIVE" 2>/dev/null || true
+fi
+
 cd "$APP_LIVE"
 as_app "$APP_LIVE" npx prisma migrate deploy || true
 as_app "$APP_LIVE" npm run db:ensure-admin || true

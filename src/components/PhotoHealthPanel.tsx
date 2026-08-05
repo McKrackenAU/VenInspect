@@ -9,6 +9,7 @@ type Summary = {
   healed: number;
   roots: string[];
   samples: { path: string; status: "ok" | "missing" | "healed" }[];
+  writeProbe?: { photoDir: string; ok: boolean; error: string | null };
 };
 
 export function PhotoHealthPanel() {
@@ -77,6 +78,19 @@ export function PhotoHealthPanel() {
       ) : null}
       {summary ? (
         <div className="space-y-2 text-sm">
+          {summary.writeProbe ? (
+            <p
+              className={
+                summary.writeProbe.ok
+                  ? "text-[color:var(--ventia-green)]"
+                  : "text-red-700"
+              }
+            >
+              {summary.writeProbe.ok
+                ? `Write OK — ${summary.writeProbe.photoDir}`
+                : summary.writeProbe.error || "Photo storage not writable"}
+            </p>
+          ) : null}
           <p>
             Checked <strong>{summary.checked}</strong> · OK{" "}
             <strong>{summary.ok}</strong> · Missing{" "}
